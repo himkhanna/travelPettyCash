@@ -8,6 +8,9 @@ environment:
   # 3.27+ required for Color.withValues + CardThemeData APIs used in the theme.
   flutter: '>=3.27.0'
 
+# Slim Phase 1 dependency set: only what the demo actively uses. Drift,
+# secure_storage, image_cropper, codegen toolchain, etc. land in Phase 3
+# when the real API client + receipt pipeline arrive.
 dependencies:
   flutter:
     sdk: flutter
@@ -15,59 +18,34 @@ dependencies:
     sdk: flutter
 
   # State management
-  flutter_riverpod: ^2.5.1
-  riverpod_annotation: ^2.3.5
+  flutter_riverpod: ^2.6.1
 
   # Routing
-  go_router: ^14.2.0
+  go_router: ^14.6.2
 
-  # Networking (used later when ApiRepositories land; in scaffold for type wiring)
-  dio: ^5.5.0
-
-  # Local storage
-  drift: ^2.18.0
-  sqlite3_flutter_libs: ^0.5.24
-  path_provider: ^2.1.3
-  path: ^1.9.0
-  flutter_secure_storage: ^9.2.2
-  shared_preferences: ^2.2.3
-
-  # DTOs / data classes
-  freezed_annotation: ^2.4.1
-  json_annotation: ^4.9.0
-
-  # Localization & formatting
-  intl: ^0.19.0
+  # Localization & formatting (Flutter 3.27+ bundles intl 0.20)
+  intl: ^0.20.2
 
   # Charts
-  fl_chart: ^0.68.0
-
-  # Media (receipts)
-  image_picker: ^1.1.2
-  image_cropper: ^7.1.0
-
-  # Connectivity (offline detection for sync coordinator)
-  connectivity_plus: ^6.0.3
+  fl_chart: ^0.69.2
 
   # Misc
-  uuid: ^4.4.0
-  collection: ^1.18.0
+  uuid: ^4.5.1
+  collection: ^1.19.0
+
+  # Reserved for the API client phase. Pinned here so pub get exercises
+  # them, but they're not imported yet outside of stubs.
+  dio: ^5.7.0
+  connectivity_plus: ^6.1.0
+  image_picker: ^1.1.2
+  shared_preferences: ^2.3.3
+  path_provider: ^2.1.5
+  path: ^1.9.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  integration_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-
-  # Codegen
-  build_runner: ^2.4.11
-  freezed: ^2.5.2
-  json_serializable: ^6.8.0
-  riverpod_generator: ^2.4.0
-  drift_dev: ^2.18.0
-  custom_lint: ^0.6.4
-  riverpod_lint: ^2.3.10
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
@@ -77,9 +55,3 @@ flutter:
     - assets/demo/
     - assets/demo/receipts/
     - assets/icons/
-
-  # Fonts will be added when the PDD-approved typeface is supplied.
-  # fonts:
-  #   - family: PDDDisplay
-  #     fonts:
-  #       - asset: assets/fonts/PDDDisplay-Regular.ttf
