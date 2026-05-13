@@ -2,7 +2,19 @@
   "permissions": {
     "allow": [
       "Bash(flutter --version)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "Bash(gh auth *)",
+      "Bash(curl -s \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs?per_page=10\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(f'{r[\\\\\"head_sha\\\\\"][:7]}  {r[\\\\\"conclusion\\\\\"]:8}  {r[\\\\\"display_title\\\\\"][:60]}'\\) for r in d['workflow_runs']]\")",
+      "PowerShell($d = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs?per_page=10\"; $d.workflow_runs | Select-Object @{N='sha';E={$_.head_sha.Substring\\(0,7\\)}}, conclusion, @{N='title';E={$_.display_title.Substring\\(0,[Math]::Min\\(60,$_.display_title.Length\\)\\)}} | Format-Table -AutoSize)",
+      "PowerShell($jobs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs/25817018621/jobs\"; $jobs.jobs | ForEach-Object { Write-Output \"JOB: $\\($_.name\\) -> $\\($_.conclusion\\)\"; $_.steps | Where-Object { $_.conclusion -eq 'failure' } | ForEach-Object { Write-Output \"  FAILED STEP: $\\($_.name\\)\" } })",
+      "PowerShell($jobs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs/25817018621/jobs\"; $jobs.jobs | ForEach-Object { Write-Output \"===== $\\($_.name\\) =====\"; $_.steps | ForEach-Object { Write-Output \\(\"{0,-30} {1,-10} {2}\" -f $_.name, $_.conclusion, $_.number\\) } })",
+      "PowerShell(Test-Path *)",
+      "PowerShell(docker version *)",
+      "PowerShell(docker pull dart:stable *)",
+      "PowerShell(docker run *)",
+      "PowerShell($mobilePath = \"C:\\\\Users\\\\himanshu\\\\Travel Petty Cash\\\\mobile\"; docker run --rm -v \"${mobilePath}:/work\" -w /work dart:stable dart format lib test 2>&1 | Select-Object -Last 30)",
+      "PowerShell(docker pull *)"
     ]
   }
 }

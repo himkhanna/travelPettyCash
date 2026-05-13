@@ -30,7 +30,9 @@ class _ExpenseBreakdownScreenState
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(widget.tripId));
+    final AsyncValue<Trip> tripAsync = ref.watch(
+      tripDetailProvider(widget.tripId),
+    );
     final AsyncValue<List<ExpenseSummary>> summaryAsync = ref.watch(
       mySummaryProvider((tripId: widget.tripId, groupBy: _groupBy)),
     );
@@ -58,11 +60,13 @@ class _ExpenseBreakdownScreenState
             ),
             Expanded(
               child: summaryAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => Center(child: Text('Error: $e')),
-                data: (List<ExpenseSummary> rows) =>
-                    _BreakdownBody(rows: rows, currency: trip.currency, groupBy: _groupBy),
+                data: (List<ExpenseSummary> rows) => _BreakdownBody(
+                  rows: rows,
+                  currency: trip.currency,
+                  groupBy: _groupBy,
+                ),
               ),
             ),
           ],
@@ -85,7 +89,9 @@ class _GroupTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.cream,
         borderRadius: const BorderRadius.all(AppRadii.chip),
@@ -147,9 +153,9 @@ class _BreakdownBody extends ConsumerWidget {
       return Center(
         child: Text(
           'No expenses yet.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
         ),
       );
     }
@@ -199,19 +205,18 @@ class _BreakdownBody extends ConsumerWidget {
                   children: <Widget>[
                     Text(
                       'TOTAL SPEND',
-                      style:
-                          Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: AppColors.textSecondary,
-                                letterSpacing: 1.4,
-                              ),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        letterSpacing: 1.4,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       total.format(),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.brandBrown,
-                          ),
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.brandBrown,
+                      ),
                     ),
                   ],
                 ),
@@ -242,8 +247,8 @@ class _BreakdownBody extends ConsumerWidget {
                   Text(
                     s.amount.format(),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),

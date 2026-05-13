@@ -8,12 +8,13 @@ import '../domain/funding.dart';
 
 final Provider<SourceRepository> sourceRepositoryProvider =
     Provider<SourceRepository>(
-  (Ref ref) => FakeSourceRepository(
-    ref.watch(demoStoreProvider),
-    ref.watch(fakeConfigProvider),
-  ),
-);
+      (Ref ref) => FakeSourceRepository(
+        ref.watch(demoStoreProvider),
+        ref.watch(fakeConfigProvider),
+      ),
+    );
 
-final FutureProvider<List<Source>> sourcesProvider = FutureProvider<List<Source>>(
-  (Ref ref) => ref.read(sourceRepositoryProvider).all(),
-);
+final FutureProvider<List<Source>> sourcesProvider =
+    FutureProvider<List<Source>>(
+      (Ref ref) => ref.read(sourceRepositoryProvider).all(),
+    );

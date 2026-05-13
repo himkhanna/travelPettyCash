@@ -29,20 +29,26 @@ void main() {
       expect(e.pendingSync, false);
     });
 
-    test('offline create goes to pending queue with pendingSync=true', () async {
-      cfg.setOfflineMode(value: true);
-      final Expense e = await _create(repo, 'e1');
-      expect(store.expenses, isEmpty);
-      expect(store.pendingExpenses.single.id, 'e1');
-      expect(e.pendingSync, true);
-    });
+    test(
+      'offline create goes to pending queue with pendingSync=true',
+      () async {
+        cfg.setOfflineMode(value: true);
+        final Expense e = await _create(repo, 'e1');
+        expect(store.expenses, isEmpty);
+        expect(store.pendingExpenses.single.id, 'e1');
+        expect(e.pendingSync, true);
+      },
+    );
 
-    test('idempotency: replaying same client UUID returns existing row', () async {
-      await _create(repo, 'e1');
-      final Expense second = await _create(repo, 'e1');
-      expect(second.id, 'e1');
-      expect(store.expenses.length, 1);
-    });
+    test(
+      'idempotency: replaying same client UUID returns existing row',
+      () async {
+        await _create(repo, 'e1');
+        final Expense second = await _create(repo, 'e1');
+        expect(second.id, 'e1');
+        expect(store.expenses.length, 1);
+      },
+    );
 
     test('idempotency works across the offline→online boundary', () async {
       cfg.setOfflineMode(value: true);
@@ -62,8 +68,7 @@ void main() {
       cfg.setOfflineMode(value: false);
       await _create(repo, 'e2');
 
-      final List<Expense> all =
-          await repo.list(tripId: 't1', userId: 'u-1');
+      final List<Expense> all = await repo.list(tripId: 't1', userId: 'u-1');
       expect(all.map((Expense e) => e.id).toSet(), <String>{'e1', 'e2'});
       expect(
         all.firstWhere((Expense e) => e.id == 'e1').pendingSync,

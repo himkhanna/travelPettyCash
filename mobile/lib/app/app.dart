@@ -15,10 +15,7 @@ class PddApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: buildPddTheme(),
       routerConfig: buildAppRouter(),
-      supportedLocales: const <Locale>[
-        Locale('en'),
-        Locale('ar'),
-      ],
+      supportedLocales: const <Locale>[Locale('en'), Locale('ar')],
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

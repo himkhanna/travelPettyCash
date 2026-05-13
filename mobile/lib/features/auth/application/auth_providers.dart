@@ -6,16 +6,19 @@ import '../data/auth_repository.dart';
 import '../data/fake_auth_repository.dart';
 import '../domain/user.dart';
 
-final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>(
-  (Ref ref) => FakeAuthRepository(
-    ref.watch(demoStoreProvider),
-    ref.watch(fakeConfigProvider),
-  ),
-);
+final Provider<AuthRepository> authRepositoryProvider =
+    Provider<AuthRepository>(
+      (Ref ref) => FakeAuthRepository(
+        ref.watch(demoStoreProvider),
+        ref.watch(fakeConfigProvider),
+      ),
+    );
 
 /// Hydrates from FakeConfig.role so the landing-page choice becomes the
 /// current user without an explicit login call.
-final FutureProvider<User?> currentUserProvider = FutureProvider<User?>((Ref ref) async {
+final FutureProvider<User?> currentUserProvider = FutureProvider<User?>((
+  Ref ref,
+) async {
   // Re-evaluate whenever the role switches in the dev menu.
   ref.watch(fakeRoleProvider);
   final AuthRepository repo = ref.read(authRepositoryProvider);

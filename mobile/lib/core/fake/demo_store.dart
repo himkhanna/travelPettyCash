@@ -69,33 +69,45 @@ class DemoStore {
       for (final Trip t in trips) t.id: t.currency,
     };
 
-    final List<Map<String, Object?>> allocRaw =
-        await _readRaw('assets/demo/allocations.json');
+    final List<Map<String, Object?>> allocRaw = await _readRaw(
+      'assets/demo/allocations.json',
+    );
     allocations
       ..clear()
-      ..addAll(allocRaw.map((Map<String, Object?> j) {
-        final String currency = tripCurrency[j['tripId']]!;
-        return parseAllocation(j, currency: currency);
-      }));
+      ..addAll(
+        allocRaw.map((Map<String, Object?> j) {
+          final String currency = tripCurrency[j['tripId']]!;
+          return parseAllocation(j, currency: currency);
+        }),
+      );
 
-    final List<Map<String, Object?>> expRaw =
-        await _readRaw('assets/demo/expenses.json');
+    final List<Map<String, Object?>> expRaw = await _readRaw(
+      'assets/demo/expenses.json',
+    );
     expenses
       ..clear()
-      ..addAll(expRaw.map((Map<String, Object?> j) {
-        final String currency = tripCurrency[j['tripId']]!;
-        return parseExpense(j, currency: currency);
-      }));
+      ..addAll(
+        expRaw.map((Map<String, Object?> j) {
+          final String currency = tripCurrency[j['tripId']]!;
+          return parseExpense(j, currency: currency);
+        }),
+      );
 
     chatThreads
       ..clear()
-      ..addAll(await _readList('assets/demo/chat_threads.json', parseChatThread));
+      ..addAll(
+        await _readList('assets/demo/chat_threads.json', parseChatThread),
+      );
     chatMessages
       ..clear()
-      ..addAll(await _readList('assets/demo/chat_messages.json', parseChatMessage));
+      ..addAll(
+        await _readList('assets/demo/chat_messages.json', parseChatMessage),
+      );
     notifications
       ..clear()
-      ..addAll(await _readList('assets/demo/notifications.json', parseNotification));
+      ..addAll(
+        await _readList('assets/demo/notifications.json', parseNotification),
+      );
 
     _loaded = true;
   }
@@ -116,18 +128,25 @@ class DemoStore {
 
   // ---------- helpers shared across fake repos ----------
 
-  User userById(String id) =>
-      users.firstWhere((User u) => u.id == id, orElse: () => throw StateError('User not found: $id'));
+  User userById(String id) => users.firstWhere(
+    (User u) => u.id == id,
+    orElse: () => throw StateError('User not found: $id'),
+  );
 
-  Trip tripById(String id) =>
-      trips.firstWhere((Trip t) => t.id == id, orElse: () => throw StateError('Trip not found: $id'));
+  Trip tripById(String id) => trips.firstWhere(
+    (Trip t) => t.id == id,
+    orElse: () => throw StateError('Trip not found: $id'),
+  );
 
-  Source sourceById(String id) =>
-      sources.firstWhere((Source s) => s.id == id, orElse: () => throw StateError('Source not found: $id'));
+  Source sourceById(String id) => sources.firstWhere(
+    (Source s) => s.id == id,
+    orElse: () => throw StateError('Source not found: $id'),
+  );
 
   ExpenseCategory categoryByCode(String code) => categories.firstWhere(
-      (ExpenseCategory c) => c.code == code,
-      orElse: () => throw StateError('Category not found: $code'));
+    (ExpenseCategory c) => c.code == code,
+    orElse: () => throw StateError('Category not found: $code'),
+  );
 
   int unreadNotificationCount(String userId, {String? tripId}) {
     return notifications.where((AppNotification n) {
@@ -153,5 +172,6 @@ enum DemoStoreEvent {
   tripsChanged,
 }
 
-final Provider<DemoStore> demoStoreProvider =
-    Provider<DemoStore>((Ref ref) => DemoStore.instance);
+final Provider<DemoStore> demoStoreProvider = Provider<DemoStore>(
+  (Ref ref) => DemoStore.instance,
+);

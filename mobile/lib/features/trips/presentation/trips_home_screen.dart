@@ -37,7 +37,9 @@ class TripsHomeScreen extends ConsumerWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -50,9 +52,9 @@ class TripsHomeScreen extends ConsumerWidget {
               Text(
                 'ACTIVE TRIPS',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: AppColors.textSecondary,
-                      letterSpacing: 1.6,
-                    ),
+                  color: AppColors.textSecondary,
+                  letterSpacing: 1.6,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               Expanded(
@@ -109,17 +111,17 @@ class _Greeting extends StatelessWidget {
         Text(
           'HELLO',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                letterSpacing: 1.4,
-                color: AppColors.textSecondary,
-              ),
+            letterSpacing: 1.4,
+            color: AppColors.textSecondary,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           (user?.displayName ?? 'DEMO USER').toUpperCase(),
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
         ),
       ],
     );
@@ -136,14 +138,13 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(Icons.flight_takeoff,
-                size: 48, color: AppColors.goldOlive),
+            Icon(Icons.flight_takeoff, size: 48, color: AppColors.goldOlive),
             const SizedBox(height: AppSpacing.md),
             Text(
               'No active trips for this role.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -179,7 +180,11 @@ class _TripList extends ConsumerWidget {
 }
 
 class _TripCard extends StatelessWidget {
-  const _TripCard({required this.trip, required this.unread, required this.onTap});
+  const _TripCard({
+    required this.trip,
+    required this.unread,
+    required this.onTap,
+  });
   final Trip trip;
   final int unread;
   final VoidCallback onTap;
@@ -205,24 +210,23 @@ class _TripCard extends StatelessWidget {
                     Text(
                       trip.countryName.toUpperCase(),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       trip.name,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
               ),
               if (unread > 0) _UnreadBadge(count: unread),
               const SizedBox(width: AppSpacing.sm),
-              const Icon(Icons.chevron_right,
-                  color: AppColors.textSecondary),
+              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
             ],
           ),
         ),
@@ -274,9 +278,10 @@ class _UnreadBadge extends StatelessWidget {
       child: Text(
         count.toString(),
         style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 13),
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
       ),
     );
   }

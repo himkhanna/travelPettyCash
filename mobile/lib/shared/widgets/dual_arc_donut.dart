@@ -33,35 +33,43 @@ class DualArcDonut extends StatelessWidget {
 
     final List<PieChartSectionData> sections = <PieChartSectionData>[];
     if (negative) {
-      sections.add(PieChartSectionData(
-        value: spentVal == 0 ? 1 : spentVal,
-        color: AppColors.brandBrown,
-        radius: thickness,
-        showTitle: false,
-      ));
-    } else if (balanceVal == 0 && spentVal == 0) {
-      sections.add(PieChartSectionData(
-        value: 1,
-        color: AppColors.cream,
-        radius: thickness,
-        showTitle: false,
-      ));
-    } else {
-      if (balanceVal > 0) {
-        sections.add(PieChartSectionData(
-          value: balanceVal,
-          color: AppColors.success,
-          radius: thickness,
-          showTitle: false,
-        ));
-      }
-      if (spentVal > 0) {
-        sections.add(PieChartSectionData(
-          value: spentVal,
+      sections.add(
+        PieChartSectionData(
+          value: spentVal == 0 ? 1 : spentVal,
           color: AppColors.brandBrown,
           radius: thickness,
           showTitle: false,
-        ));
+        ),
+      );
+    } else if (balanceVal == 0 && spentVal == 0) {
+      sections.add(
+        PieChartSectionData(
+          value: 1,
+          color: AppColors.cream,
+          radius: thickness,
+          showTitle: false,
+        ),
+      );
+    } else {
+      if (balanceVal > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: balanceVal,
+            color: AppColors.success,
+            radius: thickness,
+            showTitle: false,
+          ),
+        );
+      }
+      if (spentVal > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: spentVal,
+            color: AppColors.brandBrown,
+            radius: thickness,
+            showTitle: false,
+          ),
+        );
       }
     }
 
@@ -87,28 +95,26 @@ class DualArcDonut extends StatelessWidget {
                 Text(
                   'BALANCE',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        letterSpacing: 1.4,
-                      ),
+                    color: AppColors.textSecondary,
+                    letterSpacing: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   centerLabel ?? balance.format(),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: negative
-                            ? AppColors.outflow
-                            : AppColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: negative ? AppColors.outflow : AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   centerSublabel ?? 'SPENT  ${spent.format()}',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        letterSpacing: 1.2,
-                      ),
+                    color: AppColors.textSecondary,
+                    letterSpacing: 1.2,
+                  ),
                 ),
               ],
             ),

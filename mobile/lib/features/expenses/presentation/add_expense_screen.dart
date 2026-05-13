@@ -49,10 +49,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(widget.tripId));
+    final AsyncValue<Trip> tripAsync = ref.watch(
+      tripDetailProvider(widget.tripId),
+    );
     final AsyncValue<List<Source>> sourcesAsync = ref.watch(sourcesProvider);
-    final AsyncValue<List<ExpenseCategory>> categoriesAsync =
-        ref.watch(categoriesProvider);
+    final AsyncValue<List<ExpenseCategory>> categoriesAsync = ref.watch(
+      categoriesProvider,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -69,8 +72,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: tripAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => Text('Error: $e'),
                 data: (Trip trip) => Form(
                   key: _formKey,
@@ -84,21 +86,18 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       const SizedBox(height: AppSpacing.lg),
                       _Label(text: 'SOURCE'),
                       sourcesAsync.when(
-                        loading: () =>
-                            const LinearProgressIndicator(),
+                        loading: () => const LinearProgressIndicator(),
                         error: (Object e, _) => Text('Error: $e'),
                         data: (List<Source> sources) => _SourcePicker(
                           sources: sources,
                           selected: _sourceId,
-                          onPick: (String id) =>
-                              setState(() => _sourceId = id),
+                          onPick: (String id) => setState(() => _sourceId = id),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       _Label(text: 'CATEGORY'),
                       categoriesAsync.when(
-                        loading: () =>
-                            const LinearProgressIndicator(),
+                        loading: () => const LinearProgressIndicator(),
                         error: (Object e, _) => Text('Error: $e'),
                         data: (List<ExpenseCategory> cats) => _CategoryPicker(
                           categories: cats,
@@ -129,15 +128,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       _ReceiptStub(),
                       const SizedBox(height: AppSpacing.xl),
                       FilledButton(
-                        onPressed:
-                            _submitting ? null : () => _submit(trip),
+                        onPressed: _submitting ? null : () => _submit(trip),
                         child: _submitting
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppColors.cream),
+                                  strokeWidth: 2,
+                                  color: AppColors.cream,
+                                ),
                               )
                             : const Text('ADD EXPENSE'),
                       ),
@@ -171,9 +170,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     setState(() => _submitting = true);
     try {
-      final String userId =
-          ref.read(currentUserProvider).valueOrNull?.id ?? '';
-      final Expense e = await ref.read(expenseRepositoryProvider).create(
+      final String userId = ref.read(currentUserProvider).valueOrNull?.id ?? '';
+      final Expense e = await ref
+          .read(expenseRepositoryProvider)
+          .create(
             clientUuid: _uuid.v4(),
             tripId: trip.id,
             userId: userId,
@@ -186,8 +186,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           );
       // Refresh dependent providers.
       ref.invalidate(myExpensesProvider(trip.id));
-      ref.invalidate(tripBalancesProvider(
-          (tripId: trip.id, scope: BalanceScope.me)));
+      ref.invalidate(
+        tripBalancesProvider((tripId: trip.id, scope: BalanceScope.me)),
+      );
       if (!mounted) return;
       await _showSuccessModal(trip, e);
     } catch (err) {
@@ -274,10 +275,10 @@ class _Label extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textSecondary,
-              letterSpacing: 1.4,
-              fontWeight: FontWeight.w700,
-            ),
+          color: AppColors.textSecondary,
+          letterSpacing: 1.4,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -297,15 +298,15 @@ class _AmountField extends StatelessWidget {
         FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
       ],
       style: Theme.of(context).textTheme.displaySmall?.copyWith(
-            color: AppColors.brandBrown,
-            fontWeight: FontWeight.w700,
-          ),
+        color: AppColors.brandBrown,
+        fontWeight: FontWeight.w700,
+      ),
       textAlign: TextAlign.center,
       decoration: InputDecoration(
         prefixText: '$currency  ',
-        prefixStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+        prefixStyle: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
         hintText: '0',
         border: InputBorder.none,
         enabledBorder: const UnderlineInputBorder(
@@ -426,7 +427,9 @@ class _DatePickerTile extends StatelessWidget {
       },
       child: Container(
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.md),
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
         decoration: BoxDecoration(
           color: AppColors.cream,
           borderRadius: const BorderRadius.all(AppRadii.chip),
@@ -454,7 +457,8 @@ class _ReceiptStub extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Receipt capture is wired in Milestone B (web demo uses a stub).'),
+              'Receipt capture is wired in Milestone B (web demo uses a stub).',
+            ),
           ),
         );
       },
@@ -462,19 +466,21 @@ class _ReceiptStub extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           borderRadius: const BorderRadius.all(AppRadii.chip),
-          border: Border.all(color: AppColors.divider, style: BorderStyle.solid),
+          border: Border.all(
+            color: AppColors.divider,
+            style: BorderStyle.solid,
+          ),
         ),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.add_a_photo_outlined,
-                color: AppColors.brandBrown),
+            const Icon(Icons.add_a_photo_outlined, color: AppColors.brandBrown),
             const SizedBox(width: AppSpacing.sm),
             Text(
               'ADD RECEIPT',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AppColors.brandBrown,
-                    letterSpacing: 1.2,
-                  ),
+                color: AppColors.brandBrown,
+                letterSpacing: 1.2,
+              ),
             ),
           ],
         ),

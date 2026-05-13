@@ -18,7 +18,9 @@ class MyExpensesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<Expense>> expenses = ref.watch(myExpensesProvider(tripId));
+    final AsyncValue<List<Expense>> expenses = ref.watch(
+      myExpensesProvider(tripId),
+    );
     final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
 
     return Scaffold(
@@ -28,16 +30,17 @@ class MyExpensesScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.donut_large_outlined),
             tooltip: 'Chart view',
-            onPressed: () =>
-                context.go('/m/trips/$tripId/expenses/mine/chart'),
+            onPressed: () => context.go('/m/trips/$tripId/expenses/mine/chart'),
           ),
           IconButton(
             icon: const Icon(Icons.filter_alt_outlined),
             tooltip: 'Filter',
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Filters land later in Milestone A.'),
-              ));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Filters land later in Milestone A.'),
+                ),
+              );
             },
           ),
         ],
@@ -64,8 +67,8 @@ class MyExpensesScreen extends ConsumerWidget {
                           return _ExpenseRow(
                             expense: e,
                             trip: trip,
-                            onTap: () => context.go(
-                                '/m/trips/$tripId/expenses/${e.id}'),
+                            onTap: () =>
+                                context.go('/m/trips/$tripId/expenses/${e.id}'),
                           );
                         },
                       ),
@@ -83,7 +86,11 @@ class MyExpensesScreen extends ConsumerWidget {
 }
 
 class _ExpenseRow extends ConsumerWidget {
-  const _ExpenseRow({required this.expense, required this.trip, required this.onTap});
+  const _ExpenseRow({
+    required this.expense,
+    required this.trip,
+    required this.onTap,
+  });
   final Expense expense;
   final Trip trip;
   final VoidCallback onTap;
@@ -121,7 +128,8 @@ class _ExpenseRow extends ConsumerWidget {
                         const SizedBox(width: 6),
                         Text(
                           expense.categoryCode,
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
                                 color: AppColors.textSecondary,
                                 letterSpacing: 1.2,
                               ),
@@ -129,9 +137,8 @@ class _ExpenseRow extends ConsumerWidget {
                         const Spacer(),
                         Text(
                           dateStr,
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -160,8 +167,18 @@ class _ExpenseRow extends ConsumerWidget {
 
   String _shortDate(DateTime d) {
     const List<String> months = <String>[
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
     ];
     return '${d.day} ${months[d.month - 1]}';
   }
@@ -189,9 +206,9 @@ class _AmountCircle extends StatelessWidget {
             amount,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.brandBrown,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: AppColors.brandBrown,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -217,9 +234,9 @@ class _PendingChip extends StatelessWidget {
           Text(
             'Pending sync',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.warning,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: AppColors.warning,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -237,15 +254,18 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(Icons.receipt_long_outlined,
-                size: 48, color: AppColors.goldOlive),
+            Icon(
+              Icons.receipt_long_outlined,
+              size: 48,
+              color: AppColors.goldOlive,
+            ),
             const SizedBox(height: AppSpacing.md),
             Text(
               'No expenses yet — tap the + button to record one.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),

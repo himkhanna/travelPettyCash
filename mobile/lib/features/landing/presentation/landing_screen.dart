@@ -50,7 +50,10 @@ class LandingScreen extends ConsumerWidget {
                       cfg.setRole(r);
                       context.go('/cms');
                     },
-                    roles: const <FakeRole>[FakeRole.admin, FakeRole.superAdmin],
+                    roles: const <FakeRole>[
+                      FakeRole.admin,
+                      FakeRole.superAdmin,
+                    ],
                     target: _RoleTarget.cms,
                   ),
                   const SizedBox(height: AppSpacing.xl),
@@ -76,16 +79,16 @@ class _LandingHeader extends StatelessWidget {
         Text(
           'PDD Petty Cash',
           style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: AppColors.cream,
-                fontWeight: FontWeight.w600,
-              ),
+            color: AppColors.cream,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Demo Console — pick a role to enter the prototype',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.cream.withValues(alpha: 0.8),
-              ),
+            color: AppColors.cream.withValues(alpha: 0.8),
+          ),
         ),
       ],
     );
@@ -101,10 +104,10 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       text,
       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.goldOlive,
-            letterSpacing: 1.6,
-            fontWeight: FontWeight.w700,
-          ),
+        color: AppColors.goldOlive,
+        letterSpacing: 1.6,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }
@@ -136,7 +139,11 @@ class _RoleGrid extends StatelessWidget {
 }
 
 class _RoleCard extends StatelessWidget {
-  const _RoleCard({required this.role, required this.target, required this.onTap});
+  const _RoleCard({
+    required this.role,
+    required this.target,
+    required this.onTap,
+  });
   final FakeRole role;
   final _RoleTarget target;
   final VoidCallback onTap;
@@ -161,24 +168,26 @@ class _RoleCard extends StatelessWidget {
                 Text(
                   _roleLabel(role),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   _seedNameFor(role),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  target == _RoleTarget.mobile ? 'Mobile UI →' : 'Admin Console →',
+                  target == _RoleTarget.mobile
+                      ? 'Mobile UI →'
+                      : 'Admin Console →',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.brandBrown,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: AppColors.brandBrown,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -257,9 +266,9 @@ class _DemoNotice extends StatelessWidget {
               'No real funds, no real authentication. '
               'Use the Demo Controls menu inside the app to simulate offline mode, latency, and failures.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.cream,
-                    height: 1.5,
-                  ),
+                color: AppColors.cream,
+                height: 1.5,
+              ),
             ),
           ),
         ],

@@ -25,9 +25,9 @@ class SourceBalanceCard extends StatelessWidget {
           Text(
             balance.sourceName.toUpperCase(),
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                  letterSpacing: 1.2,
-                ),
+              color: AppColors.textSecondary,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
@@ -83,9 +83,9 @@ class _Ring extends StatelessWidget {
             amount,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.brandBrown,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: AppColors.brandBrown,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -115,9 +115,9 @@ class _Flow extends StatelessWidget {
         Text(
           amount,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );

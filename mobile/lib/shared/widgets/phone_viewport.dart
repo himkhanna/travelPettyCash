@@ -28,9 +28,7 @@ class PhoneViewport extends StatelessWidget {
 
     return ColoredBox(
       color: AppColors.brandBrownDark,
-      child: Center(
-        child: _DeviceChrome(child: child),
-      ),
+      child: Center(child: _DeviceChrome(child: child)),
     );
   }
 }

@@ -23,7 +23,8 @@ class TripDashboardScreen extends ConsumerStatefulWidget {
   final String tripId;
 
   @override
-  ConsumerState<TripDashboardScreen> createState() => _TripDashboardScreenState();
+  ConsumerState<TripDashboardScreen> createState() =>
+      _TripDashboardScreenState();
 }
 
 class _TripDashboardScreenState extends ConsumerState<TripDashboardScreen> {
@@ -31,9 +32,12 @@ class _TripDashboardScreenState extends ConsumerState<TripDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(widget.tripId));
+    final AsyncValue<Trip> tripAsync = ref.watch(
+      tripDetailProvider(widget.tripId),
+    );
     final User? user = ref.watch(currentUserProvider).valueOrNull;
-    final bool leaderOrAdmin = user?.role == UserRole.leader ||
+    final bool leaderOrAdmin =
+        user?.role == UserRole.leader ||
         user?.role == UserRole.admin ||
         user?.role == UserRole.superAdmin;
 
@@ -56,10 +60,11 @@ class _TripDashboardScreenState extends ConsumerState<TripDashboardScreen> {
         child: Column(
           children: <Widget>[
             const SyncStatusBanner(),
-            if (leaderOrAdmin) _ScopeTabs(
-              scope: _scope,
-              onChanged: (BalanceScope s) => setState(() => _scope = s),
-            ),
+            if (leaderOrAdmin)
+              _ScopeTabs(
+                scope: _scope,
+                onChanged: (BalanceScope s) => setState(() => _scope = s),
+              ),
             Expanded(
               child: _DashboardBody(tripId: widget.tripId, scope: _scope),
             ),
@@ -83,7 +88,9 @@ class _ScopeTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.cream,
         borderRadius: const BorderRadius.all(AppRadii.chip),
@@ -148,8 +155,9 @@ class _DashboardBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<TripBalances> balances =
-        ref.watch(tripBalancesProvider((tripId: tripId, scope: scope)));
+    final AsyncValue<TripBalances> balances = ref.watch(
+      tripBalancesProvider((tripId: tripId, scope: scope)),
+    );
     final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
 
     return balances.when(
@@ -157,7 +165,11 @@ class _DashboardBody extends ConsumerWidget {
       error: (Object e, _) => Center(child: Text('Error: $e')),
       data: (TripBalances b) => SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -190,9 +202,9 @@ class _DashboardBody extends ConsumerWidget {
   }
 
   Money _sumReceived(TripBalances b) => b.perSource.fold(
-        Money.zero(b.totalBudget.currencyCode),
-        (Money a, SourceBalance s) => a + s.received,
-      );
+    Money.zero(b.totalBudget.currencyCode),
+    (Money a, SourceBalance s) => a + s.received,
+  );
 }
 
 class _TotalBudgetPill extends StatelessWidget {
@@ -203,7 +215,9 @@ class _TotalBudgetPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.md, horizontal: AppSpacing.lg),
+        vertical: AppSpacing.md,
+        horizontal: AppSpacing.lg,
+      ),
       decoration: BoxDecoration(
         color: AppColors.brandBrown,
         borderRadius: const BorderRadius.all(AppRadii.button),
@@ -214,16 +228,16 @@ class _TotalBudgetPill extends StatelessWidget {
           Text(
             'TOTAL TRIP BUDGET',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AppColors.cream,
-                  letterSpacing: 1.4,
-                ),
+              color: AppColors.cream,
+              letterSpacing: 1.4,
+            ),
           ),
           Text(
             amount.format(),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.cream,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: AppColors.cream,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -248,9 +262,9 @@ class _ClosedBanner extends StatelessWidget {
           Expanded(
             child: Text(
               'This trip is closed. Expenses are read-only.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.outflow,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.outflow),
             ),
           ),
         ],

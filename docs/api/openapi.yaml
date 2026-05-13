@@ -318,7 +318,7 @@ paths:
                 properties:
                   signedUrl: { type: string }
 
-  /expenses:bulk:
+  /expenses/bulk:
     patch:
       tags: [expenses]
       summary: Bulk source reassignment (screen-inventory #25)

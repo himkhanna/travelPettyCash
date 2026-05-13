@@ -1,7 +1,10 @@
 import '../domain/user.dart';
 
 abstract class AuthRepository {
-  Future<AuthSession> login({required String username, required String password});
+  Future<AuthSession> login({
+    required String username,
+    required String password,
+  });
   Future<AuthSession> loginAsRole(UserRole role);
   Future<void> logout();
   Future<User?> currentUser();

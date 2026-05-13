@@ -17,10 +17,7 @@ GoRouter buildAppRouter() {
     initialLocation: '/',
     debugLogDiagnostics: false,
     routes: <RouteBase>[
-      GoRoute(
-        path: '/',
-        builder: (_, __) => const LandingScreen(),
-      ),
+      GoRoute(path: '/', builder: (_, __) => const LandingScreen()),
 
       // Mobile UI — rendered inside a phone-frame on web (>=600px).
       ShellRoute(
@@ -55,9 +52,9 @@ GoRouter buildAppRouter() {
             path: '/m/trips/:tripId/expenses/:expenseId',
             builder: (BuildContext context, GoRouterState state) =>
                 ExpenseDetailScreen(
-              tripId: state.pathParameters['tripId']!,
-              expenseId: state.pathParameters['expenseId']!,
-            ),
+                  tripId: state.pathParameters['tripId']!,
+                  expenseId: state.pathParameters['expenseId']!,
+                ),
           ),
           GoRoute(
             path: '/m/trips/:id/transfer',
@@ -114,10 +111,7 @@ GoRouter buildAppRouter() {
       ),
 
       // CMS — full-width Flutter Web UI for Admin / Super Admin.
-      GoRoute(
-        path: '/cms',
-        builder: (_, __) => const CmsPlaceholder(),
-      ),
+      GoRoute(path: '/cms', builder: (_, __) => const CmsPlaceholder()),
     ],
     errorBuilder: (_, GoRouterState state) => Scaffold(
       body: Center(child: Text('Route not found: ${state.matchedLocation}')),

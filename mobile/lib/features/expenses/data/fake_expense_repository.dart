@@ -30,7 +30,8 @@ class FakeExpenseRepository implements ExpenseRepository {
             !filter.categoryCodes!.contains(e.categoryCode)) {
           return false;
         }
-        if (filter.sourceIds != null && !filter.sourceIds!.contains(e.sourceId)) {
+        if (filter.sourceIds != null &&
+            !filter.sourceIds!.contains(e.sourceId)) {
           return false;
         }
         if (filter.memberIds != null && !filter.memberIds!.contains(e.userId)) {
@@ -82,10 +83,13 @@ class FakeExpenseRepository implements ExpenseRepository {
 
     // Idempotency: if a row already exists with this id (in pending OR
     // accepted), return it. CLAUDE.md §11 — client UUID is canonical.
-    final int existing = _store.expenses.indexWhere((Expense e) => e.id == clientUuid);
+    final int existing = _store.expenses.indexWhere(
+      (Expense e) => e.id == clientUuid,
+    );
     if (existing >= 0) return _store.expenses[existing];
-    final int existingPending =
-        _store.pendingExpenses.indexWhere((Expense e) => e.id == clientUuid);
+    final int existingPending = _store.pendingExpenses.indexWhere(
+      (Expense e) => e.id == clientUuid,
+    );
     if (existingPending >= 0) return _store.pendingExpenses[existingPending];
 
     if (_cfg.offlineMode) {
@@ -163,7 +167,9 @@ class FakeExpenseRepository implements ExpenseRepository {
       update(expenseId, ExpensePatch(sourceId: newSourceId));
 
   @override
-  Future<List<Expense>> bulkReassignSource(Map<String, String> idToSourceId) async {
+  Future<List<Expense>> bulkReassignSource(
+    Map<String, String> idToSourceId,
+  ) async {
     final List<Expense> out = <Expense>[];
     for (final MapEntry<String, String> e in idToSourceId.entries) {
       out.add(await reassignSource(e.key, e.value));
@@ -246,11 +252,13 @@ class FakeExpenseRepository implements ExpenseRepository {
     }
 
     return totals.entries
-        .map((MapEntry<String, Money> en) => ExpenseSummary(
-              groupKey: en.key,
-              label: labels[en.key]!,
-              amount: en.value,
-            ))
+        .map(
+          (MapEntry<String, Money> en) => ExpenseSummary(
+            groupKey: en.key,
+            label: labels[en.key]!,
+            amount: en.value,
+          ),
+        )
         .toList(growable: false);
   }
 }

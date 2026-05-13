@@ -4,8 +4,9 @@ publish_to: 'none'
 version: 0.1.0+1
 
 environment:
-  sdk: '>=3.4.0 <4.0.0'
-  flutter: '>=3.22.0'
+  sdk: '>=3.8.0 <4.0.0'
+  # 3.27+ required for Color.withValues + CardThemeData APIs used in the theme.
+  flutter: '>=3.27.0'
 
 dependencies:
   flutter:

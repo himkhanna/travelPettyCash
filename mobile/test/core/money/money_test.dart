@@ -86,13 +86,20 @@ void main() {
         const Money(100, 'SAR'),
         const Money(200, 'SAR'),
       ]..sort();
-      expect(list.map((Money m) => m.amountMinor).toList(), <int>[100, 200, 300]);
+      expect(list.map((Money m) => m.amountMinor).toList(), <int>[
+        100,
+        200,
+        300,
+      ]);
     });
 
     test('equality is value-based', () {
       expect(const Money(100, 'SAR') == const Money(100, 'SAR'), true);
       expect(const Money(100, 'SAR') == const Money(100, 'AED'), false);
-      expect(const Money(100, 'SAR').hashCode, const Money(100, 'SAR').hashCode);
+      expect(
+        const Money(100, 'SAR').hashCode,
+        const Money(100, 'SAR').hashCode,
+      );
     });
   });
 

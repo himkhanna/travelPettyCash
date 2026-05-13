@@ -13,6 +13,8 @@ class FakeSourceRepository implements SourceRepository {
   Future<List<Source>> all() async {
     await _store.ensureLoaded();
     await _cfg.waitLatency();
-    return _store.sources.where((Source s) => s.isActive).toList(growable: false);
+    return _store.sources
+        .where((Source s) => s.isActive)
+        .toList(growable: false);
   }
 }

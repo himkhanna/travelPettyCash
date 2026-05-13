@@ -15,7 +15,10 @@ class FakeAuthRepository implements AuthRepository {
   User? _current;
 
   @override
-  Future<AuthSession> login({required String username, required String password}) async {
+  Future<AuthSession> login({
+    required String username,
+    required String password,
+  }) async {
     await _store.ensureLoaded();
     await _cfg.waitLatency();
     final User user = _store.users.firstWhere(
@@ -51,16 +54,18 @@ class FakeAuthRepository implements AuthRepository {
     // If the role was set via the landing page, hydrate from there.
     final UserRole? r = _domainRoleFor(_cfg.role);
     if (r == null) return null;
-    _current = _store.users.firstWhere((User u) => u.role == r,
-        orElse: () => throw StateError('No seed user for role $r'));
+    _current = _store.users.firstWhere(
+      (User u) => u.role == r,
+      orElse: () => throw StateError('No seed user for role $r'),
+    );
     return _current;
   }
 
   AuthSession _session(User user) => AuthSession(
-        user: user,
-        accessToken: 'demo-access-${user.id}',
-        refreshToken: 'demo-refresh-${user.id}',
-      );
+    user: user,
+    accessToken: 'demo-access-${user.id}',
+    refreshToken: 'demo-refresh-${user.id}',
+  );
 
   FakeRole _roleFor(User u) {
     switch (u.role) {

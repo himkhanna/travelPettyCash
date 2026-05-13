@@ -9,8 +9,11 @@ import 'trip_repository.dart';
 /// Reads from DemoStore. Balance computation is **derived from the event
 /// log** (allocations + transfers + expenses) — never cached, per CLAUDE.md §6.4.
 class FakeTripRepository implements TripRepository {
-  FakeTripRepository(this._store, this._cfg, {required String Function() currentUserId})
-      : _currentUserId = currentUserId;
+  FakeTripRepository(
+    this._store,
+    this._cfg, {
+    required String Function() currentUserId,
+  }) : _currentUserId = currentUserId;
 
   final DemoStore _store;
   final FakeConfig _cfg;
@@ -22,9 +25,11 @@ class FakeTripRepository implements TripRepository {
     await _cfg.waitLatency();
     final String me = _currentUserId();
     return _store.trips
-        .where((Trip t) =>
-            t.status == TripStatus.active &&
-            (t.memberIds.contains(me) || t.leaderId == me || _isAdmin()))
+        .where(
+          (Trip t) =>
+              t.status == TripStatus.active &&
+              (t.memberIds.contains(me) || t.leaderId == me || _isAdmin()),
+        )
         .toList(growable: false);
   }
 
@@ -33,10 +38,12 @@ class FakeTripRepository implements TripRepository {
     await _store.ensureLoaded();
     await _cfg.waitLatency();
     final String me = _currentUserId();
-    return _store.trips.where((Trip t) {
-      if (status != null && t.status != status) return false;
-      return t.memberIds.contains(me) || t.leaderId == me || _isAdmin();
-    }).toList(growable: false);
+    return _store.trips
+        .where((Trip t) {
+          if (status != null && t.status != status) return false;
+          return t.memberIds.contains(me) || t.leaderId == me || _isAdmin();
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -54,34 +61,38 @@ class FakeTripRepository implements TripRepository {
     final String me = _currentUserId();
 
     final List<Source> sources = _store.sources;
-    final List<SourceBalance> perSource = sources.map((Source s) {
-      final Money received = _sumReceived(
-        tripId: tripId,
-        sourceId: s.id,
-        currency: trip.currency,
-        scope: scope,
-        me: me,
-        leaderId: trip.leaderId,
-      );
-      final Money spent = _sumSpent(
-        tripId: tripId,
-        sourceId: s.id,
-        currency: trip.currency,
-        scope: scope,
-        me: me,
-      );
-      return SourceBalance(
-        sourceId: s.id,
-        sourceName: s.name,
-        sourceNameAr: s.nameAr,
-        received: received,
-        spent: spent,
-        balance: received - spent,
-      );
-    }).toList(growable: false);
+    final List<SourceBalance> perSource = sources
+        .map((Source s) {
+          final Money received = _sumReceived(
+            tripId: tripId,
+            sourceId: s.id,
+            currency: trip.currency,
+            scope: scope,
+            me: me,
+            leaderId: trip.leaderId,
+          );
+          final Money spent = _sumSpent(
+            tripId: tripId,
+            sourceId: s.id,
+            currency: trip.currency,
+            scope: scope,
+            me: me,
+          );
+          return SourceBalance(
+            sourceId: s.id,
+            sourceName: s.name,
+            sourceNameAr: s.nameAr,
+            received: received,
+            spent: spent,
+            balance: received - spent,
+          );
+        })
+        .toList(growable: false);
 
-    Money fold(Money Function(SourceBalance) get) =>
-        perSource.fold(Money.zero(trip.currency), (Money a, SourceBalance b) => a + get(b));
+    Money fold(Money Function(SourceBalance) get) => perSource.fold(
+      Money.zero(trip.currency),
+      (Money a, SourceBalance b) => a + get(b),
+    );
 
     return TripBalances(
       tripId: tripId,

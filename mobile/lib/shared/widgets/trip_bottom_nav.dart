@@ -9,7 +9,11 @@ import '../../app/theme.dart';
 /// The Add slot is a raised FAB-style button that routes to a full screen,
 /// not a tab swap (per screen-inventory #5).
 class TripBottomNav extends StatelessWidget {
-  const TripBottomNav({super.key, required this.tripId, required this.currentLocation});
+  const TripBottomNav({
+    super.key,
+    required this.tripId,
+    required this.currentLocation,
+  });
 
   final String tripId;
   final String currentLocation;
@@ -40,9 +44,7 @@ class TripBottomNav extends StatelessWidget {
                 active: currentLocation.contains('/expenses/mine'),
                 onTap: () => context.go('/m/trips/$tripId/expenses/mine'),
               ),
-              _AddFab(
-                onTap: () => context.go('/m/trips/$tripId/expenses/new'),
-              ),
+              _AddFab(onTap: () => context.go('/m/trips/$tripId/expenses/new')),
               _NavItem(
                 icon: Icons.swap_horiz,
                 label: 'Transfer',

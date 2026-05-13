@@ -29,7 +29,8 @@ class SyncStatusBanner extends ConsumerWidget {
       return _Banner(
         color: AppColors.brandBrown,
         icon: Icons.sync,
-        label: 'Syncing ${s.pendingCount} expense${s.pendingCount == 1 ? '' : 's'}…',
+        label:
+            'Syncing ${s.pendingCount} expense${s.pendingCount == 1 ? '' : 's'}…',
       );
     }
 
@@ -57,7 +58,9 @@ class _Banner extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       color: color.withValues(alpha: 0.12),
       child: Row(
         children: <Widget>[

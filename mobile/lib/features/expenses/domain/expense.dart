@@ -56,7 +56,11 @@ class ExpenseCategory {
 }
 
 class ExpenseSummary {
-  const ExpenseSummary({required this.groupKey, required this.label, required this.amount});
+  const ExpenseSummary({
+    required this.groupKey,
+    required this.label,
+    required this.amount,
+  });
   final String groupKey;
   final String label;
   final Money amount;

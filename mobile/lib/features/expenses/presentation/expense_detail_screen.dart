@@ -14,7 +14,11 @@ import '../domain/expense.dart';
 
 /// Screen-inventory #9 — Expense detail (read).
 class ExpenseDetailScreen extends ConsumerWidget {
-  const ExpenseDetailScreen({super.key, required this.tripId, required this.expenseId});
+  const ExpenseDetailScreen({
+    super.key,
+    required this.tripId,
+    required this.expenseId,
+  });
   final String tripId;
   final String expenseId;
 
@@ -41,13 +45,16 @@ class ExpenseDetailScreen extends ConsumerWidget {
           }
           if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
           final Expense e = snap.data!;
-          final bool canEdit = me?.id == e.userId &&
+          final bool canEdit =
+              me?.id == e.userId &&
               tripAsync.maybeWhen(
                 data: (Trip t) => t.status != TripStatus.closed,
                 orElse: () => false,
               );
           final String sourceName = store.sourceById(e.sourceId).name;
-          final String categoryName = store.categoryByCode(e.categoryCode).nameEn;
+          final String categoryName = store
+              .categoryByCode(e.categoryCode)
+              .nameEn;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -73,14 +80,14 @@ class ExpenseDetailScreen extends ConsumerWidget {
                 Text(
                   '${_pad(e.occurredAt.hour)}:${_pad(e.occurredAt.minute)}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 Text(
                   _longDate(e.occurredAt),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 Container(
@@ -89,8 +96,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: AppColors.goldOlive.withValues(alpha: 0.15),
-                    border:
-                        Border.all(color: AppColors.goldOlive, width: 3),
+                    border: Border.all(color: AppColors.goldOlive, width: 3),
                   ),
                   alignment: Alignment.center,
                   child: Padding(
@@ -158,9 +164,8 @@ class ExpenseDetailScreen extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             'This expense is queued and will sync when you return online.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.warning,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.warning),
                           ),
                         ),
                       ],
@@ -178,11 +183,27 @@ class ExpenseDetailScreen extends ConsumerWidget {
   String _pad(int n) => n.toString().padLeft(2, '0');
   String _longDate(DateTime d) {
     const List<String> days = <String>[
-      'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'
+      'MON',
+      'TUE',
+      'WED',
+      'THU',
+      'FRI',
+      'SAT',
+      'SUN',
     ];
     const List<String> months = <String>[
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
     ];
     return '${days[d.weekday - 1]} ${d.day} ${months[d.month - 1]} ${d.year}';
   }
@@ -245,9 +266,9 @@ class _DetailRow extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                      letterSpacing: 1.2,
-                    ),
+                  color: AppColors.textSecondary,
+                  letterSpacing: 1.2,
+                ),
               ),
               const SizedBox(height: 2),
               Text(value, style: Theme.of(context).textTheme.bodyLarge),

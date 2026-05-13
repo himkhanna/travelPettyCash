@@ -30,8 +30,7 @@ class SyncCoordinator extends ChangeNotifier {
   bool get isSyncing => _syncing;
   // During an active drain, `_remaining` mirrors the in-progress queue size;
   // when idle, fall back to the raw queue. Don't sum — that double-counts.
-  int get pendingCount =>
-      _syncing ? _remaining : _store.pendingExpenses.length;
+  int get pendingCount => _syncing ? _remaining : _store.pendingExpenses.length;
   int get remainingInCurrentBatch => _remaining;
   Object? get lastError => _lastError;
 
@@ -94,16 +93,15 @@ class SyncCoordinator extends ChangeNotifier {
   }
 }
 
-final Provider<SyncCoordinator> syncCoordinatorProvider = Provider<SyncCoordinator>(
-  (Ref ref) {
-    final SyncCoordinator c = SyncCoordinator(
-      ref.watch(demoStoreProvider),
-      ref.watch(fakeConfigProvider),
-    );
-    ref.onDispose(c.dispose);
-    return c;
-  },
-);
+final Provider<SyncCoordinator> syncCoordinatorProvider =
+    Provider<SyncCoordinator>((Ref ref) {
+      final SyncCoordinator c = SyncCoordinator(
+        ref.watch(demoStoreProvider),
+        ref.watch(fakeConfigProvider),
+      );
+      ref.onDispose(c.dispose);
+      return c;
+    });
 
 /// Watchable view of the coordinator for UI badges and banners.
 final Provider<SyncState> syncStateProvider = Provider<SyncState>((Ref ref) {

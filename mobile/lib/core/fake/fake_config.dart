@@ -81,13 +81,7 @@ class FakeFailure implements Exception {
   String toString() => 'FakeFailure(op=$op): synthetic failure from FakeConfig';
 }
 
-enum FakeRole {
-  unset,
-  member,
-  leader,
-  admin,
-  superAdmin,
-}
+enum FakeRole { unset, member, leader, admin, superAdmin }
 
 final Provider<FakeConfig> fakeConfigProvider = Provider<FakeConfig>(
   (Ref ref) => FakeConfig.instance,

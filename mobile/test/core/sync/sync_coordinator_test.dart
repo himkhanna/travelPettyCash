@@ -27,10 +27,7 @@ void main() {
     });
 
     test('drain moves pending into accepted', () async {
-      store.pendingExpenses.addAll(<Expense>[
-        _exp('p1'),
-        _exp('p2'),
-      ]);
+      store.pendingExpenses.addAll(<Expense>[_exp('p1'), _exp('p2')]);
       await coordinator.drain();
       expect(store.pendingExpenses, isEmpty);
       expect(store.expenses.map((Expense e) => e.id), <String>['p1', 'p2']);
@@ -43,7 +40,11 @@ void main() {
     });
 
     test('pendingCount does not double-count during drain', () async {
-      store.pendingExpenses.addAll(<Expense>[_exp('p1'), _exp('p2'), _exp('p3')]);
+      store.pendingExpenses.addAll(<Expense>[
+        _exp('p1'),
+        _exp('p2'),
+        _exp('p3'),
+      ]);
       expect(coordinator.pendingCount, 3);
       final Future<void> drainFuture = coordinator.drain();
       // Mid-drain — count should equal the in-flight queue, not the sum.
@@ -65,15 +66,15 @@ void main() {
 }
 
 Expense _exp(String id) => Expense(
-      id: id,
-      tripId: 'trip-1',
-      userId: 'u-1',
-      sourceId: 'src-1',
-      categoryCode: 'FOOD',
-      amount: const Money(1000, 'SAR'),
-      quantity: 1,
-      details: 'test',
-      occurredAt: DateTime(2026, 5, 13),
-      createdAt: DateTime(2026, 5, 13),
-      pendingSync: true,
-    );
+  id: id,
+  tripId: 'trip-1',
+  userId: 'u-1',
+  sourceId: 'src-1',
+  categoryCode: 'FOOD',
+  amount: const Money(1000, 'SAR'),
+  quantity: 1,
+  details: 'test',
+  occurredAt: DateTime(2026, 5, 13),
+  createdAt: DateTime(2026, 5, 13),
+  pendingSync: true,
+);

@@ -21,16 +21,16 @@ class CmsPlaceholder extends ConsumerWidget {
           children: <Widget>[
             const Icon(Icons.shield_outlined, color: AppColors.brandBrown),
             const SizedBox(width: AppSpacing.sm),
-            Text('PDD Petty Cash — Admin Console',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'PDD Petty Cash — Admin Console',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ],
         ),
         actions: <Widget>[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Center(
-              child: Chip(label: Text(_roleLabel(cfg.role))),
-            ),
+            child: Center(child: Chip(label: Text(_roleLabel(cfg.role)))),
           ),
         ],
       ),
@@ -42,11 +42,16 @@ class CmsPlaceholder extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(Icons.dashboard_customize_outlined,
-                    size: 72, color: AppColors.goldOlive),
+                Icon(
+                  Icons.dashboard_customize_outlined,
+                  size: 72,
+                  color: AppColors.goldOlive,
+                ),
                 const SizedBox(height: AppSpacing.md),
-                Text('Admin Console',
-                    style: Theme.of(context).textTheme.headlineSmall),
+                Text(
+                  'Admin Console',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Create trips, assign funds from source pools, generate signed '
@@ -54,8 +59,8 @@ class CmsPlaceholder extends ConsumerWidget {
                   'Milestone D in the build plan.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),

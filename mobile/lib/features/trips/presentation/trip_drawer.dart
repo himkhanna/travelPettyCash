@@ -22,8 +22,8 @@ class TripDrawer extends ConsumerWidget {
     final int unread = ref
         .read(demoStoreProvider)
         .unreadNotificationCount(user?.id ?? '', tripId: tripId);
-    final bool leaderOrAdmin = user?.role == UserRole.leader ||
-        user?.role == UserRole.admin;
+    final bool leaderOrAdmin =
+        user?.role == UserRole.leader || user?.role == UserRole.admin;
 
     return Drawer(
       backgroundColor: AppColors.surface,
@@ -55,8 +55,8 @@ class TripDrawer extends ConsumerWidget {
                   Text(
                     _roleLabel(user?.role),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -109,7 +109,10 @@ class TripDrawer extends ConsumerWidget {
   }
 
   String _initials(String name) {
-    final List<String> parts = name.split(' ').where((String p) => p.isNotEmpty).toList();
+    final List<String> parts = name
+        .split(' ')
+        .where((String p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -176,9 +179,10 @@ class _Badge extends StatelessWidget {
       child: Text(
         '$count',
         style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 12),
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
       ),
     );
   }

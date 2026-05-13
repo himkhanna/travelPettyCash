@@ -13,29 +13,29 @@ import '../money/money.dart';
 /// the first run.
 
 User parseUser(Map<String, Object?> json) => User(
-      id: json['id']! as String,
-      username: json['username']! as String,
-      displayName: json['displayName']! as String,
-      displayNameAr: json['displayNameAr']! as String,
-      email: json['email']! as String,
-      role: UserRole.fromApiCode(json['role']! as String),
-      isActive: json['isActive']! as bool,
-    );
+  id: json['id']! as String,
+  username: json['username']! as String,
+  displayName: json['displayName']! as String,
+  displayNameAr: json['displayNameAr']! as String,
+  email: json['email']! as String,
+  role: UserRole.fromApiCode(json['role']! as String),
+  isActive: json['isActive']! as bool,
+);
 
 Source parseSource(Map<String, Object?> json) => Source(
-      id: json['id']! as String,
-      name: json['name']! as String,
-      nameAr: json['nameAr']! as String,
-      isActive: json['isActive']! as bool,
-    );
+  id: json['id']! as String,
+  name: json['name']! as String,
+  nameAr: json['nameAr']! as String,
+  isActive: json['isActive']! as bool,
+);
 
 ExpenseCategory parseCategory(Map<String, Object?> json) => ExpenseCategory(
-      code: json['code']! as String,
-      nameEn: json['nameEn']! as String,
-      nameAr: json['nameAr']! as String,
-      iconKey: json['iconKey']! as String,
-      isActive: json['isActive']! as bool,
-    );
+  code: json['code']! as String,
+  nameEn: json['nameEn']! as String,
+  nameAr: json['nameAr']! as String,
+  iconKey: json['iconKey']! as String,
+  isActive: json['isActive']! as bool,
+);
 
 Trip parseTrip(Map<String, Object?> json) {
   final String currency = json['currency']! as String;
@@ -57,21 +57,23 @@ Trip parseTrip(Map<String, Object?> json) {
   );
 }
 
-Allocation parseAllocation(Map<String, Object?> json, {required String currency}) =>
-    Allocation(
-      id: json['id']! as String,
-      tripId: json['tripId']! as String,
-      fromUserId: json['fromUserId'] as String?,
-      toUserId: json['toUserId']! as String,
-      sourceId: json['sourceId']! as String,
-      amount: Money(json['amountMinor']! as int, currency),
-      status: _parseAllocationStatus(json['status']! as String),
-      note: json['note'] as String?,
-      createdAt: DateTime.parse(json['createdAt']! as String),
-      respondedAt: json['respondedAt'] == null
-          ? null
-          : DateTime.parse(json['respondedAt']! as String),
-    );
+Allocation parseAllocation(
+  Map<String, Object?> json, {
+  required String currency,
+}) => Allocation(
+  id: json['id']! as String,
+  tripId: json['tripId']! as String,
+  fromUserId: json['fromUserId'] as String?,
+  toUserId: json['toUserId']! as String,
+  sourceId: json['sourceId']! as String,
+  amount: Money(json['amountMinor']! as int, currency),
+  status: _parseAllocationStatus(json['status']! as String),
+  note: json['note'] as String?,
+  createdAt: DateTime.parse(json['createdAt']! as String),
+  respondedAt: json['respondedAt'] == null
+      ? null
+      : DateTime.parse(json['respondedAt']! as String),
+);
 
 Expense parseExpense(Map<String, Object?> json, {required String currency}) =>
     Expense(
@@ -89,39 +91,41 @@ Expense parseExpense(Map<String, Object?> json, {required String currency}) =>
     );
 
 ChatThread parseChatThread(Map<String, Object?> json) => ChatThread(
-      id: json['id']! as String,
-      tripId: json['tripId']! as String,
-      title: json['title']! as String,
-      titleAr: json['titleAr']! as String,
-      participantIds: (json['participantIds']! as List<Object?>).cast<String>(),
-      unreadCount: (json['unreadCount'] as int?) ?? 0,
-      lastMessagePreview: json['lastMessagePreview'] as String?,
-      lastMessageAt: json['lastMessageAt'] == null
-          ? null
-          : DateTime.parse(json['lastMessageAt']! as String),
-    );
+  id: json['id']! as String,
+  tripId: json['tripId']! as String,
+  title: json['title']! as String,
+  titleAr: json['titleAr']! as String,
+  participantIds: (json['participantIds']! as List<Object?>).cast<String>(),
+  unreadCount: (json['unreadCount'] as int?) ?? 0,
+  lastMessagePreview: json['lastMessagePreview'] as String?,
+  lastMessageAt: json['lastMessageAt'] == null
+      ? null
+      : DateTime.parse(json['lastMessageAt']! as String),
+);
 
 ChatMessage parseChatMessage(Map<String, Object?> json) => ChatMessage(
-      id: json['id']! as String,
-      threadId: json['threadId']! as String,
-      senderId: json['senderId']! as String,
-      body: json['body']! as String,
-      sentAt: DateTime.parse(json['sentAt']! as String),
-      deliveredAt: json['deliveredAt'] == null
-          ? null
-          : DateTime.parse(json['deliveredAt']! as String),
-      readAt: json['readAt'] == null ? null : DateTime.parse(json['readAt']! as String),
-    );
+  id: json['id']! as String,
+  threadId: json['threadId']! as String,
+  senderId: json['senderId']! as String,
+  body: json['body']! as String,
+  sentAt: DateTime.parse(json['sentAt']! as String),
+  deliveredAt: json['deliveredAt'] == null
+      ? null
+      : DateTime.parse(json['deliveredAt']! as String),
+  readAt: json['readAt'] == null
+      ? null
+      : DateTime.parse(json['readAt']! as String),
+);
 
 AppNotification parseNotification(Map<String, Object?> json) => AppNotification(
-      id: json['id']! as String,
-      userId: json['userId']! as String,
-      type: _parseNotificationType(json['type']! as String),
-      payload: Map<String, Object?>.from(json['payload']! as Map<Object?, Object?>),
-      actionable: json['actionable']! as bool,
-      state: _parseNotificationState(json['state']! as String),
-      createdAt: DateTime.parse(json['createdAt']! as String),
-    );
+  id: json['id']! as String,
+  userId: json['userId']! as String,
+  type: _parseNotificationType(json['type']! as String),
+  payload: Map<String, Object?>.from(json['payload']! as Map<Object?, Object?>),
+  actionable: json['actionable']! as bool,
+  state: _parseNotificationState(json['state']! as String),
+  createdAt: DateTime.parse(json['createdAt']! as String),
+);
 
 TripStatus _parseTripStatus(String code) {
   switch (code) {
