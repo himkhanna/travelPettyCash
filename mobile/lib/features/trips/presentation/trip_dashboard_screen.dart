@@ -6,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../core/money/money.dart';
 import '../../../shared/widgets/dual_arc_donut.dart';
 import '../../../shared/widgets/source_balance_card.dart';
+import '../../../shared/widgets/sync_status_banner.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
@@ -54,6 +55,7 @@ class _TripDashboardScreenState extends ConsumerState<TripDashboardScreen> {
         bottom: false,
         child: Column(
           children: <Widget>[
+            const SyncStatusBanner(),
             if (leaderOrAdmin) _ScopeTabs(
               scope: _scope,
               onChanged: (BalanceScope s) => setState(() => _scope = s),

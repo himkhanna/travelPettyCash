@@ -21,7 +21,7 @@ class FakeExpenseRepository implements ExpenseRepository {
     await _store.ensureLoaded();
     await _cfg.waitLatency();
 
-    final List<Expense> filtered = _store.expenses.where((Expense e) {
+    bool keep(Expense e) {
       if (e.tripId != tripId) return false;
       if (e.deletedAt != null) return false;
       if (userId != null && e.userId != userId) return false;
@@ -44,8 +44,12 @@ class FakeExpenseRepository implements ExpenseRepository {
         }
       }
       return true;
-    }).toList()
-      ..sort((Expense a, Expense b) => b.occurredAt.compareTo(a.occurredAt));
+    }
+
+    final List<Expense> filtered = <Expense>[
+      ..._store.pendingExpenses.where(keep),
+      ..._store.expenses.where(keep),
+    ]..sort((Expense a, Expense b) => b.occurredAt.compareTo(a.occurredAt));
 
     return filtered.take(limit).toList(growable: false);
   }
@@ -75,12 +79,39 @@ class FakeExpenseRepository implements ExpenseRepository {
     required String idempotencyKey,
   }) async {
     await _store.ensureLoaded();
-    await _cfg.waitLatency();
-    _cfg.maybeFail(op: 'expenses.create');
 
-    // Idempotency: if a row already exists with this id, return it.
+    // Idempotency: if a row already exists with this id (in pending OR
+    // accepted), return it. CLAUDE.md §11 — client UUID is canonical.
     final int existing = _store.expenses.indexWhere((Expense e) => e.id == clientUuid);
     if (existing >= 0) return _store.expenses[existing];
+    final int existingPending =
+        _store.pendingExpenses.indexWhere((Expense e) => e.id == clientUuid);
+    if (existingPending >= 0) return _store.pendingExpenses[existingPending];
+
+    if (_cfg.offlineMode) {
+      // Queue locally. Skip latency + failure injection — the device isn't
+      // talking to anyone. SyncCoordinator handles the eventual upload.
+      final Expense pending = Expense(
+        id: clientUuid,
+        tripId: tripId,
+        userId: userId,
+        sourceId: sourceId,
+        categoryCode: categoryCode,
+        amount: amount,
+        quantity: quantity,
+        details: details,
+        occurredAt: occurredAt,
+        createdAt: _cfg.now(),
+        receiptObjectKey: receiptObjectKey,
+        pendingSync: true,
+      );
+      _store.pendingExpenses.add(pending);
+      _store.emit(DemoStoreEvent.pendingExpensesChanged);
+      return pending;
+    }
+
+    await _cfg.waitLatency();
+    _cfg.maybeFail(op: 'expenses.create');
 
     final Expense e = Expense(
       id: clientUuid,

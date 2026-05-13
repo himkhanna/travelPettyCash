@@ -27,6 +27,12 @@ class DemoStore {
   final List<Allocation> allocations = <Allocation>[];
   final List<Transfer> transfers = <Transfer>[];
   final List<Expense> expenses = <Expense>[];
+
+  /// Expenses created while FakeConfig.offlineMode == true.
+  /// Drained by SyncCoordinator when connectivity returns; in the real app
+  /// this is backed by a Drift `pending_expenses` table (Phase 3).
+  final List<Expense> pendingExpenses = <Expense>[];
+
   final List<ChatThread> chatThreads = <ChatThread>[];
   final List<ChatMessage> chatMessages = <ChatMessage>[];
   final List<AppNotification> notifications = <AppNotification>[];
@@ -139,6 +145,7 @@ class DemoStore {
 /// Lightweight event taxonomy for invalidating providers when fakes mutate.
 enum DemoStoreEvent {
   expensesChanged,
+  pendingExpensesChanged,
   allocationsChanged,
   transfersChanged,
   notificationsChanged,

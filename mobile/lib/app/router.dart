@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/cms/presentation/cms_placeholder.dart';
+import '../features/expenses/presentation/add_expense_screen.dart';
+import '../features/expenses/presentation/expense_breakdown_screen.dart';
+import '../features/expenses/presentation/expense_detail_screen.dart';
+import '../features/expenses/presentation/my_expenses_screen.dart';
 import '../features/landing/presentation/landing_screen.dart';
 import '../features/trips/presentation/trip_dashboard_screen.dart';
 import '../features/trips/presentation/trip_tab_stub.dart';
@@ -34,20 +38,25 @@ GoRouter buildAppRouter() {
           ),
           GoRoute(
             path: '/m/trips/:id/expenses/mine',
-            builder: (BuildContext context, GoRouterState state) => TripTabStub(
-              tripId: state.pathParameters['id']!,
-              title: 'My Expenses',
-              icon: Icons.receipt_long_outlined,
-              message: 'List view + filter + chart toggle lands in the next slice.',
-            ),
+            builder: (BuildContext context, GoRouterState state) =>
+                MyExpensesScreen(tripId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/m/trips/:id/expenses/mine/chart',
+            builder: (BuildContext context, GoRouterState state) =>
+                ExpenseBreakdownScreen(tripId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/m/trips/:id/expenses/new',
-            builder: (BuildContext context, GoRouterState state) => TripTabStub(
-              tripId: state.pathParameters['id']!,
-              title: 'Add Expense',
-              icon: Icons.add_circle_outline,
-              message: 'Form + receipt + offline queue lands in the next slice.',
+            builder: (BuildContext context, GoRouterState state) =>
+                AddExpenseScreen(tripId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/m/trips/:tripId/expenses/:expenseId',
+            builder: (BuildContext context, GoRouterState state) =>
+                ExpenseDetailScreen(
+              tripId: state.pathParameters['tripId']!,
+              expenseId: state.pathParameters['expenseId']!,
             ),
           ),
           GoRoute(
@@ -65,7 +74,7 @@ GoRouter buildAppRouter() {
               tripId: state.pathParameters['id']!,
               title: 'Profile',
               icon: Icons.account_circle_outlined,
-              message: 'Profile + all-trips view lands later in Milestone A.',
+              message: 'Profile + all-trips view lands in Milestone B.',
             ),
           ),
           GoRoute(
