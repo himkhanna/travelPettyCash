@@ -1,0 +1,10 @@
+[
+  { "code": "FOOD", "nameEn": "Food", "nameAr": "طعام", "iconKey": "cutlery", "isActive": true },
+  { "code": "TRANSPORT", "nameEn": "Transport", "nameAr": "نقل", "iconKey": "car", "isActive": true },
+  { "code": "HOTEL", "nameEn": "Hotel", "nameAr": "فندق", "iconKey": "bed", "isActive": true },
+  { "code": "PHONE", "nameEn": "Phone", "nameAr": "هاتف", "iconKey": "phone", "isActive": true },
+  { "code": "ENTERTAINMENT", "nameEn": "Entertainment", "nameAr": "ترفيه", "iconKey": "ticket", "isActive": true },
+  { "code": "TIPS", "nameEn": "Tips", "nameAr": "إكراميات", "iconKey": "coin", "isActive": true },
+  { "code": "TRAVEL", "nameEn": "Travel", "nameAr": "سفر", "iconKey": "plane", "isActive": true },
+  { "code": "OTHERS", "nameEn": "Others", "nameAr": "أخرى", "iconKey": "dots", "isActive": true }
+]

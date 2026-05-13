@@ -1,0 +1,14 @@
+[
+  {
+    "id": "src-zabeel",
+    "name": "Zabeel Office",
+    "nameAr": "قصر زعبيل",
+    "isActive": true
+  },
+  {
+    "id": "src-protocol",
+    "name": "Protocol Department",
+    "nameAr": "دائرة التشريفات",
+    "isActive": true
+  }
+]

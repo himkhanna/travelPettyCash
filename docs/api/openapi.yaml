@@ -1,0 +1,944 @@
+openapi: 3.0.3
+info:
+  title: PDD Petty Cash API
+  description: |
+    REST API for the PDD Petty Cash (Travel Expense Management) app.
+    See CLAUDE.md §9 for conventions: camelCase JSON, RFC 7807 errors, cursor pagination,
+    Idempotency-Key required on POST /expenses, /transfers, /allocations.
+  version: 0.1.0
+servers:
+  - url: https://api.pettycash.pdd.gov.ae/api/v1
+    description: Production (Moro Hub) — placeholder
+  - url: http://localhost:8080/api/v1
+    description: Local Spring Boot
+
+tags:
+  - name: auth
+  - name: trips
+  - name: expenses
+  - name: funds
+  - name: chat
+  - name: notifications
+  - name: reports
+  - name: categories
+  - name: sources
+  - name: users
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Exchange username + password for tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '401':
+          $ref: '#/components/responses/Problem'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      security: []
+      summary: Rotate refresh token, mint new access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+
+  /me:
+    get:
+      tags: [users]
+      summary: Current authenticated user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+
+  /trips:
+    get:
+      tags: [trips]
+      summary: List trips visible to the caller
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/TripStatus' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Trip' }
+    post:
+      tags: [trips]
+      summary: Create a trip (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTripRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trip' }
+
+  /trips/{tripId}:
+    get:
+      tags: [trips]
+      parameters: [{ $ref: '#/components/parameters/TripIdPath' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trip' }
+
+  /trips/{tripId}/close:
+    patch:
+      tags: [trips]
+      summary: Close a trip (Admin only)
+      parameters: [{ $ref: '#/components/parameters/TripIdPath' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trip' }
+
+  /trips/{tripId}/balances:
+    get:
+      tags: [trips]
+      summary: Balances for the trip, scoped to caller / leader / trip-wide
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - in: query
+          name: scope
+          required: true
+          schema:
+            type: string
+            enum: [me, trip, leader]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TripBalances' }
+
+  /trips/{tripId}/expenses:
+    get:
+      tags: [expenses]
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - in: query
+          name: userId
+          schema: { type: string }
+        - in: query
+          name: scope
+          schema: { type: string, enum: [mine, all] }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 100 }
+        - in: query
+          name: categoryCode
+          schema: { type: string }
+        - in: query
+          name: sourceId
+          schema: { type: string }
+        - in: query
+          name: memberId
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpensePage' }
+    post:
+      tags: [expenses]
+      summary: Create an expense (idempotent, client-supplied UUID)
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateExpenseRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+
+  /trips/{tripId}/expenses/summary:
+    get:
+      tags: [expenses]
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - in: query
+          name: scope
+          required: true
+          schema: { type: string, enum: [mine, all, user] }
+        - in: query
+          name: groupBy
+          required: true
+          schema: { type: string, enum: [category, source, member] }
+        - in: query
+          name: userId
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ExpenseSummaryRow' }
+
+  /expenses/{expenseId}:
+    get:
+      tags: [expenses]
+      parameters: [{ $ref: '#/components/parameters/ExpenseIdPath' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+    patch:
+      tags: [expenses]
+      parameters: [{ $ref: '#/components/parameters/ExpenseIdPath' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpensePatch' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+
+  /expenses/{expenseId}/source:
+    patch:
+      tags: [expenses]
+      summary: Reassign source (audited event per CLAUDE.md §5)
+      parameters: [{ $ref: '#/components/parameters/ExpenseIdPath' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceId]
+              properties:
+                sourceId: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Expense' }
+
+  /expenses/{expenseId}/receipt:
+    post:
+      tags: [expenses]
+      summary: Upload receipt photo
+      parameters: [{ $ref: '#/components/parameters/ExpenseIdPath' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  objectKey: { type: string }
+                  signedUrl: { type: string }
+    get:
+      tags: [expenses]
+      summary: Get signed URL for the receipt
+      parameters: [{ $ref: '#/components/parameters/ExpenseIdPath' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signedUrl: { type: string }
+
+  /expenses:bulk:
+    patch:
+      tags: [expenses]
+      summary: Bulk source reassignment (screen-inventory #25)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required: [id, sourceId]
+                properties:
+                  id: { type: string }
+                  sourceId: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Expense' }
+
+  /trips/{tripId}/allocations:
+    get:
+      tags: [funds]
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - in: query
+          name: groupBy
+          schema: { type: string, enum: [member] }
+        - in: query
+          name: userId
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Allocation' }
+    post:
+      tags: [funds]
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [allocations]
+              properties:
+                allocations:
+                  type: array
+                  items: { $ref: '#/components/schemas/AllocationDraft' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Allocation' }
+
+  /allocations/{allocationId}/respond:
+    post:
+      tags: [funds]
+      parameters:
+        - in: path
+          name: allocationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [ACCEPT, DECLINE] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Allocation' }
+
+  /trips/{tripId}/transfers:
+    post:
+      tags: [funds]
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransferRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+
+  /categories:
+    get:
+      tags: [categories]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ExpenseCategory' }
+    post:
+      tags: [categories]
+      summary: Add a new category (Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCategoryRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpenseCategory' }
+
+  /sources:
+    get:
+      tags: [sources]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Source' }
+
+  /chat/threads:
+    get:
+      tags: [chat]
+      parameters:
+        - in: query
+          name: tripId
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ChatThread' }
+
+  /chat/threads/{threadId}/messages:
+    get:
+      tags: [chat]
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ChatMessage' }
+    post:
+      tags: [chat]
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatMessage' }
+
+  /notifications:
+    get:
+      tags: [notifications]
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notification' }
+
+  /notifications/{notificationId}/read:
+    patch:
+      tags: [notifications]
+      parameters:
+        - in: path
+          name: notificationId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+
+  /notifications/{notificationId}/act:
+    post:
+      tags: [notifications]
+      parameters:
+        - in: path
+          name: notificationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [ACCEPT, DECLINE] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+
+  /reports/trip/{tripId}:
+    get:
+      tags: [reports]
+      parameters:
+        - { $ref: '#/components/parameters/TripIdPath' }
+        - in: query
+          name: format
+          required: true
+          schema: { type: string, enum: [xlsx, pdf] }
+        - in: query
+          name: scope
+          required: true
+          schema: { type: string, enum: [user, team, finance, dg] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reportId: { type: string }
+                  signedUrl: { type: string }
+                  sha256: { type: string }
+
+  /reports/{reportId}/sign:
+    post:
+      tags: [reports]
+      parameters:
+        - in: path
+          name: reportId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TripIdPath:
+      in: path
+      name: tripId
+      required: true
+      schema: { type: string }
+    ExpenseIdPath:
+      in: path
+      name: expenseId
+      required: true
+      schema: { type: string }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Problem:
+      description: RFC 7807 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Minor units (e.g. halalas for SAR, fils for AED)
+        currency:
+          type: string
+          example: SAR
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+
+    AuthSession:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        user: { $ref: '#/components/schemas/User' }
+
+    UserRole:
+      type: string
+      enum: [MEMBER, LEADER, ADMIN, SUPER_ADMIN]
+
+    User:
+      type: object
+      required: [id, username, displayName, displayNameAr, email, role, isActive]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        displayName: { type: string }
+        displayNameAr: { type: string }
+        email: { type: string }
+        role: { $ref: '#/components/schemas/UserRole' }
+        isActive: { type: boolean }
+
+    TripStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, CLOSED]
+
+    Trip:
+      type: object
+      required: [id, name, countryCode, currency, status, leaderId, memberIds, totalBudget]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        countryCode: { type: string }
+        countryName: { type: string }
+        currency: { type: string }
+        status: { $ref: '#/components/schemas/TripStatus' }
+        createdBy: { type: string }
+        leaderId: { type: string }
+        memberIds:
+          type: array
+          items: { type: string }
+        totalBudget: { $ref: '#/components/schemas/Money' }
+        createdAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time }
+
+    CreateTripRequest:
+      type: object
+      required: [name, countryCode, currency, leaderId, memberIds]
+      properties:
+        name: { type: string }
+        countryCode: { type: string }
+        currency: { type: string }
+        leaderId: { type: string }
+        memberIds:
+          type: array
+          items: { type: string }
+
+    SourceBalance:
+      type: object
+      properties:
+        sourceId: { type: string }
+        sourceName: { type: string }
+        sourceNameAr: { type: string }
+        received: { $ref: '#/components/schemas/Money' }
+        spent: { $ref: '#/components/schemas/Money' }
+        balance: { $ref: '#/components/schemas/Money' }
+
+    TripBalances:
+      type: object
+      properties:
+        tripId: { type: string }
+        scope: { type: string, enum: [me, trip, leader] }
+        totalBudget: { $ref: '#/components/schemas/Money' }
+        totalSpent: { $ref: '#/components/schemas/Money' }
+        totalBalance: { $ref: '#/components/schemas/Money' }
+        perSource:
+          type: array
+          items: { $ref: '#/components/schemas/SourceBalance' }
+
+    Source:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        nameAr: { type: string }
+        isActive: { type: boolean }
+
+    ExpenseCategory:
+      type: object
+      properties:
+        code: { type: string }
+        nameEn: { type: string }
+        nameAr: { type: string }
+        iconKey: { type: string }
+        isActive: { type: boolean }
+
+    CreateCategoryRequest:
+      type: object
+      required: [code, nameEn, nameAr, iconKey]
+      properties:
+        code: { type: string }
+        nameEn: { type: string }
+        nameAr: { type: string }
+        iconKey: { type: string }
+
+    Expense:
+      type: object
+      properties:
+        id: { type: string }
+        tripId: { type: string }
+        userId: { type: string }
+        sourceId: { type: string }
+        categoryCode: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        quantity: { type: integer, default: 1 }
+        details: { type: string }
+        occurredAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        receiptObjectKey: { type: string }
+
+    ExpensePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Expense' }
+        nextCursor: { type: string }
+
+    CreateExpenseRequest:
+      type: object
+      required: [id, sourceId, categoryCode, amount, occurredAt]
+      properties:
+        id:
+          type: string
+          description: Client-supplied UUID; becomes the server-side Expense.id.
+        sourceId: { type: string }
+        categoryCode: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        quantity: { type: integer, default: 1 }
+        details: { type: string }
+        occurredAt: { type: string, format: date-time }
+        receiptObjectKey: { type: string }
+
+    ExpensePatch:
+      type: object
+      properties:
+        sourceId: { type: string }
+        categoryCode: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        details: { type: string }
+        occurredAt: { type: string, format: date-time }
+
+    ExpenseSummaryRow:
+      type: object
+      properties:
+        groupKey: { type: string }
+        label: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+
+    AllocationStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, DECLINED]
+
+    Allocation:
+      type: object
+      properties:
+        id: { type: string }
+        tripId: { type: string }
+        fromUserId: { type: string, nullable: true }
+        toUserId: { type: string }
+        sourceId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { $ref: '#/components/schemas/AllocationStatus' }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time }
+
+    AllocationDraft:
+      type: object
+      required: [toUserId, sourceId, amount]
+      properties:
+        toUserId: { type: string }
+        sourceId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        note: { type: string }
+
+    Transfer:
+      type: object
+      properties:
+        id: { type: string }
+        tripId: { type: string }
+        fromUserId: { type: string }
+        toUserId: { type: string }
+        sourceId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { $ref: '#/components/schemas/AllocationStatus' }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time }
+
+    CreateTransferRequest:
+      type: object
+      required: [id, toUserId, sourceId, amount]
+      properties:
+        id: { type: string, description: 'Client-supplied UUID' }
+        toUserId: { type: string }
+        sourceId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        note: { type: string }
+
+    ChatThread:
+      type: object
+      properties:
+        id: { type: string }
+        tripId: { type: string }
+        title: { type: string }
+        titleAr: { type: string }
+        participantIds:
+          type: array
+          items: { type: string }
+        unreadCount: { type: integer }
+        lastMessagePreview: { type: string }
+        lastMessageAt: { type: string, format: date-time }
+
+    ChatMessage:
+      type: object
+      properties:
+        id: { type: string }
+        threadId: { type: string }
+        senderId: { type: string }
+        body: { type: string }
+        sentAt: { type: string, format: date-time }
+        deliveredAt: { type: string, format: date-time }
+        readAt: { type: string, format: date-time }
+
+    NotificationType:
+      type: string
+      enum: [ALLOCATION_RECEIVED, TRANSFER_RECEIVED, TRANSFER_ACCEPTED, TRIP_ASSIGNED, TRIP_CLOSED, EXPENSE_QUERY]
+
+    NotificationState:
+      type: string
+      enum: [UNREAD, READ, ACTED]
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        type: { $ref: '#/components/schemas/NotificationType' }
+        payload:
+          type: object
+          additionalProperties: true
+        actionable: { type: boolean }
+        state: { $ref: '#/components/schemas/NotificationState' }
+        createdAt: { type: string, format: date-time }

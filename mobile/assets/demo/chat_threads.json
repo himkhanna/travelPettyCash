@@ -1,0 +1,6 @@
+[
+  { "id": "thread-1", "tripId": "trip-ksa-2026", "title": "KSA Delegation Team", "titleAr": "فريق وفد السعودية", "participantIds": ["u-fatima", "u-ahmed", "u-mohammed", "u-layla"], "unreadCount": 2, "lastMessagePreview": "Confirmed pickup at 7am", "lastMessageAt": "2026-05-13T07:45:00+04:00" },
+  { "id": "thread-2", "tripId": "trip-ksa-2026", "title": "Ahmed Al Maktoum", "titleAr": "أحمد آل مكتوم", "participantIds": ["u-fatima", "u-ahmed"], "unreadCount": 1, "lastMessagePreview": "Can you forward the receipt?", "lastMessageAt": "2026-05-12T18:00:00+04:00" },
+  { "id": "thread-3", "tripId": "trip-ksa-2026", "title": "Mohammed Ali", "titleAr": "محمد علي", "participantIds": ["u-fatima", "u-mohammed"], "unreadCount": 0, "lastMessagePreview": "Thanks!", "lastMessageAt": "2026-05-11T10:00:00+04:00" },
+  { "id": "thread-4", "tripId": "trip-egy-2026", "title": "Cairo Trip", "titleAr": "رحلة القاهرة", "participantIds": ["u-fatima", "u-ahmed", "u-mohammed"], "unreadCount": 0, "lastMessagePreview": "Meeting moved to 11", "lastMessageAt": "2026-05-04T09:30:00+04:00" }
+]

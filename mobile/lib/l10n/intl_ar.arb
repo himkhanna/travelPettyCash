@@ -1,0 +1,31 @@
+{
+  "@@locale": "ar",
+
+  "appTitle": "صرفيات السفر",
+
+  "landingTitle": "واجهة العرض التجريبي",
+  "landingSubtitle": "اختر دوراً للدخول إلى النموذج الأولي",
+  "landingMobileSection": "تطبيق الجوال",
+  "landingCmsSection": "لوحة الإدارة (ويب)",
+  "landingDemoNotice": "هذا نموذج واجهة مع بيانات تجريبية فقط. لا توجد أموال أو مصادقة فعلية.",
+
+  "roleMember": "منسق",
+  "roleLeader": "قائد الفريق",
+  "roleAdmin": "مشرف",
+  "roleSuperAdmin": "المدير العام",
+
+  "auth_login_title": "أهلاً وسهلاً",
+  "auth_login_username": "اسم المستخدم",
+  "auth_login_password": "كلمة المرور",
+  "auth_login_forgot": "نسيت كلمة المرور؟",
+  "auth_login_submit": "تسجيل الدخول",
+
+  "common_close": "إغلاق",
+  "common_cancel": "إلغاء",
+  "common_confirm": "تأكيد",
+  "common_save": "حفظ",
+  "common_back": "رجوع",
+  "common_pending_sync": "بانتظار المزامنة",
+  "common_offline": "غير متصل",
+  "common_loading": "جاري التحميل…"
+}

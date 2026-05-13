@@ -1,0 +1,7 @@
+[
+  { "id": "msg-1", "threadId": "thread-1", "senderId": "u-fatima", "body": "Good morning team, breakfast at 8.", "sentAt": "2026-05-13T07:00:00+04:00", "deliveredAt": "2026-05-13T07:00:01+04:00", "readAt": "2026-05-13T07:05:00+04:00" },
+  { "id": "msg-2", "threadId": "thread-1", "senderId": "u-ahmed", "body": "On my way.", "sentAt": "2026-05-13T07:10:00+04:00", "deliveredAt": "2026-05-13T07:10:01+04:00", "readAt": "2026-05-13T07:11:00+04:00" },
+  { "id": "msg-3", "threadId": "thread-1", "senderId": "u-mohammed", "body": "Confirmed pickup at 7am", "sentAt": "2026-05-13T07:45:00+04:00", "deliveredAt": "2026-05-13T07:45:01+04:00" },
+  { "id": "msg-4", "threadId": "thread-2", "senderId": "u-fatima", "body": "Can you forward the receipt?", "sentAt": "2026-05-12T18:00:00+04:00", "deliveredAt": "2026-05-12T18:00:01+04:00" },
+  { "id": "msg-5", "threadId": "thread-3", "senderId": "u-mohammed", "body": "Thanks!", "sentAt": "2026-05-11T10:00:00+04:00", "deliveredAt": "2026-05-11T10:00:01+04:00", "readAt": "2026-05-11T10:02:00+04:00" }
+]

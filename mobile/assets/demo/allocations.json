@@ -1,0 +1,9 @@
+[
+  { "id": "alloc-1", "tripId": "trip-ksa-2026", "fromUserId": null, "toUserId": "u-fatima", "sourceId": "src-zabeel", "amountMinor": 2500000, "status": "ACCEPTED", "createdAt": "2026-04-28T09:30:00+04:00", "respondedAt": "2026-04-28T09:31:00+04:00" },
+  { "id": "alloc-2", "tripId": "trip-ksa-2026", "fromUserId": null, "toUserId": "u-fatima", "sourceId": "src-protocol", "amountMinor": 6600000, "status": "ACCEPTED", "createdAt": "2026-04-28T09:30:00+04:00", "respondedAt": "2026-04-28T09:31:00+04:00" },
+  { "id": "alloc-3", "tripId": "trip-ksa-2026", "fromUserId": "u-fatima", "toUserId": "u-ahmed", "sourceId": "src-zabeel", "amountMinor": 290000, "status": "ACCEPTED", "createdAt": "2026-04-29T08:00:00+04:00", "respondedAt": "2026-04-29T08:15:00+04:00" },
+  { "id": "alloc-4", "tripId": "trip-ksa-2026", "fromUserId": "u-fatima", "toUserId": "u-ahmed", "sourceId": "src-protocol", "amountMinor": 350000, "status": "ACCEPTED", "createdAt": "2026-04-29T08:00:00+04:00", "respondedAt": "2026-04-29T08:15:00+04:00" },
+  { "id": "alloc-5", "tripId": "trip-ksa-2026", "fromUserId": "u-fatima", "toUserId": "u-mohammed", "sourceId": "src-zabeel", "amountMinor": 290000, "status": "ACCEPTED", "createdAt": "2026-04-29T08:05:00+04:00", "respondedAt": "2026-04-29T08:20:00+04:00" },
+  { "id": "alloc-6", "tripId": "trip-ksa-2026", "fromUserId": "u-fatima", "toUserId": "u-mohammed", "sourceId": "src-protocol", "amountMinor": 350000, "status": "ACCEPTED", "createdAt": "2026-04-29T08:05:00+04:00", "respondedAt": "2026-04-29T08:20:00+04:00" },
+  { "id": "alloc-7", "tripId": "trip-ksa-2026", "fromUserId": "u-fatima", "toUserId": "u-layla", "sourceId": "src-zabeel", "amountMinor": 290000, "status": "PENDING", "createdAt": "2026-05-12T14:00:00+04:00" }
+]

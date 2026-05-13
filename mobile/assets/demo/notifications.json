@@ -1,0 +1,8 @@
+[
+  { "id": "notif-1", "userId": "u-ahmed", "type": "ALLOCATION_RECEIVED", "payload": { "fromUserId": "u-fatima", "tripId": "trip-ksa-2026", "sourceId": "src-zabeel", "amountMinor": 290000, "currency": "SAR" }, "actionable": true, "state": "UNREAD", "createdAt": "2026-04-29T08:00:00+04:00" },
+  { "id": "notif-2", "userId": "u-ahmed", "type": "TRANSFER_RECEIVED", "payload": { "fromUserId": "u-mohammed", "tripId": "trip-ksa-2026", "sourceId": "src-protocol", "amountMinor": 150000, "currency": "SAR" }, "actionable": true, "state": "UNREAD", "createdAt": "2026-05-12T16:00:00+04:00" },
+  { "id": "notif-3", "userId": "u-ahmed", "type": "TRANSFER_ACCEPTED", "payload": { "byUserId": "u-mohammed", "tripId": "trip-ksa-2026", "amountMinor": 50000, "currency": "SAR" }, "actionable": false, "state": "READ", "createdAt": "2026-05-10T14:00:00+04:00" },
+  { "id": "notif-4", "userId": "u-ahmed", "type": "TRIP_ASSIGNED", "payload": { "tripId": "trip-egy-2026", "byUserId": "u-khalid" }, "actionable": true, "state": "UNREAD", "createdAt": "2026-05-02T10:30:00+04:00" },
+  { "id": "notif-5", "userId": "u-ahmed", "type": "TRIP_CLOSED", "payload": { "tripId": "trip-jor-2026", "byUserId": "u-khalid" }, "actionable": false, "state": "READ", "createdAt": "2026-03-20T18:00:00+04:00" },
+  { "id": "notif-6", "userId": "u-ahmed", "type": "EXPENSE_QUERY", "payload": { "expenseId": "exp-2", "byUserId": "u-khalid", "question": "Could you re-share the lunch receipt?" }, "actionable": false, "state": "UNREAD", "createdAt": "2026-05-13T09:00:00+04:00" }
+]

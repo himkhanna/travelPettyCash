@@ -1,0 +1,42 @@
+[
+  {
+    "id": "trip-ksa-2026",
+    "name": "KSA State Visit",
+    "countryCode": "SA",
+    "countryName": "Saudi Arabia",
+    "currency": "SAR",
+    "status": "ACTIVE",
+    "createdBy": "u-khalid",
+    "leaderId": "u-fatima",
+    "memberIds": ["u-ahmed", "u-mohammed", "u-layla"],
+    "totalBudgetMinor": 9100000,
+    "createdAt": "2026-04-28T09:00:00+04:00"
+  },
+  {
+    "id": "trip-egy-2026",
+    "name": "Cairo Delegation",
+    "countryCode": "EG",
+    "countryName": "Egypt",
+    "currency": "EGP",
+    "status": "ACTIVE",
+    "createdBy": "u-khalid",
+    "leaderId": "u-fatima",
+    "memberIds": ["u-ahmed", "u-mohammed"],
+    "totalBudgetMinor": 4500000,
+    "createdAt": "2026-05-02T10:30:00+04:00"
+  },
+  {
+    "id": "trip-jor-2026",
+    "name": "Amman Visit",
+    "countryCode": "JO",
+    "countryName": "Jordan",
+    "currency": "JOD",
+    "status": "CLOSED",
+    "createdBy": "u-khalid",
+    "leaderId": "u-fatima",
+    "memberIds": ["u-ahmed", "u-layla"],
+    "totalBudgetMinor": 8500000,
+    "createdAt": "2026-03-10T08:00:00+04:00",
+    "closedAt": "2026-03-20T18:00:00+04:00"
+  }
+]

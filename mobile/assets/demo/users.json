@@ -1,0 +1,56 @@
+[
+  {
+    "id": "u-ahmed",
+    "username": "ahmed",
+    "displayName": "Ahmed Al Maktoum",
+    "displayNameAr": "أحمد آل مكتوم",
+    "email": "ahmed@protocol.gov.ae",
+    "role": "MEMBER",
+    "isActive": true
+  },
+  {
+    "id": "u-fatima",
+    "username": "fatima",
+    "displayName": "Fatima Al Hashimi",
+    "displayNameAr": "فاطمة الهاشمي",
+    "email": "fatima@protocol.gov.ae",
+    "role": "LEADER",
+    "isActive": true
+  },
+  {
+    "id": "u-mohammed",
+    "username": "mohammed",
+    "displayName": "Mohammed Ali",
+    "displayNameAr": "محمد علي",
+    "email": "mohammed@protocol.gov.ae",
+    "role": "MEMBER",
+    "isActive": true
+  },
+  {
+    "id": "u-layla",
+    "username": "layla",
+    "displayName": "Layla Al Mansouri",
+    "displayNameAr": "ليلى المنصوري",
+    "email": "layla@protocol.gov.ae",
+    "role": "MEMBER",
+    "isActive": true
+  },
+  {
+    "id": "u-khalid",
+    "username": "khalid",
+    "displayName": "Khalid Al Suwaidi",
+    "displayNameAr": "خالد السويدي",
+    "email": "khalid@protocol.gov.ae",
+    "role": "ADMIN",
+    "isActive": true
+  },
+  {
+    "id": "u-noura",
+    "username": "noura",
+    "displayName": "Noura Al Falasi",
+    "displayNameAr": "نورة الفلاسي",
+    "email": "noura@protocol.gov.ae",
+    "role": "SUPER_ADMIN",
+    "isActive": true
+  }
+]

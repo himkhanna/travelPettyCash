@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+
+jobs:
+  mobile:
+    name: Flutter (analyze + test + web build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Pub cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            mobile/.dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('mobile/pubspec.yaml') }}
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: dart format check
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: flutter analyze
+        run: flutter analyze --fatal-infos
+
+      - name: flutter test
+        run: flutter test --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: mobile/coverage/lcov.info
+
+      - name: flutter build web
+        run: flutter build web --release --base-href /
+
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: mobile/build/web
+
+  openapi-lint:
+    name: OpenAPI spec lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Redocly CLI
+        run: npm install -g @redocly/cli
+      - name: Lint OpenAPI
+        run: redocly lint docs/api/openapi.yaml
+
+  # Preview deploy hook — enable once the Vercel project is created and
+  # secrets are added to the repo (VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID).
+  # preview-deploy:
+  #   name: Vercel preview
+  #   needs: mobile
+  #   if: github.event_name == 'pull_request'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: web-build
+  #         path: mobile/build/web
+  #     - uses: amondnet/vercel-action@v25
+  #       with:
+  #         vercel-token: ${{ secrets.VERCEL_TOKEN }}
+  #         vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+  #         vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+  #         working-directory: mobile/build/web

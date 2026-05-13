@@ -1,0 +1,32 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "PDD Petty Cash",
+  "@appTitle": { "description": "Product name shown on the title bar and app stores" },
+
+  "landingTitle": "Demo Console",
+  "landingSubtitle": "Pick a role to enter the prototype",
+  "landingMobileSection": "Mobile App",
+  "landingCmsSection": "Admin Console (Web)",
+  "landingDemoNotice": "This is a UI prototype against mocked data. No real funds, no real authentication.",
+
+  "roleMember": "Team Member",
+  "roleLeader": "Team Leader",
+  "roleAdmin": "Admin",
+  "roleSuperAdmin": "Director General",
+
+  "auth_login_title": "WELCOME",
+  "auth_login_username": "Username",
+  "auth_login_password": "Password",
+  "auth_login_forgot": "Forgot password?",
+  "auth_login_submit": "LOGIN",
+
+  "common_close": "CLOSE",
+  "common_cancel": "CANCEL",
+  "common_confirm": "CONFIRM",
+  "common_save": "SAVE",
+  "common_back": "BACK",
+  "common_pending_sync": "Pending sync",
+  "common_offline": "Offline",
+  "common_loading": "Loading…"
+}
