@@ -14,7 +14,8 @@
       "PowerShell(docker pull dart:stable *)",
       "PowerShell(docker run *)",
       "PowerShell($mobilePath = \"C:\\\\Users\\\\himanshu\\\\Travel Petty Cash\\\\mobile\"; docker run --rm -v \"${mobilePath}:/work\" -w /work dart:stable dart format lib test 2>&1 | Select-Object -Last 30)",
-      "PowerShell(docker pull *)"
+      "PowerShell(docker pull *)",
+      "Read(//c/Users/himanshu/AppData/Local/Temp/claude/C--Users-himanshu-Travel-Petty-Cash/eaf463f3-a3a5-4271-afef-6bcdad3bc163/tasks/**)"
     ]
   }
 }
