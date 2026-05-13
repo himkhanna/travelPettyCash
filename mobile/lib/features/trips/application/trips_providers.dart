@@ -1,16 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/fake/demo_store.dart';
+import '../../../core/fake/fake_config.dart';
+import '../../auth/application/auth_providers.dart';
+import '../data/fake_trip_repository.dart';
 import '../data/trip_repository.dart';
 import '../domain/trip.dart';
 
 final Provider<TripRepository> tripRepositoryProvider = Provider<TripRepository>(
-  (Ref ref) => throw UnimplementedError(
-    'tripRepositoryProvider must be overridden in main.dart',
+  (Ref ref) => FakeTripRepository(
+    ref.watch(demoStoreProvider),
+    ref.watch(fakeConfigProvider),
+    currentUserId: () =>
+        ref.read(currentUserProvider).valueOrNull?.id ?? '',
   ),
 );
 
 final FutureProvider<List<Trip>> activeTripsProvider = FutureProvider<List<Trip>>(
-  (Ref ref) => ref.read(tripRepositoryProvider).activeTrips(),
+  (Ref ref) {
+    // Refetch when role changes — different roles see different trips.
+    ref.watch(fakeRoleProvider);
+    return ref.read(tripRepositoryProvider).activeTrips();
+  },
 );
 
 final FutureProviderFamily<Trip, String> tripDetailProvider =
@@ -21,6 +32,8 @@ final FutureProviderFamily<Trip, String> tripDetailProvider =
 final FutureProviderFamily<TripBalances, ({String tripId, BalanceScope scope})>
     tripBalancesProvider = FutureProvider.family<
         TripBalances, ({String tripId, BalanceScope scope})>(
-  (Ref ref, ({String tripId, BalanceScope scope}) args) =>
-      ref.read(tripRepositoryProvider).balances(args.tripId, args.scope),
+  (Ref ref, ({String tripId, BalanceScope scope}) args) {
+    ref.watch(fakeRoleProvider);
+    return ref.read(tripRepositoryProvider).balances(args.tripId, args.scope);
+  },
 );

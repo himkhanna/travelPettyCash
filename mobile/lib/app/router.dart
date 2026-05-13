@@ -3,7 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../features/cms/presentation/cms_placeholder.dart';
 import '../features/landing/presentation/landing_screen.dart';
-import '../features/trips/presentation/trips_home_placeholder.dart';
+import '../features/trips/presentation/trip_dashboard_placeholder.dart';
+import '../features/trips/presentation/trips_home_screen.dart';
 import '../shared/widgets/phone_viewport.dart';
 
 GoRouter buildAppRouter() {
@@ -23,9 +24,13 @@ GoRouter buildAppRouter() {
         routes: <RouteBase>[
           GoRoute(
             path: '/m/trips',
-            builder: (_, __) => const TripsHomePlaceholder(),
+            builder: (_, __) => const TripsHomeScreen(),
           ),
-          // Future: /m/trips/:id/dashboard, /m/trips/:id/expenses, etc.
+          GoRoute(
+            path: '/m/trips/:id/dashboard',
+            builder: (BuildContext context, GoRouterState state) =>
+                TripDashboardPlaceholder(tripId: state.pathParameters['id']!),
+          ),
         ],
       ),
 
