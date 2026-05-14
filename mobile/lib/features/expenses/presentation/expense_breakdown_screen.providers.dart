@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/sync/sync_coordinator.dart';
 import '../../auth/application/auth_providers.dart';
 import '../application/expenses_providers.dart';
+import '../data/expense_repository.dart';
 import '../domain/expense.dart';
 
 final FutureProviderFamily<

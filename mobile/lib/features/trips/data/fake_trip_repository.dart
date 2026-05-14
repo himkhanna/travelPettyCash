@@ -1,7 +1,6 @@
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/money/money.dart';
-import '../../auth/domain/user.dart';
 import '../../funds/domain/funding.dart';
 import '../domain/trip.dart';
 import 'trip_repository.dart';

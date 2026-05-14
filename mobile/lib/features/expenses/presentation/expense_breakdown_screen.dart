@@ -10,6 +10,7 @@ import '../../../shared/widgets/trip_bottom_nav.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
+import '../data/expense_repository.dart';
 import '../domain/expense.dart';
 import 'expense_breakdown_screen.providers.dart';
 

@@ -12,40 +12,27 @@ environment:
 # secure_storage, image_cropper, codegen toolchain, etc. land in Phase 3
 # when the real API client + receipt pipeline arrive.
 dependencies:
+  collection: ^1.19.0
+  connectivity_plus: ^6.1.0
+  dio: ^5.7.0
+  fl_chart: ^0.69.2
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-
-  # State management
   flutter_riverpod: ^2.6.1
-
-  # Routing
   go_router: ^14.6.2
-
-  # Localization & formatting (Flutter 3.27+ bundles intl 0.20)
-  intl: ^0.20.2
-
-  # Charts
-  fl_chart: ^0.69.2
-
-  # Misc
-  uuid: ^4.5.1
-  collection: ^1.19.0
-
-  # Reserved for the API client phase. Pinned here so pub get exercises
-  # them, but they're not imported yet outside of stubs.
-  dio: ^5.7.0
-  connectivity_plus: ^6.1.0
   image_picker: ^1.1.2
-  shared_preferences: ^2.3.3
-  path_provider: ^2.1.5
+  intl: ^0.20.2
   path: ^1.9.0
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.3
+  uuid: ^4.5.1
 
 dev_dependencies:
+  flutter_lints: ^5.0.0
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
