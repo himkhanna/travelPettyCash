@@ -42,41 +42,41 @@ void main() {
         ),
       );
       store.allocations.addAll(<Allocation>[
-          Allocation(
-            id: 'a1',
-            tripId: 't1',
-            fromUserId: null,
-            toUserId: 'u-leader',
-            sourceId: 'src-z',
-            amount: const Money(800000, 'SAR'),
-            status: AllocationStatus.accepted,
-            createdAt: DateTime(2026, 5, 1),
-          ),
-          Allocation(
-            id: 'a2',
-            tripId: 't1',
-            fromUserId: 'u-leader',
-            toUserId: 'u-member',
-            sourceId: 'src-z',
-            amount: const Money(200000, 'SAR'),
-            status: AllocationStatus.accepted,
-            createdAt: DateTime(2026, 5, 1),
-          ),
-        ]);
+        Allocation(
+          id: 'a1',
+          tripId: 't1',
+          fromUserId: null,
+          toUserId: 'u-leader',
+          sourceId: 'src-z',
+          amount: const Money(800000, 'SAR'),
+          status: AllocationStatus.accepted,
+          createdAt: DateTime(2026, 5, 1),
+        ),
+        Allocation(
+          id: 'a2',
+          tripId: 't1',
+          fromUserId: 'u-leader',
+          toUserId: 'u-member',
+          sourceId: 'src-z',
+          amount: const Money(200000, 'SAR'),
+          status: AllocationStatus.accepted,
+          createdAt: DateTime(2026, 5, 1),
+        ),
+      ]);
       store.expenses.add(
-          Expense(
-            id: 'e1',
-            tripId: 't1',
-            userId: 'u-member',
-            sourceId: 'src-z',
-            categoryCode: 'FOOD',
-            amount: const Money(50000, 'SAR'),
-            quantity: 1,
-            details: 'lunch',
-            occurredAt: DateTime(2026, 5, 2),
-            createdAt: DateTime(2026, 5, 2),
-          ),
-        );
+        Expense(
+          id: 'e1',
+          tripId: 't1',
+          userId: 'u-member',
+          sourceId: 'src-z',
+          categoryCode: 'FOOD',
+          amount: const Money(50000, 'SAR'),
+          quantity: 1,
+          details: 'lunch',
+          occurredAt: DateTime(2026, 5, 2),
+          createdAt: DateTime(2026, 5, 2),
+        ),
+      );
       cfg = FakeConfig.instance..setLatency(Duration.zero);
       repo = FakeTripRepository(store, cfg, currentUserId: () => 'u-member');
     });

@@ -43,11 +43,9 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib test
 
       - name: flutter analyze
-        id: analyze
-        continue-on-error: true
         run: |
+          set -o pipefail
           flutter analyze 2>&1 | tee analyze.log
-          echo "exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
 
       - name: Upload analyze log
         if: always()
@@ -58,8 +56,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: flutter test
-        continue-on-error: true
-        run: flutter test --coverage 2>&1 | tee test.log
+        run: |
+          set -o pipefail
+          flutter test --coverage 2>&1 | tee test.log
 
       - name: Upload test log
         if: always()
@@ -83,8 +82,9 @@ jobs:
         run: flutter create --platforms=web --project-name=pdd_petty_cash .
 
       - name: flutter build web
-        continue-on-error: true
-        run: flutter build web --release --base-href / 2>&1 | tee build.log
+        run: |
+          set -o pipefail
+          flutter build web --release --base-href / 2>&1 | tee build.log
 
       - name: Upload build log
         if: always()
