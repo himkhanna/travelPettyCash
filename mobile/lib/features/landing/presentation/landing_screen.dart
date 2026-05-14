@@ -48,7 +48,7 @@ class LandingScreen extends ConsumerWidget {
                   _RoleGrid(
                     onPick: (FakeRole r) {
                       cfg.setRole(r);
-                      context.go('/cms');
+                      context.go(r == FakeRole.superAdmin ? '/cms/dg' : '/cms');
                     },
                     roles: const <FakeRole>[
                       FakeRole.admin,

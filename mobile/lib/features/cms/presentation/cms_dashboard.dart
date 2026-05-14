@@ -11,7 +11,10 @@ import '../../auth/domain/user.dart';
 import '../../expenses/domain/expense.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
+import 'add_category_dialog.dart';
 import 'create_trip_dialog.dart';
+import 'reports_dialog.dart';
+import 'trip_admin_actions.dart';
 
 /// Admin / Super Admin console. Trip list on the left, selected-trip
 /// expenses + balances on the right.
@@ -52,7 +55,36 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
           ],
         ),
         actions: <Widget>[
+          if (me?.role == UserRole.superAdmin) ...<Widget>[
+            OutlinedButton.icon(
+              icon: const Icon(Icons.shield_outlined, size: 18),
+              label: const Text('DG DASHBOARD'),
+              onPressed: () => context.go('/cms/dg'),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           if (me?.role == UserRole.admin) ...<Widget>[
+            IconButton(
+              icon: const Icon(Icons.category_outlined),
+              tooltip: 'Add expense category',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (BuildContext _) => const AddCategoryDialog(),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            if (_selectedTripId != null)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.description_outlined, size: 18),
+                label: const Text('REPORTS'),
+                onPressed: () {
+                  final Trip? t = tripsAsync.valueOrNull
+                      ?.where((Trip t) => t.id == _selectedTripId)
+                      .firstOrNull;
+                  if (t != null) showReportsCatalog(context, trip: t);
+                },
+              ),
+            const SizedBox(width: AppSpacing.sm),
             FilledButton.icon(
               icon: const Icon(Icons.add, size: 18),
               label: const Text('CREATE TRIP'),
@@ -363,6 +395,7 @@ class _TripDetail extends ConsumerWidget {
                 _StatusChip(status: trip.status),
               ],
             ),
+            TripAdminActions(trip: trip),
             const SizedBox(height: AppSpacing.lg),
             balancesAsync.when(
               loading: () => const Padding(

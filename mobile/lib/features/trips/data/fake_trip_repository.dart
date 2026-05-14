@@ -3,6 +3,7 @@ import '../../../core/fake/fake_config.dart';
 import '../../../core/money/money.dart';
 import '../../expenses/domain/expense.dart';
 import '../../funds/domain/funding.dart';
+import '../../notifications/domain/notification.dart';
 import '../domain/trip.dart';
 import 'trip_repository.dart';
 
@@ -202,7 +203,47 @@ class FakeTripRepository implements TripRepository {
   }
 
   @override
-  Future<Trip> closeTrip(String tripId) {
-    throw UnimplementedError('Admin closeTrip lands in Milestone D');
+  Future<Trip> closeTrip(String tripId) async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    _cfg.maybeFail(op: 'trips.closeTrip');
+    final int i = _store.trips.indexWhere((Trip t) => t.id == tripId);
+    if (i < 0) throw StateError('Trip not found: $tripId');
+    final Trip old = _store.trips[i];
+    final DateTime now = _cfg.now();
+    final Trip closed = Trip(
+      id: old.id,
+      name: old.name,
+      countryCode: old.countryCode,
+      countryName: old.countryName,
+      currency: old.currency,
+      status: TripStatus.closed,
+      createdBy: old.createdBy,
+      leaderId: old.leaderId,
+      memberIds: old.memberIds,
+      totalBudget: old.totalBudget,
+      createdAt: old.createdAt,
+      closedAt: now,
+    );
+    _store.trips[i] = closed;
+
+    // TRIP_CLOSED notification to every participant.
+    for (final String userId in <String>{old.leaderId, ...old.memberIds}) {
+      _store.notifications.add(
+        AppNotification(
+          id: 'notif-closed-$tripId-${userId.substring(2)}',
+          userId: userId,
+          type: NotificationType.tripClosed,
+          payload: <String, Object?>{'tripId': tripId, 'byUserId': 'admin'},
+          actionable: false,
+          state: NotificationState.unread,
+          createdAt: now,
+        ),
+      );
+    }
+
+    _store.emit(DemoStoreEvent.tripsChanged);
+    _store.emit(DemoStoreEvent.notificationsChanged);
+    return closed;
   }
 }
