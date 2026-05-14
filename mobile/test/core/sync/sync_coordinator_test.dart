@@ -12,10 +12,10 @@ void main() {
     late SyncCoordinator coordinator;
 
     setUp(() {
-      // Use a fresh isolated store per test by clearing the singleton.
+      TestWidgetsFlutterBinding.ensureInitialized();
       store = DemoStore.instance;
-      store.expenses.clear();
-      store.pendingExpenses.clear();
+      store.resetForTest();
+      store.markLoadedForTest();
       cfg = FakeConfig.instance
         ..setLatency(const Duration(milliseconds: 1))
         ..setOfflineMode(value: false);

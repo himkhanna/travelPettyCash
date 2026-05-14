@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,6 +50,33 @@ class DemoStore {
   Future<void> ensureLoaded() {
     if (_loaded) return Future<void>.value();
     return _loading ??= _load();
+  }
+
+  /// Bypasses asset loading when a test has manually populated the
+  /// collections. Call this in setUp after clear()+add(), before calling
+  /// any FakeRepository method that internally hits ensureLoaded().
+  @visibleForTesting
+  void markLoadedForTest() {
+    _loaded = true;
+  }
+
+  /// Resets the load flag and clears all collections — pair with
+  /// markLoadedForTest in tests that need to leave a clean store behind.
+  @visibleForTesting
+  void resetForTest() {
+    _loaded = false;
+    _loading = null;
+    users.clear();
+    sources.clear();
+    categories.clear();
+    trips.clear();
+    allocations.clear();
+    transfers.clear();
+    expenses.clear();
+    pendingExpenses.clear();
+    chatThreads.clear();
+    chatMessages.clear();
+    notifications.clear();
   }
 
   Future<void> _load() async {

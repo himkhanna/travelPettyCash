@@ -12,9 +12,10 @@ void main() {
     late FakeExpenseRepository repo;
 
     setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
       store = DemoStore.instance;
-      store.expenses.clear();
-      store.pendingExpenses.clear();
+      store.resetForTest();
+      store.markLoadedForTest();
       cfg = FakeConfig.instance
         ..setLatency(Duration.zero)
         ..setFailureRate(0)

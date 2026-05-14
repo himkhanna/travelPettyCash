@@ -77,6 +77,11 @@ jobs:
           path: mobile/coverage/lcov.info
           if-no-files-found: ignore
 
+      # Phase 1 hasn't committed platform stubs (web/, android/, ios/) since the
+      # demo only targets web. Generate them on the fly here.
+      - name: flutter create platforms
+        run: flutter create --platforms=web --project-name=pdd_petty_cash .
+
       - name: flutter build web
         continue-on-error: true
         run: flutter build web --release --base-href / 2>&1 | tee build.log

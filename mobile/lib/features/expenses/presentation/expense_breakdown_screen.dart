@@ -7,7 +7,6 @@ import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
-import '../../auth/application/auth_providers.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import '../data/expense_repository.dart';

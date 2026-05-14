@@ -14,38 +14,34 @@ void main() {
     late FakeTripRepository repo;
 
     setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
       store = DemoStore.instance;
-      store.users.clear();
-      store.sources
-        ..clear()
-        ..add(
-          const Source(
-            id: 'src-z',
-            name: 'Zabeel',
-            nameAr: 'زعبيل',
-            isActive: true,
-          ),
-        );
-      store.trips
-        ..clear()
-        ..add(
-          Trip(
-            id: 't1',
-            name: 'KSA',
-            countryCode: 'SA',
-            countryName: 'Saudi Arabia',
-            currency: 'SAR',
-            status: TripStatus.active,
-            createdBy: 'u-admin',
-            leaderId: 'u-leader',
-            memberIds: const <String>['u-member'],
-            totalBudget: const Money(1000000, 'SAR'),
-            createdAt: DateTime(2026, 5, 1),
-          ),
-        );
-      store.allocations
-        ..clear()
-        ..addAll(<Allocation>[
+      store.resetForTest();
+      store.markLoadedForTest();
+      store.sources.add(
+        const Source(
+          id: 'src-z',
+          name: 'Zabeel',
+          nameAr: 'زعبيل',
+          isActive: true,
+        ),
+      );
+      store.trips.add(
+        Trip(
+          id: 't1',
+          name: 'KSA',
+          countryCode: 'SA',
+          countryName: 'Saudi Arabia',
+          currency: 'SAR',
+          status: TripStatus.active,
+          createdBy: 'u-admin',
+          leaderId: 'u-leader',
+          memberIds: const <String>['u-member'],
+          totalBudget: const Money(1000000, 'SAR'),
+          createdAt: DateTime(2026, 5, 1),
+        ),
+      );
+      store.allocations.addAll(<Allocation>[
           Allocation(
             id: 'a1',
             tripId: 't1',
@@ -67,9 +63,7 @@ void main() {
             createdAt: DateTime(2026, 5, 1),
           ),
         ]);
-      store.expenses
-        ..clear()
-        ..add(
+      store.expenses.add(
           Expense(
             id: 'e1',
             tripId: 't1',
