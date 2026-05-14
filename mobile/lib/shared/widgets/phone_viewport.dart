@@ -8,7 +8,9 @@ import '../../app/theme.dart';
 /// app in a phone-shaped frame at desktop sizes.
 ///
 /// On narrow viewports (<600 logical px) or non-web targets, the child
-/// renders full-screen without the bezel.
+/// renders full-screen without the bezel. On short viewports (height
+/// below the bezel + padding) the whole page becomes scrollable so the
+/// bottom of the phone never gets clipped.
 class PhoneViewport extends StatelessWidget {
   const PhoneViewport({super.key, required this.child});
 
@@ -17,10 +19,14 @@ class PhoneViewport extends StatelessWidget {
   static const double kWidth = 375;
   static const double kHeight = 812;
 
+  // Bezel padding (10 each side) + outer bottom shadow margin.
+  static const double kChromeWidth = kWidth + 20;
+  static const double kChromeHeight = kHeight + 20;
+
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool useBezel = kIsWeb && screenWidth >= 600;
+    final Size size = MediaQuery.of(context).size;
+    final bool useBezel = kIsWeb && size.width >= 600;
 
     if (!useBezel) {
       return child;
@@ -28,7 +34,19 @@ class PhoneViewport extends StatelessWidget {
 
     return ColoredBox(
       color: AppColors.brandBrownDark,
-      child: Center(child: _DeviceChrome(child: child)),
+      child: SingleChildScrollView(
+        // Page-level scroll so users on browser windows shorter than
+        // the phone frame can still reach the bottom.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: size.height),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: _DeviceChrome(child: child),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

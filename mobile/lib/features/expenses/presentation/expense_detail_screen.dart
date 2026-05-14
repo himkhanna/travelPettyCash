@@ -136,19 +136,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 if (e.receiptObjectKey != null)
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.receipt_outlined),
-                    label: const Text('VIEW RECEIPT'),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Receipt viewer lands later in Milestone A.',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  _ReceiptViewer(objectKey: e.receiptObjectKey!),
                 if (e.pendingSync) ...<Widget>[
                   const SizedBox(height: AppSpacing.md),
                   Container(
@@ -227,6 +215,97 @@ class ExpenseDetailScreen extends ConsumerWidget {
       default:
         return Icons.label_outline;
     }
+  }
+}
+
+class _ReceiptViewer extends StatelessWidget {
+  const _ReceiptViewer({required this.objectKey});
+
+  /// `objectKey` is either a `blob:` URL (uploaded via image_picker in the
+  /// demo) or a server-side S3 key in production. The placeholder card is
+  /// what seed expenses get since their pointers don't resolve.
+  final String objectKey;
+
+  bool get _isBlobUrl => objectKey.startsWith('blob:') || objectKey.startsWith('http');
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'RECEIPT',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: AppColors.textSecondary,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (_isBlobUrl)
+          ClipRRect(
+            borderRadius: const BorderRadius.all(AppRadii.card),
+            child: GestureDetector(
+              onTap: () => _showFullscreen(context),
+              child: Image.network(
+                objectKey,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: 220,
+                errorBuilder: (_, __, ___) => _placeholder(context),
+              ),
+            ),
+          )
+        else
+          _placeholder(context),
+      ],
+    );
+  }
+
+  Widget _placeholder(BuildContext context) => Container(
+    height: 120,
+    decoration: BoxDecoration(
+      color: AppColors.cream,
+      borderRadius: const BorderRadius.all(AppRadii.card),
+      border: Border.all(color: AppColors.divider),
+    ),
+    child: const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.image_outlined, size: 32, color: AppColors.textSecondary),
+          SizedBox(height: 6),
+          Text(
+            'Receipt on file',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  void _showFullscreen(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: <Widget>[
+            InteractiveViewer(
+              child: Image.network(objectKey),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

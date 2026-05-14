@@ -6,13 +6,16 @@ import 'auth_repository.dart';
 /// Maps the landing-page role choice (FakeRole) to a seed user and "logs in"
 /// as that user. No password check — this is a demo, see project memory
 /// [[project-build-order-ui-first]].
+///
+/// Current user is **always derived from FakeConfig.role**, never cached on
+/// this repository. Caching led to a bug where switching role on the landing
+/// page kept returning the previously-resolved user because the FutureProvider
+/// rebuilt but the repo returned the stale field.
 class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository(this._store, this._cfg);
 
   final DemoStore _store;
   final FakeConfig _cfg;
-
-  User? _current;
 
   @override
   Future<AuthSession> login({
@@ -25,7 +28,6 @@ class FakeAuthRepository implements AuthRepository {
       (User u) => u.username == username,
       orElse: () => throw StateError('Unknown demo user: $username'),
     );
-    _current = user;
     _cfg.setRole(_roleFor(user));
     return _session(user);
   }
@@ -37,28 +39,24 @@ class FakeAuthRepository implements AuthRepository {
       (User u) => u.role == role,
       orElse: () => throw StateError('No seed user for role: $role'),
     );
-    _current = user;
+    _cfg.setRole(_roleFor(user));
     return _session(user);
   }
 
   @override
   Future<void> logout() async {
-    _current = null;
     _cfg.setRole(FakeRole.unset);
   }
 
   @override
   Future<User?> currentUser() async {
-    if (_current != null) return _current;
     await _store.ensureLoaded();
-    // If the role was set via the landing page, hydrate from there.
     final UserRole? r = _domainRoleFor(_cfg.role);
     if (r == null) return null;
-    _current = _store.users.firstWhere(
+    return _store.users.firstWhere(
       (User u) => u.role == r,
       orElse: () => throw StateError('No seed user for role $r'),
     );
-    return _current;
   }
 
   AuthSession _session(User user) => AuthSession(

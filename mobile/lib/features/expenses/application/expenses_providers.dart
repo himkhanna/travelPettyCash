@@ -4,6 +4,7 @@ import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/sync/sync_coordinator.dart';
 import '../../auth/application/auth_providers.dart';
+import '../../auth/domain/user.dart';
 import '../data/category_repository.dart';
 import '../data/expense_repository.dart';
 import '../data/fake_category_repository.dart';
@@ -32,15 +33,13 @@ final FutureProvider<List<ExpenseCategory>> categoriesProvider =
     );
 
 final FutureProviderFamily<List<Expense>, String> myExpensesProvider =
-    FutureProvider.family<List<Expense>, String>((Ref ref, String tripId) {
-      // Rebuild when role flips, when pending queue drains, or when an expense
-      // is created/updated/deleted.
-      ref.watch(fakeRoleProvider);
+    FutureProvider.family<List<Expense>, String>((Ref ref, String tripId) async {
+      final User? user = await ref.watch(currentUserProvider.future);
+      if (user == null) return <Expense>[];
       ref.watch(syncStateProvider);
-      final String userId = ref.read(currentUserProvider).valueOrNull?.id ?? '';
       return ref
           .read(expenseRepositoryProvider)
-          .list(tripId: tripId, userId: userId);
+          .list(tripId: tripId, userId: user.id);
     });
 
 /// Per-trip view of pending expenses (for "X pending" banners).

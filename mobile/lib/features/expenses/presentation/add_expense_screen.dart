@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/theme.dart';
@@ -39,6 +40,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   String? _categoryCode;
   DateTime _occurredAt = DateTime.now();
   bool _submitting = false;
+  XFile? _receiptFile;
 
   @override
   void dispose() {
@@ -125,7 +127,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       _Label(text: 'RECEIPT'),
-                      _ReceiptStub(),
+                      _ReceiptPicker(
+                        file: _receiptFile,
+                        onPick: _pickReceipt,
+                        onClear: () => setState(() => _receiptFile = null),
+                      ),
                       const SizedBox(height: AppSpacing.xl),
                       FilledButton(
                         onPressed: _submitting ? null : () => _submit(trip),
@@ -182,6 +188,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             amount: amount,
             details: _detailsCtrl.text.trim(),
             occurredAt: _occurredAt,
+            // The XFile.path on web is a blob: URL — directly viewable via
+            // Image.network in the detail screen. On a real backend this
+            // becomes an S3 object key after the receipt upload step.
+            receiptObjectKey: _receiptFile?.path,
             idempotencyKey: _uuid.v4(),
           );
       // Refresh dependent providers.
@@ -195,6 +205,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _toast('Submission failed: $err');
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _pickReceipt() async {
+    try {
+      final XFile? picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1600,
+      );
+      if (picked != null) {
+        setState(() => _receiptFile = picked);
+      }
+    } catch (e) {
+      _toast('Receipt pick failed: $e');
     }
   }
 
@@ -449,41 +474,106 @@ class _DatePickerTile extends StatelessWidget {
   }
 }
 
-class _ReceiptStub extends StatelessWidget {
+class _ReceiptPicker extends StatelessWidget {
+  const _ReceiptPicker({
+    required this.file,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final XFile? file;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Receipt capture is wired in Milestone B (web demo uses a stub).',
-            ),
+    if (file == null) {
+      return InkWell(
+        onTap: onPick,
+        borderRadius: const BorderRadius.all(AppRadii.chip),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(AppRadii.chip),
+            border: Border.all(color: AppColors.divider),
           ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(AppRadii.chip),
-          border: Border.all(
-            color: AppColors.divider,
-            style: BorderStyle.solid,
+          child: Row(
+            children: <Widget>[
+              const Icon(
+                Icons.add_a_photo_outlined,
+                color: AppColors.brandBrown,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                'ADD RECEIPT',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppColors.brandBrown,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
           ),
         ),
-        child: Row(
-          children: <Widget>[
-            const Icon(Icons.add_a_photo_outlined, color: AppColors.brandBrown),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              'ADD RECEIPT',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: AppColors.brandBrown,
-                letterSpacing: 1.2,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: const BorderRadius.all(AppRadii.chip),
+        border: Border.all(color: AppColors.goldOlive),
+      ),
+      child: Row(
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: const BorderRadius.all(AppRadii.chip),
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: Image.network(
+                file!.path,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const ColoredBox(
+                  color: AppColors.divider,
+                  child: Icon(Icons.image_outlined),
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  file!.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Tap to replace',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Pick another file',
+            onPressed: onPick,
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Remove receipt',
+            onPressed: onClear,
+          ),
+        ],
       ),
     );
   }

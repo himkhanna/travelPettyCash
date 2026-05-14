@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/cms/presentation/cms_placeholder.dart';
+import '../features/cms/presentation/cms_dashboard.dart';
 import '../features/expenses/presentation/add_expense_screen.dart';
 import '../features/expenses/presentation/expense_breakdown_screen.dart';
 import '../features/expenses/presentation/expense_detail_screen.dart';
@@ -111,7 +111,7 @@ GoRouter buildAppRouter() {
       ),
 
       // CMS — full-width Flutter Web UI for Admin / Super Admin.
-      GoRoute(path: '/cms', builder: (_, __) => const CmsPlaceholder()),
+      GoRoute(path: '/cms', builder: (_, __) => const CmsDashboard()),
     ],
     errorBuilder: (_, GoRouterState state) => Scaffold(
       body: Center(child: Text('Route not found: ${state.matchedLocation}')),

@@ -25,7 +25,18 @@
       "PowerShell(Expand-Archive *)",
       "PowerShell($runs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs?per_page=2\"; $target = $runs.workflow_runs | Where-Object { $_.head_sha.StartsWith\\('f873f3e'\\) } | Select-Object -First 1; $jobs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs/$\\($target.id\\)/jobs\"; $jobs.jobs | ForEach-Object { Write-Output \"===== $\\($_.name\\) -> $\\($_.conclusion\\) =====\"; $_.steps | ForEach-Object { Write-Output \\(\"{0,-35} {1}\" -f $_.name, $_.conclusion\\) } })",
       "PowerShell($mobilePath = \"C:\\\\Users\\\\himanshu\\\\Travel Petty Cash\\\\mobile\"; docker run --rm -v \"${mobilePath}:/work\" -w /work dart:stable dart format lib test 2>&1 | Select-Object -Last 5)",
-      "PowerShell($runs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs?per_page=2\"; $target = $runs.workflow_runs | Where-Object { $_.head_sha.StartsWith\\('8c48ce2'\\) } | Select-Object -First 1; Write-Output \"8c48ce2 -> $\\($target.conclusion\\)\"; $jobs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs/$\\($target.id\\)/jobs\"; $jobs.jobs | ForEach-Object { Write-Output \"  $\\($_.name\\) -> $\\($_.conclusion\\)\" })"
+      "PowerShell($runs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs?per_page=2\"; $target = $runs.workflow_runs | Where-Object { $_.head_sha.StartsWith\\('8c48ce2'\\) } | Select-Object -First 1; Write-Output \"8c48ce2 -> $\\($target.conclusion\\)\"; $jobs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs/$\\($target.id\\)/jobs\"; $jobs.jobs | ForEach-Object { Write-Output \"  $\\($_.name\\) -> $\\($_.conclusion\\)\" })",
+      "PowerShell($runs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs?per_page=2\"; $target = $runs.workflow_runs | Where-Object { $_.head_sha.StartsWith\\('a435845'\\) } | Select-Object -First 1; Write-Output \"a435845 -> $\\($target.conclusion\\)\"; $jobs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs/$\\($target.id\\)/jobs\"; $jobs.jobs | ForEach-Object { Write-Output \"  $\\($_.name\\) -> $\\($_.conclusion\\)\"; $_.steps | Where-Object { $_.name -in @\\('flutter analyze','flutter test','flutter build web','dart format check'\\) } | ForEach-Object { Write-Output \\(\"    {0,-25} {1}\" -f $_.name, $_.conclusion\\) } })",
+      "PowerShell($runs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs?per_page=2\"; $target = $runs.workflow_runs | Where-Object { $_.head_sha.StartsWith\\('a435845'\\) } | Select-Object -First 1; Write-Output \"Status: $\\($target.status\\) | Conclusion: $\\($target.conclusion\\)\"; $jobs = Invoke-RestMethod -Uri \"https://api.github.com/repos/himkhanna/travelPettyCash/actions/runs/$\\($target.id\\)/jobs\"; $jobs.jobs | ForEach-Object { Write-Output \"$\\($_.name\\) | status=$\\($_.status\\) | conclusion=$\\($_.conclusion\\)\" })",
+      "PowerShell(& \"C:\\\\Tools\\\\flutter\\\\bin\\\\flutter.bat\" --version 2>&1 | Select-Object -First 5)",
+      "PowerShell(flutter *)",
+      "PowerShell(flutter pub *)",
+      "PowerShell(flutter analyze *)",
+      "PowerShell(flutter test *)",
+      "PowerShell(flutter create *)",
+      "PowerShell(flutter devices *)",
+      "PowerShell(flutter run *)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3737/\" -UseBasicParsing -TimeoutSec 5; Write-Output \"Status: $\\($r.StatusCode\\) OK\" } catch { Write-Output \"Error: $_\" })"
     ]
   }
 }
