@@ -5,6 +5,8 @@ import '../features/cms/presentation/cms_dashboard.dart';
 import '../features/expenses/presentation/add_expense_screen.dart';
 import '../features/expenses/presentation/expense_breakdown_screen.dart';
 import '../features/expenses/presentation/expense_detail_screen.dart';
+import '../features/chat/presentation/chat_thread_screen.dart';
+import '../features/chat/presentation/chats_list_screen.dart';
 import '../features/expenses/presentation/my_expenses_screen.dart';
 import '../features/funds/presentation/transfer_screen.dart';
 import '../features/landing/presentation/landing_screen.dart';
@@ -74,12 +76,16 @@ GoRouter buildAppRouter() {
           ),
           GoRoute(
             path: '/m/trips/:id/chat',
-            builder: (BuildContext context, GoRouterState state) => TripTabStub(
-              tripId: state.pathParameters['id']!,
-              title: 'Chats',
-              icon: Icons.chat_bubble_outline,
-              message: 'Chat threads + per-thread view lands in Milestone B.',
-            ),
+            builder: (BuildContext context, GoRouterState state) =>
+                ChatsListScreen(tripId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/m/trips/:tripId/chat/:threadId',
+            builder: (BuildContext context, GoRouterState state) =>
+                ChatThreadScreen(
+                  tripId: state.pathParameters['tripId']!,
+                  threadId: state.pathParameters['threadId']!,
+                ),
           ),
           GoRoute(
             path: '/m/trips/:id/manage-funds',

@@ -5,49 +5,99 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/sync_status_banner.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
+import '../../funds/application/funds_providers.dart';
+import '../../funds/domain/funding.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import '../application/expenses_providers.dart';
 import '../domain/expense.dart';
+import 'widgets/expense_filter_sheet.dart';
 
-/// Screen-inventory #7 — My Expenses list. List/chart toggle routes to
-/// the breakdown chart (#11) which lands in the next slice.
-class MyExpensesScreen extends ConsumerWidget {
+/// Screen-inventory #7 — My Expenses list with filter (#8) and bulk source
+/// reassignment (#25).
+class MyExpensesScreen extends ConsumerStatefulWidget {
   const MyExpensesScreen({super.key, required this.tripId});
   final String tripId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyExpensesScreen> createState() => _MyExpensesScreenState();
+}
+
+class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
+  bool _editMode = false;
+  final Map<String, String> _pendingSourceChange = <String, String>{};
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
     final AsyncValue<List<Expense>> expenses = ref.watch(
-      myExpensesProvider(tripId),
+      myExpensesProvider(widget.tripId),
     );
-    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
+    final AsyncValue<Trip> tripAsync = ref.watch(
+      tripDetailProvider(widget.tripId),
+    );
+    final ExpenseFilterState filter = ref.watch(
+      expenseFilterProvider(widget.tripId),
+    );
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('MY EXPENSES'),
         actions: <Widget>[
-          IconButton(
-            icon: const Icon(Icons.donut_large_outlined),
-            tooltip: 'Chart view',
-            onPressed: () => context.go('/m/trips/$tripId/expenses/mine/chart'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_alt_outlined),
-            tooltip: 'Filter',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Filters land later in Milestone A.'),
-                ),
-              );
-            },
-          ),
+          if (!_editMode) ...<Widget>[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit all (reassign sources)',
+              onPressed: () => setState(() {
+                _editMode = true;
+                _pendingSourceChange.clear();
+              }),
+            ),
+            IconButton(
+              icon: const Icon(Icons.donut_large_outlined),
+              tooltip: 'Chart view',
+              onPressed: () => context.go(
+                '/m/trips/${widget.tripId}/expenses/mine/chart',
+              ),
+            ),
+            _FilterButton(
+              filter: filter,
+              onTap: () => showExpenseFilterSheet(
+                context,
+                tripId: widget.tripId,
+              ),
+            ),
+          ] else ...<Widget>[
+            TextButton(
+              onPressed: () => setState(() {
+                _editMode = false;
+                _pendingSourceChange.clear();
+              }),
+              child: const Text('CANCEL'),
+            ),
+            TextButton(
+              onPressed: _pendingSourceChange.isEmpty || _saving
+                  ? null
+                  : _saveBulk,
+              child: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      'SAVE ${_pendingSourceChange.length}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+            ),
+          ],
         ],
       ),
       body: Column(
         children: <Widget>[
           const SyncStatusBanner(),
+          if (filter.count > 0 && !_editMode)
+            _ActiveFilterChip(filter: filter, tripId: widget.tripId),
           Expanded(
             child: expenses.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -67,8 +117,20 @@ class MyExpensesScreen extends ConsumerWidget {
                           return _ExpenseRow(
                             expense: e,
                             trip: trip,
-                            onTap: () =>
-                                context.go('/m/trips/$tripId/expenses/${e.id}'),
+                            editMode: _editMode,
+                            pendingSourceId: _pendingSourceChange[e.id],
+                            onTap: _editMode
+                                ? null
+                                : () => context.go(
+                                    '/m/trips/${widget.tripId}/expenses/${e.id}',
+                                  ),
+                            onChangeSource: (String newId) => setState(() {
+                              if (newId == e.sourceId) {
+                                _pendingSourceChange.remove(e.id);
+                              } else {
+                                _pendingSourceChange[e.id] = newId;
+                              }
+                            }),
                           );
                         },
                       ),
@@ -78,8 +140,121 @@ class MyExpensesScreen extends ConsumerWidget {
         ],
       ),
       bottomNavigationBar: TripBottomNav(
-        tripId: tripId,
+        tripId: widget.tripId,
         currentLocation: GoRouterState.of(context).matchedLocation,
+      ),
+    );
+  }
+
+  Future<void> _saveBulk() async {
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(expenseRepositoryProvider)
+          .bulkReassignSource(_pendingSourceChange);
+      ref.invalidate(myExpensesProvider(widget.tripId));
+      ref.invalidate(tripBalancesProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reassigned ${_pendingSourceChange.length} expense${_pendingSourceChange.length == 1 ? '' : 's'}',
+          ),
+        ),
+      );
+      setState(() {
+        _editMode = false;
+        _pendingSourceChange.clear();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Bulk save failed: $e')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({required this.filter, required this.onTap});
+
+  final ExpenseFilterState filter;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        IconButton(
+          icon: const Icon(Icons.filter_alt_outlined),
+          tooltip: 'Filter',
+          onPressed: onTap,
+        ),
+        if (filter.count > 0)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: const BoxDecoration(
+                color: AppColors.outflow,
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
+              child: Text(
+                '${filter.count}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ActiveFilterChip extends ConsumerWidget {
+  const _ActiveFilterChip({required this.filter, required this.tripId});
+  final ExpenseFilterState filter;
+  final String tripId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      color: AppColors.cream,
+      child: Row(
+        children: <Widget>[
+          const Icon(
+            Icons.filter_alt,
+            size: 16,
+            color: AppColors.brandBrown,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '${filter.count} filter${filter.count == 1 ? '' : 's'} active',
+              style: const TextStyle(
+                color: AppColors.brandBrown,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () =>
+                ref.read(expenseFilterProvider(tripId).notifier).state =
+                    const ExpenseFilterState(),
+            child: const Text('CLEAR'),
+          ),
+        ],
       ),
     );
   }
@@ -89,17 +264,27 @@ class _ExpenseRow extends ConsumerWidget {
   const _ExpenseRow({
     required this.expense,
     required this.trip,
-    required this.onTap,
+    required this.editMode,
+    required this.pendingSourceId,
+    required this.onChangeSource,
+    this.onTap,
   });
+
   final Expense expense;
   final Trip trip;
-  final VoidCallback onTap;
+  final bool editMode;
+  final String? pendingSourceId;
+  final ValueChanged<String> onChangeSource;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final String currentSourceId = pendingSourceId ?? expense.sourceId;
     final String dateStr = _shortDate(expense.occurredAt);
+    final bool dirty = pendingSourceId != null;
+
     return Material(
-      color: AppColors.surfaceCard,
+      color: dirty ? AppColors.cream : AppColors.surfaceCard,
       borderRadius: const BorderRadius.all(AppRadii.card),
       child: InkWell(
         onTap: onTap,
@@ -144,13 +329,20 @@ class _ExpenseRow extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      expense.details.isEmpty
-                          ? '(no details)'
-                          : expense.details,
+                      expense.details.isEmpty ? '(no details)' : expense.details,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
+                    const SizedBox(height: 6),
+                    if (editMode)
+                      _SourceDropdown(
+                        currentSourceId: currentSourceId,
+                        originalSourceId: expense.sourceId,
+                        onChange: onChangeSource,
+                      )
+                    else
+                      _SourceLabel(sourceId: expense.sourceId),
                     if (expense.pendingSync) ...<Widget>[
                       const SizedBox(height: 6),
                       const _PendingChip(),
@@ -167,20 +359,74 @@ class _ExpenseRow extends ConsumerWidget {
 
   String _shortDate(DateTime d) {
     const List<String> months = <String>[
-      'JAN',
-      'FEB',
-      'MAR',
-      'APR',
-      'MAY',
-      'JUN',
-      'JUL',
-      'AUG',
-      'SEP',
-      'OCT',
-      'NOV',
-      'DEC',
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
     ];
     return '${d.day} ${months[d.month - 1]}';
+  }
+}
+
+class _SourceLabel extends ConsumerWidget {
+  const _SourceLabel({required this.sourceId});
+  final String sourceId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<Source>> sources = ref.watch(sourcesProvider);
+    final String name = sources.maybeWhen(
+      data: (List<Source> list) => list
+          .firstWhere(
+            (Source s) => s.id == sourceId,
+            orElse: () => const Source(
+              id: '',
+              name: '?',
+              nameAr: '?',
+              isActive: true,
+            ),
+          )
+          .name,
+      orElse: () => '…',
+    );
+    return Text(
+      name,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: AppColors.brandBrown,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1.2,
+      ),
+    );
+  }
+}
+
+class _SourceDropdown extends ConsumerWidget {
+  const _SourceDropdown({
+    required this.currentSourceId,
+    required this.originalSourceId,
+    required this.onChange,
+  });
+
+  final String currentSourceId;
+  final String originalSourceId;
+  final ValueChanged<String> onChange;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<Source>> sources = ref.watch(sourcesProvider);
+    return sources.maybeWhen(
+      data: (List<Source> list) => DropdownButton<String>(
+        value: currentSourceId,
+        isDense: true,
+        underline: const SizedBox.shrink(),
+        items: <DropdownMenuItem<String>>[
+          for (final Source s in list)
+            DropdownMenuItem<String>(value: s.id, child: Text(s.name)),
+        ],
+        onChanged: (String? v) {
+          if (v != null) onChange(v);
+        },
+      ),
+      orElse: () => const LinearProgressIndicator(),
+    );
   }
 }
 
@@ -261,11 +507,11 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'No expenses yet — tap the + button to record one.',
+              'No expenses for the current filter.',
               textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),

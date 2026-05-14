@@ -10,6 +10,7 @@ import '../data/expense_repository.dart';
 import '../data/fake_category_repository.dart';
 import '../data/fake_expense_repository.dart';
 import '../domain/expense.dart';
+import '../presentation/widgets/expense_filter_sheet.dart';
 
 final Provider<ExpenseRepository> expenseRepositoryProvider =
     Provider<ExpenseRepository>(
@@ -37,9 +38,16 @@ final FutureProviderFamily<List<Expense>, String> myExpensesProvider =
       final User? user = await ref.watch(currentUserProvider.future);
       if (user == null) return <Expense>[];
       ref.watch(syncStateProvider);
+      final ExpenseFilterState filter = ref.watch(
+        expenseFilterProvider(tripId),
+      );
       return ref
           .read(expenseRepositoryProvider)
-          .list(tripId: tripId, userId: user.id);
+          .list(
+            tripId: tripId,
+            userId: user.id,
+            filter: filter.toRepoFilter(),
+          );
     });
 
 /// Per-trip view of pending expenses (for "X pending" banners).
