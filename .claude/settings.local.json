@@ -36,7 +36,8 @@
       "PowerShell(flutter create *)",
       "PowerShell(flutter devices *)",
       "PowerShell(flutter run *)",
-      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3737/\" -UseBasicParsing -TimeoutSec 5; Write-Output \"Status: $\\($r.StatusCode\\) OK\" } catch { Write-Output \"Error: $_\" })"
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3737/\" -UseBasicParsing -TimeoutSec 5; Write-Output \"Status: $\\($r.StatusCode\\) OK\" } catch { Write-Output \"Error: $_\" })",
+      "PowerShell(Get-Content *)"
     ]
   }
 }

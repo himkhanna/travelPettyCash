@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
+import '../../funds/data/fake_allocation_repository.dart';
 import '../../funds/data/fake_transfer_repository.dart';
 import '../../funds/data/funds_repository.dart';
 import '../../funds/domain/funding.dart';
@@ -15,6 +16,11 @@ class FakeNotificationsRepository implements NotificationsRepository {
   final FakeConfig _cfg;
 
   late final TransferRepository _transfers = FakeTransferRepository(
+    _store,
+    _cfg,
+  );
+
+  late final AllocationRepository _allocations = FakeAllocationRepository(
     _store,
     _cfg,
   );
@@ -78,13 +84,24 @@ class FakeNotificationsRepository implements NotificationsRepository {
     if (i < 0) throw StateError('Notification not found: $notificationId');
     final AppNotification n = _store.notifications[i];
 
-    // Side-effect: if this is an actionable TRANSFER_RECEIVED, drive the
-    // underlying transfer to the right status.
+    // Side-effect: drive the underlying transfer / allocation to the
+    // right status when the user accepts or declines.
     if (n.type == NotificationType.transferReceived) {
       final String? transferId = n.payload['transferId'] as String?;
       if (transferId != null) {
         await _transfers.respond(
           transferId: transferId,
+          response: action == NotificationAction.accept
+              ? AllocationStatus.accepted
+              : AllocationStatus.declined,
+        );
+      }
+    }
+    if (n.type == NotificationType.allocationReceived) {
+      final String? allocationId = n.payload['allocationId'] as String?;
+      if (allocationId != null) {
+        await _allocations.respond(
+          allocationId: allocationId,
           response: action == NotificationAction.accept
               ? AllocationStatus.accepted
               : AllocationStatus.declined,
