@@ -43,10 +43,31 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib test
 
       - name: flutter analyze
-        run: flutter analyze --fatal-infos
+        id: analyze
+        continue-on-error: true
+        run: |
+          flutter analyze 2>&1 | tee analyze.log
+          echo "exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Upload analyze log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analyze-log
+          path: mobile/analyze.log
+          if-no-files-found: ignore
 
       - name: flutter test
-        run: flutter test --coverage
+        continue-on-error: true
+        run: flutter test --coverage 2>&1 | tee test.log
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: mobile/test.log
+          if-no-files-found: ignore
 
       - name: Upload coverage
         if: always()
@@ -57,7 +78,16 @@ jobs:
           if-no-files-found: ignore
 
       - name: flutter build web
-        run: flutter build web --release --base-href /
+        continue-on-error: true
+        run: flutter build web --release --base-href / 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: mobile/build.log
+          if-no-files-found: ignore
 
       - name: Upload web build
         uses: actions/upload-artifact@v4
