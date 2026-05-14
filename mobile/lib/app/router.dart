@@ -8,6 +8,8 @@ import '../features/expenses/presentation/expense_detail_screen.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../features/chat/presentation/chats_list_screen.dart';
 import '../features/expenses/presentation/my_expenses_screen.dart';
+import '../features/expenses/presentation/trip_expense_breakdown_screen.dart';
+import '../features/expenses/presentation/trip_expenses_screen.dart';
 import '../features/funds/presentation/allocate_funds_screen.dart';
 import '../features/funds/presentation/manage_funds_screen.dart';
 import '../features/funds/presentation/transfer_screen.dart';
@@ -48,6 +50,18 @@ GoRouter buildAppRouter() {
             path: '/m/trips/:id/expenses/mine/chart',
             builder: (BuildContext context, GoRouterState state) =>
                 ExpenseBreakdownScreen(tripId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/m/trips/:id/expenses/all',
+            builder: (BuildContext context, GoRouterState state) =>
+                TripExpensesScreen(tripId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/m/trips/:id/expenses/all/chart',
+            builder: (BuildContext context, GoRouterState state) =>
+                TripExpenseBreakdownScreen(
+                  tripId: state.pathParameters['id']!,
+                ),
           ),
           GoRoute(
             path: '/m/trips/:id/expenses/new',

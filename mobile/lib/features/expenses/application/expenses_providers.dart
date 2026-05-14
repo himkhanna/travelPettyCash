@@ -50,6 +50,20 @@ final FutureProviderFamily<List<Expense>, String> myExpensesProvider =
           );
     });
 
+/// Cross-member view (#26). Same filter as My Expenses but `userId: null`.
+final FutureProviderFamily<List<Expense>, String> tripExpensesProvider =
+    FutureProvider.family<List<Expense>, String>((Ref ref, String tripId) async {
+      final User? user = await ref.watch(currentUserProvider.future);
+      if (user == null) return <Expense>[];
+      ref.watch(syncStateProvider);
+      final ExpenseFilterState filter = ref.watch(
+        expenseFilterProvider(tripId),
+      );
+      return ref
+          .read(expenseRepositoryProvider)
+          .list(tripId: tripId, filter: filter.toRepoFilter());
+    });
+
 /// Per-trip view of pending expenses (for "X pending" banners).
 final ProviderFamily<int, String> pendingCountForTripProvider =
     Provider.family<int, String>((Ref ref, String tripId) {

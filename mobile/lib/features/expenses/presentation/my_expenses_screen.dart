@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/sync_status_banner.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
+import '../../auth/application/auth_providers.dart';
+import '../../auth/domain/user.dart';
 import '../../funds/application/funds_providers.dart';
 import '../../funds/domain/funding.dart';
 import '../../trips/application/trips_providers.dart';
@@ -39,6 +41,11 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
     final ExpenseFilterState filter = ref.watch(
       expenseFilterProvider(widget.tripId),
     );
+    final User? me = ref.watch(currentUserProvider).valueOrNull;
+    final bool canSeeTripScope =
+        me?.role == UserRole.leader ||
+        me?.role == UserRole.admin ||
+        me?.role == UserRole.superAdmin;
 
     return Scaffold(
       appBar: AppBar(
@@ -96,6 +103,7 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
       body: Column(
         children: <Widget>[
           const SyncStatusBanner(),
+          if (canSeeTripScope) _ScopeTabs(tripId: widget.tripId),
           if (filter.count > 0 && !_editMode)
             _ActiveFilterChip(filter: filter, tripId: widget.tripId),
           Expanded(
@@ -174,6 +182,69 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+class _ScopeTabs extends StatelessWidget {
+  const _ScopeTabs({required this.tripId});
+  final String tripId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: const BorderRadius.all(AppRadii.chip),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.brandBrown,
+                borderRadius: const BorderRadius.all(AppRadii.chip),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'MY EXPENSES',
+                style: TextStyle(
+                  color: AppColors.cream,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () =>
+                  GoRouter.of(context).go('/m/trips/$tripId/expenses/all'),
+              borderRadius: const BorderRadius.all(AppRadii.chip),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.center,
+                child: Text(
+                  'TRIP EXPENSES',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

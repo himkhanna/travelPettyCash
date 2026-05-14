@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/theme.dart';
+import '../../../../core/fake/demo_store.dart';
 import '../../../funds/application/funds_providers.dart';
 import '../../../funds/domain/funding.dart';
+import '../../../trips/application/trips_providers.dart';
+import '../../../trips/domain/trip.dart';
 import '../../application/expenses_providers.dart';
 import '../../domain/expense.dart';
 
@@ -14,18 +17,21 @@ class ExpenseFilterState {
   const ExpenseFilterState({
     this.categoryCodes = const <String>{},
     this.sourceIds = const <String>{},
+    this.memberIds = const <String>{},
     this.from,
     this.to,
   });
 
   final Set<String> categoryCodes;
   final Set<String> sourceIds;
+  final Set<String> memberIds;
   final DateTime? from;
   final DateTime? to;
 
   bool get isEmpty =>
       categoryCodes.isEmpty &&
       sourceIds.isEmpty &&
+      memberIds.isEmpty &&
       from == null &&
       to == null;
 
@@ -33,6 +39,7 @@ class ExpenseFilterState {
     int c = 0;
     if (categoryCodes.isNotEmpty) c++;
     if (sourceIds.isNotEmpty) c++;
+    if (memberIds.isNotEmpty) c++;
     if (from != null || to != null) c++;
     return c;
   }
@@ -40,6 +47,7 @@ class ExpenseFilterState {
   ExpenseFilter toRepoFilter() => ExpenseFilter(
     categoryCodes: categoryCodes.isEmpty ? null : categoryCodes.toList(),
     sourceIds: sourceIds.isEmpty ? null : sourceIds.toList(),
+    memberIds: memberIds.isEmpty ? null : memberIds.toList(),
     from: from,
     to: to,
   );
@@ -47,6 +55,7 @@ class ExpenseFilterState {
   ExpenseFilterState copyWith({
     Set<String>? categoryCodes,
     Set<String>? sourceIds,
+    Set<String>? memberIds,
     DateTime? from,
     DateTime? to,
     bool clearFrom = false,
@@ -54,6 +63,7 @@ class ExpenseFilterState {
   }) => ExpenseFilterState(
     categoryCodes: categoryCodes ?? this.categoryCodes,
     sourceIds: sourceIds ?? this.sourceIds,
+    memberIds: memberIds ?? this.memberIds,
     from: clearFrom ? null : (from ?? this.from),
     to: clearTo ? null : (to ?? this.to),
   );
@@ -68,6 +78,7 @@ final StateProviderFamily<ExpenseFilterState, String> expenseFilterProvider =
 Future<void> showExpenseFilterSheet(
   BuildContext context, {
   required String tripId,
+  bool showMembers = false,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -76,13 +87,15 @@ Future<void> showExpenseFilterSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (BuildContext _) => _ExpenseFilterSheet(tripId: tripId),
+    builder: (BuildContext _) =>
+        _ExpenseFilterSheet(tripId: tripId, showMembers: showMembers),
   );
 }
 
 class _ExpenseFilterSheet extends ConsumerStatefulWidget {
-  const _ExpenseFilterSheet({required this.tripId});
+  const _ExpenseFilterSheet({required this.tripId, required this.showMembers});
   final String tripId;
+  final bool showMembers;
 
   @override
   ConsumerState<_ExpenseFilterSheet> createState() =>
@@ -177,6 +190,25 @@ class _ExpenseFilterSheetState extends ConsumerState<_ExpenseFilterSheet> {
                     ),
                     orElse: () => const LinearProgressIndicator(),
                   ),
+                  if (widget.showMembers) ...<Widget>[
+                    const SizedBox(height: AppSpacing.lg),
+                    _section('BY MEMBER'),
+                    _MembersFilter(
+                      tripId: widget.tripId,
+                      selected: _draft.memberIds,
+                      onToggle: (String id, bool sel) => setState(() {
+                        final Set<String> next = Set<String>.from(
+                          _draft.memberIds,
+                        );
+                        if (sel) {
+                          next.add(id);
+                        } else {
+                          next.remove(id);
+                        }
+                        _draft = _draft.copyWith(memberIds: next);
+                      }),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   _section('BY SOURCE'),
                   sourcesAsync.maybeWhen(
@@ -298,6 +330,57 @@ class _GrabHandle extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _MembersFilter extends ConsumerWidget {
+  const _MembersFilter({
+    required this.tripId,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final String tripId;
+  final Set<String> selected;
+  final void Function(String id, bool selected) onToggle;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
+    final DemoStore store = ref.read(demoStoreProvider);
+    return tripAsync.maybeWhen(
+      data: (Trip trip) {
+        final List<String> ids = <String>[trip.leaderId, ...trip.memberIds];
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: <Widget>[
+            for (final String id in ids)
+              FilterChip(
+                label: Text(_safeName(store, id)),
+                selected: selected.contains(id),
+                onSelected: (bool v) => onToggle(id, v),
+                selectedColor: AppColors.goldOlive,
+                labelStyle: TextStyle(
+                  color: selected.contains(id)
+                      ? Colors.white
+                      : AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        );
+      },
+      orElse: () => const LinearProgressIndicator(),
+    );
+  }
+
+  String _safeName(DemoStore store, String id) {
+    try {
+      return store.userById(id).displayName;
+    } catch (_) {
+      return id;
+    }
   }
 }
 
