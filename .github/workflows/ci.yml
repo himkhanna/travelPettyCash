@@ -45,7 +45,9 @@ jobs:
       - name: flutter analyze
         run: |
           set -o pipefail
-          flutter analyze 2>&1 | tee analyze.log
+          # Phase 1 keeps info-level lints visible but non-fatal.
+          # Re-enable --fatal-infos in Phase 3 after a const-cleanup pass.
+          flutter analyze --no-fatal-infos 2>&1 | tee analyze.log
 
       - name: Upload analyze log
         if: always()
