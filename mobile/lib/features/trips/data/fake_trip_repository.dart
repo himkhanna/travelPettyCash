@@ -1,6 +1,7 @@
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/money/money.dart';
+import '../../expenses/domain/expense.dart';
 import '../../funds/domain/funding.dart';
 import '../domain/trip.dart';
 import 'trip_repository.dart';
@@ -133,6 +134,17 @@ class FakeTripRepository implements TripRepository {
       }
       if (include) total += a.amount;
     }
+
+    // Accepted peer-to-peer transfers ADD to the recipient's "received".
+    // Pending transfers don't count — the recipient sees a pending row in
+    // the notifications screen and has to accept first.
+    if (scope == BalanceScope.me) {
+      for (final Transfer t in _store.transfers) {
+        if (t.tripId != tripId || t.sourceId != sourceId) continue;
+        if (t.status != AllocationStatus.accepted) continue;
+        if (t.toUserId == me) total += t.amount;
+      }
+    }
     return total;
   }
 
@@ -144,7 +156,7 @@ class FakeTripRepository implements TripRepository {
     required String me,
   }) {
     Money total = Money.zero(currency);
-    for (final dynamic exp in _store.expenses) {
+    for (final Expense exp in _store.expenses) {
       if (exp.tripId != tripId || exp.sourceId != sourceId) continue;
       if (exp.deletedAt != null) continue;
       final bool include;
@@ -157,7 +169,18 @@ class FakeTripRepository implements TripRepository {
           include = true;
           break;
       }
-      if (include) total += exp.amount as Money;
+      if (include) total += exp.amount;
+    }
+
+    // Money leaving the user via a peer transfer counts as outflow against
+    // their balance — even though it's not literally a purchase, the wallet
+    // shrinks. At trip scope this is internal redistribution and is ignored.
+    if (scope == BalanceScope.me) {
+      for (final Transfer t in _store.transfers) {
+        if (t.tripId != tripId || t.sourceId != sourceId) continue;
+        if (t.status != AllocationStatus.accepted) continue;
+        if (t.fromUserId == me) total += t.amount;
+      }
     }
     return total;
   }

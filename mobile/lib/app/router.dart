@@ -6,7 +6,9 @@ import '../features/expenses/presentation/add_expense_screen.dart';
 import '../features/expenses/presentation/expense_breakdown_screen.dart';
 import '../features/expenses/presentation/expense_detail_screen.dart';
 import '../features/expenses/presentation/my_expenses_screen.dart';
+import '../features/funds/presentation/transfer_screen.dart';
 import '../features/landing/presentation/landing_screen.dart';
+import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/trips/presentation/trip_dashboard_screen.dart';
 import '../features/trips/presentation/trip_tab_stub.dart';
 import '../features/trips/presentation/trips_home_screen.dart';
@@ -58,12 +60,8 @@ GoRouter buildAppRouter() {
           ),
           GoRoute(
             path: '/m/trips/:id/transfer',
-            builder: (BuildContext context, GoRouterState state) => TripTabStub(
-              tripId: state.pathParameters['id']!,
-              title: 'Transfer',
-              icon: Icons.swap_horiz,
-              message: 'Peer-to-peer transfer lands in Milestone B.',
-            ),
+            builder: (BuildContext context, GoRouterState state) =>
+                TransferScreen(tripId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/m/trips/:id/profile',
@@ -94,18 +92,7 @@ GoRouter buildAppRouter() {
           ),
           GoRoute(
             path: '/m/notifications',
-            builder: (_, __) => Scaffold(
-              appBar: AppBar(title: const Text('Notifications')),
-              body: const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Notifications list lands in Milestone B.',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
+            builder: (_, __) => const NotificationsScreen(),
           ),
         ],
       ),

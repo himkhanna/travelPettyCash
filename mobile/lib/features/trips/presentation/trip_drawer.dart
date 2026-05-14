@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/dev_menu.dart';
-import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
+import '../../notifications/application/notifications_providers.dart';
 
 /// Slide-out menu per screen-inventory #4 (Member) and #31 (Leader).
 /// Member drawer: Logout / All Trips / Notifications / Chat
@@ -19,9 +19,7 @@ class TripDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final User? user = ref.watch(currentUserProvider).valueOrNull;
-    final int unread = ref
-        .read(demoStoreProvider)
-        .unreadNotificationCount(user?.id ?? '', tripId: tripId);
+    final int unread = ref.watch(myUnreadCountProvider);
     final bool leaderOrAdmin =
         user?.role == UserRole.leader || user?.role == UserRole.admin;
 
