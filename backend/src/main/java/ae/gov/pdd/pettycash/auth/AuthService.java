@@ -4,6 +4,7 @@ import ae.gov.pdd.pettycash.auth.dto.AuthTokens;
 import ae.gov.pdd.pettycash.common.error.ApiException;
 import ae.gov.pdd.pettycash.user.User;
 import ae.gov.pdd.pettycash.user.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,6 +44,7 @@ public class AuthService {
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
+    @Autowired
     public AuthService(
         UserRepository users,
         RefreshTokenRepository refreshTokens,

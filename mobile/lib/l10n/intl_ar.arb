@@ -19,6 +19,13 @@
   "auth_login_password": "كلمة المرور",
   "auth_login_forgot": "نسيت كلمة المرور؟",
   "auth_login_submit": "تسجيل الدخول",
+  "auth_login_username_required": "اسم المستخدم مطلوب.",
+  "auth_login_password_required": "كلمة المرور مطلوبة.",
+  "auth_login_back_to_landing": "العودة إلى واجهة العرض",
+  "auth_login_error_invalid_credentials": "اسم المستخدم أو كلمة المرور غير صحيحة.",
+  "auth_login_error_network": "تعذر الوصول إلى الخادم. تحقق من العنوان أو الاتصال.",
+  "landing_sign_in_api": "تسجيل دخول حقيقي",
+  "landing_sign_in_api_subtitle": "تسجيل الدخول إلى الخادم الفعلي على {baseUrl}.",
 
   "common_close": "إغلاق",
   "common_cancel": "إلغاء",

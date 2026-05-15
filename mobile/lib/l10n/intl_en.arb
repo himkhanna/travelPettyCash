@@ -20,6 +20,16 @@
   "auth_login_password": "Password",
   "auth_login_forgot": "Forgot password?",
   "auth_login_submit": "LOGIN",
+  "auth_login_username_required": "Username is required.",
+  "auth_login_password_required": "Password is required.",
+  "auth_login_back_to_landing": "Back to demo console",
+  "auth_login_error_invalid_credentials": "Invalid username or password.",
+  "auth_login_error_network": "Could not reach the server. Check the base URL or your connection.",
+  "landing_sign_in_api": "SIGN IN (API)",
+  "landing_sign_in_api_subtitle": "Authenticate against the real backend at {baseUrl}.",
+  "@landing_sign_in_api_subtitle": {
+    "placeholders": { "baseUrl": { "type": "String" } }
+  },
 
   "common_close": "CLOSE",
   "common_cancel": "CANCEL",

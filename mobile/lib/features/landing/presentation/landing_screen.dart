@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/api/api_config.dart';
 import '../../../core/fake/fake_config.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/language_toggle_button.dart';
 
 /// Landing page at "/" — picks a role and routes into either the mobile UI
@@ -14,6 +16,8 @@ class LandingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final FakeConfig cfg = ref.watch(fakeConfigProvider);
+    final BackendMode mode = ref.watch(backendModeProvider);
+    final ApiConfig api = ref.watch(apiConfigProvider);
 
     return Scaffold(
       backgroundColor: AppColors.brandBrownDark,
@@ -61,6 +65,10 @@ class LandingScreen extends ConsumerWidget {
                         ],
                         target: _RoleTarget.cms,
                       ),
+                      if (mode == BackendMode.api) ...<Widget>[
+                        const SizedBox(height: AppSpacing.xl),
+                        _ApiSignInCard(baseUrl: api.baseUrl),
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                       const _DemoNotice(),
                     ],
@@ -252,6 +260,61 @@ class _RoleCard extends StatelessWidget {
       case FakeRole.unset:
         return '';
     }
+  }
+}
+
+class _ApiSignInCard extends StatelessWidget {
+  const _ApiSignInCard({required this.baseUrl});
+  final String baseUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.goldOlive.withValues(alpha: 0.12),
+        borderRadius: const BorderRadius.all(AppRadii.card),
+        border: Border.all(color: AppColors.goldOlive.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.vpn_key_outlined, color: AppColors.goldOlive, size: 32),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  l.landing_sign_in_api,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.cream,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l.landing_sign_in_api_subtitle(baseUrl),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.cream.withValues(alpha: 0.75),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.goldOlive,
+              foregroundColor: AppColors.brandBrownDark,
+            ),
+            onPressed: () => GoRouter.of(context).go('/login'),
+            child: const Icon(Icons.arrow_forward),
+          ),
+        ],
+      ),
+    );
   }
 }
 

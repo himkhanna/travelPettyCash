@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/presentation/login_screen.dart';
 import '../features/cms/presentation/cms_dashboard.dart';
 import '../features/cms/presentation/dg_dashboard.dart';
 import '../features/expenses/presentation/add_expense_screen.dart';
@@ -27,6 +28,7 @@ GoRouter buildAppRouter() {
     debugLogDiagnostics: false,
     routes: <RouteBase>[
       GoRoute(path: '/', builder: (_, __) => const LandingScreen()),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
 
       // Mobile UI — rendered inside a phone-frame on web (>=600px).
       ShellRoute(

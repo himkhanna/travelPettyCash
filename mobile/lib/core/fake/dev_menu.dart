@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/api_config.dart';
 import 'fake_config.dart';
 
 /// Hidden in production. Reachable via a long-press on the brand logo or
@@ -19,11 +20,12 @@ class DevMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final FakeConfig cfg = ref.watch(fakeConfigProvider);
+    final ApiConfig api = ref.watch(apiConfigProvider);
     return AnimatedBuilder(
-      animation: cfg,
+      animation: Listenable.merge(<Listenable>[cfg, api]),
       builder: (BuildContext context, _) {
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -35,11 +37,13 @@ class DevMenu extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'These knobs simulate network conditions and role switching '
-                  'while the backend is mocked.',
+                  'These knobs simulate network conditions, switch between '
+                  'fake and real backends, and let you change role on the fly.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const Divider(height: 32),
+                _BackendControl(api: api),
+                const SizedBox(height: 16),
                 _LatencyControl(cfg: cfg),
                 const SizedBox(height: 16),
                 _FailureRateControl(cfg: cfg),
@@ -68,6 +72,70 @@ class DevMenu extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _BackendControl extends StatefulWidget {
+  const _BackendControl({required this.api});
+  final ApiConfig api;
+
+  @override
+  State<_BackendControl> createState() => _BackendControlState();
+}
+
+class _BackendControlState extends State<_BackendControl> {
+  late final TextEditingController _baseUrl =
+      TextEditingController(text: widget.api.baseUrl);
+
+  @override
+  void dispose() {
+    _baseUrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Text('Backend'),
+        const SizedBox(height: 8),
+        SegmentedButton<BackendMode>(
+          segments: const <ButtonSegment<BackendMode>>[
+            ButtonSegment<BackendMode>(
+              value: BackendMode.fake,
+              label: Text('Fake'),
+              icon: Icon(Icons.dataset_outlined),
+            ),
+            ButtonSegment<BackendMode>(
+              value: BackendMode.api,
+              label: Text('API'),
+              icon: Icon(Icons.cloud_outlined),
+            ),
+          ],
+          selected: <BackendMode>{widget.api.mode},
+          onSelectionChanged: (Set<BackendMode> set) =>
+              widget.api.setMode(set.first),
+        ),
+        if (widget.api.mode == BackendMode.api) ...<Widget>[
+          const SizedBox(height: 12),
+          TextField(
+            controller: _baseUrl,
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'Base URL',
+              hintText: 'http://localhost:8080',
+            ),
+            onSubmitted: widget.api.setBaseUrl,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Press enter to save. /api/v1/* paths are appended automatically.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ],
     );
   }
 }

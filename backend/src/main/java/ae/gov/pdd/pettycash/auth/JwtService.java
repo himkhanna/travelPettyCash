@@ -7,6 +7,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -39,6 +40,7 @@ public class JwtService {
 
     private SecretKey signingKey;
 
+    @Autowired
     public JwtService(
         @Value("${pdd.auth.jwt.secret}") String secret,
         @Value("${pdd.auth.jwt.access-ttl:PT15M}") Duration accessTtl,
