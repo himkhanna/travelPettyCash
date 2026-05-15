@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_config.dart';
+import '../../../core/api/dio_client.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/money/money.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
+import '../data/api_source_repository.dart';
 import '../data/fake_allocation_repository.dart';
 import '../data/fake_source_repository.dart';
 import '../data/fake_transfer_repository.dart';
@@ -13,12 +16,18 @@ import '../data/funds_repository.dart';
 import '../domain/funding.dart';
 
 final Provider<SourceRepository> sourceRepositoryProvider =
-    Provider<SourceRepository>(
-      (Ref ref) => FakeSourceRepository(
+    Provider<SourceRepository>((Ref ref) {
+  final BackendMode mode = ref.watch(backendModeProvider);
+  switch (mode) {
+    case BackendMode.fake:
+      return FakeSourceRepository(
         ref.watch(demoStoreProvider),
         ref.watch(fakeConfigProvider),
-      ),
-    );
+      );
+    case BackendMode.api:
+      return ApiSourceRepository(dio: ref.watch(dioProvider));
+  }
+});
 
 final Provider<TransferRepository> transferRepositoryProvider =
     Provider<TransferRepository>(

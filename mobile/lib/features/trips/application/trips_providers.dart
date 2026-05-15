@@ -1,21 +1,32 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_config.dart';
+import '../../../core/api/dio_client.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/sync/sync_coordinator.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
+import '../data/api_trip_repository.dart';
 import '../data/fake_trip_repository.dart';
 import '../data/trip_repository.dart';
 import '../domain/trip.dart';
 
-final Provider<TripRepository> tripRepositoryProvider = Provider<TripRepository>(
-  (Ref ref) => FakeTripRepository(
-    ref.watch(demoStoreProvider),
-    ref.watch(fakeConfigProvider),
-    currentUserId: () => ref.read(currentUserProvider).valueOrNull?.id ?? '',
-  ),
-);
+final Provider<TripRepository> tripRepositoryProvider =
+    Provider<TripRepository>((Ref ref) {
+  final BackendMode mode = ref.watch(backendModeProvider);
+  switch (mode) {
+    case BackendMode.fake:
+      return FakeTripRepository(
+        ref.watch(demoStoreProvider),
+        ref.watch(fakeConfigProvider),
+        currentUserId: () =>
+            ref.read(currentUserProvider).valueOrNull?.id ?? '',
+      );
+    case BackendMode.api:
+      return ApiTripRepository(dio: ref.watch(dioProvider));
+  }
+});
 
 /// `await ref.watch(currentUserProvider.future)` does two things: it subscribes
 /// to user changes (so this rebuilds when the landing-page role switcher fires)
