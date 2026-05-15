@@ -4,6 +4,8 @@ import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.common.Money;
 import ae.gov.pdd.pettycash.common.MoneyDto;
 import ae.gov.pdd.pettycash.common.error.ApiException;
+import ae.gov.pdd.pettycash.expense.Expense;
+import ae.gov.pdd.pettycash.expense.ExpenseRepository;
 import ae.gov.pdd.pettycash.fund.Allocation;
 import ae.gov.pdd.pettycash.fund.AllocationRepository;
 import ae.gov.pdd.pettycash.fund.FundsStatus;
@@ -35,6 +37,7 @@ public class TripService {
     private final UserRepository users;
     private final AllocationRepository allocations;
     private final TransferRepository transfers;
+    private final ExpenseRepository expenses;
     private final Clock clock;
 
     @Autowired
@@ -43,9 +46,10 @@ public class TripService {
         SourceRepository sources,
         UserRepository users,
         AllocationRepository allocations,
-        TransferRepository transfers
+        TransferRepository transfers,
+        ExpenseRepository expenses
     ) {
-        this(trips, sources, users, allocations, transfers, Clock.systemUTC());
+        this(trips, sources, users, allocations, transfers, expenses, Clock.systemUTC());
     }
 
     TripService(
@@ -54,6 +58,7 @@ public class TripService {
         UserRepository users,
         AllocationRepository allocations,
         TransferRepository transfers,
+        ExpenseRepository expenses,
         Clock clock
     ) {
         this.trips = trips;
@@ -61,6 +66,7 @@ public class TripService {
         this.users = users;
         this.allocations = allocations;
         this.transfers = transfers;
+        this.expenses = expenses;
         this.clock = clock;
     }
 
@@ -131,11 +137,16 @@ public class TripService {
     }
 
     /**
-     * Balance rollup. Until the funds + expense slices land we return the
-     * trip's headline {@code totalBudget} with zero {@code totalSpent} and a
-     * per-source row for every active funding source — also zero. The shape
-     * matches what the mobile FakeTripRepository returns so the UI doesn't
-     * need to branch.
+     * Balance rollup per CLAUDE.md §6.4 — recomputed from the event log
+     * (allocations + transfers + expenses), never cached.
+     *
+     * <ul>
+     *   <li>{@code received} folds accepted allocations and (at me-scope)
+     *       accepted peer transfers received.</li>
+     *   <li>{@code spent} folds expenses, plus (at me-scope) accepted peer
+     *       transfers sent — the wallet shrinks the same way for either.</li>
+     * </ul>
+     * Negative balances are allowed; the mobile UI shows a warning chip.
      */
     @Transactional(readOnly = true)
     public TripBalancesDto balances(UUID tripId, AuthenticatedUser caller, String scope) {
@@ -145,13 +156,15 @@ public class TripService {
 
         List<Allocation> tripAllocs = allocations.findByTripIdOrderByCreatedAtAsc(t.getId());
         List<Transfer> tripXfers = transfers.findByTripIdOrderByCreatedAtAsc(t.getId());
+        List<Expense> tripExpenses =
+            expenses.findByTripIdAndDeletedAtIsNullOrderByOccurredAtDesc(t.getId());
 
         List<TripBalancesDto.SourceBalanceDto> perSource = sources
             .findByActiveTrueOrderByName()
             .stream()
             .map((Source s) -> {
                 long received = sumReceived(s.getId(), resolvedScope, caller, t, tripAllocs, tripXfers);
-                long spent = sumSpent(s.getId(), resolvedScope, caller, tripXfers);
+                long spent = sumSpent(s.getId(), resolvedScope, caller, tripXfers, tripExpenses);
                 return new TripBalancesDto.SourceBalanceDto(
                     s.getId(),
                     s.getName(),
@@ -213,17 +226,28 @@ public class TripService {
         UUID sourceId,
         String scope,
         AuthenticatedUser caller,
-        List<Transfer> xfers
+        List<Transfer> xfers,
+        List<Expense> tripExpenses
     ) {
-        // Expenses land in the next slice. For now "spent" tracks outbound
-        // peer transfers at me-scope only — trip/leader rollups don't subtract
-        // internal redistribution.
-        if (!"me".equals(scope)) return 0;
         long total = 0;
-        for (Transfer t : xfers) {
-            if (!t.getSourceId().equals(sourceId)) continue;
-            if (t.getStatus() != FundsStatus.ACCEPTED) continue;
-            if (t.getFromUserId().equals(caller.userId())) total += t.getAmountMinor();
+        for (Expense e : tripExpenses) {
+            if (!e.getSourceId().equals(sourceId)) continue;
+            boolean include = switch (scope) {
+                case "me"     -> e.getUserId().equals(caller.userId());
+                case "leader" -> true; // leader scope rolls up the whole trip
+                default       -> true;
+            };
+            if (include) total += e.getAmountMinor();
+        }
+        // At me-scope an outbound peer transfer also shrinks the wallet
+        // (the cash physically leaves the holder). Mirrors the rule in
+        // mobile/.../fake_trip_repository.dart.
+        if ("me".equals(scope)) {
+            for (Transfer t : xfers) {
+                if (!t.getSourceId().equals(sourceId)) continue;
+                if (t.getStatus() != FundsStatus.ACCEPTED) continue;
+                if (t.getFromUserId().equals(caller.userId())) total += t.getAmountMinor();
+            }
         }
         return total;
     }

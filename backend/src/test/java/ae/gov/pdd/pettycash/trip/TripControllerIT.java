@@ -149,16 +149,19 @@ class TripControllerIT {
     }
 
     @Test
-    void balancesReturnsBudgetAndZeroSpentPerSource() throws Exception {
+    void balancesReturnsBudgetAndPerSourceBreakdown() throws Exception {
         String fatima = login("fatima").path("tokens").path("accessToken").asText();
         String tripId = mvc.perform(get("/api/v1/trips")
                 .header("Authorization", "Bearer " + fatima))
             .andReturn().getResponse().getContentAsString().split("\"id\":\"")[1].substring(0, 36);
 
+        // The fields are present and the response carries one row per
+        // active funding source. The numeric value of totalSpent is asserted
+        // in ExpensesIT.balancesNowReflectsRealSpentAtTripScope.
         mvc.perform(get("/api/v1/trips/" + tripId + "/balances?scope=trip")
                 .header("Authorization", "Bearer " + fatima))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.totalSpent.amount").value(0))
+            .andExpect(jsonPath("$.totalSpent.amount").exists())
             .andExpect(jsonPath("$.totalBudget.amount").exists())
             .andExpect(jsonPath("$.perSource.length()").value(2));
     }

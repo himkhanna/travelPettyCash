@@ -1,10 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_config.dart';
+import '../../../core/api/dio_client.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/sync/sync_coordinator.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
+import '../data/api_category_repository.dart';
+import '../data/api_expense_repository.dart';
 import '../data/category_repository.dart';
 import '../data/expense_repository.dart';
 import '../data/fake_category_repository.dart';
@@ -13,20 +17,32 @@ import '../domain/expense.dart';
 import '../presentation/widgets/expense_filter_sheet.dart';
 
 final Provider<ExpenseRepository> expenseRepositoryProvider =
-    Provider<ExpenseRepository>(
-      (Ref ref) => FakeExpenseRepository(
+    Provider<ExpenseRepository>((Ref ref) {
+  final BackendMode mode = ref.watch(backendModeProvider);
+  switch (mode) {
+    case BackendMode.fake:
+      return FakeExpenseRepository(
         ref.watch(demoStoreProvider),
         ref.watch(fakeConfigProvider),
-      ),
-    );
+      );
+    case BackendMode.api:
+      return ApiExpenseRepository(dio: ref.watch(dioProvider));
+  }
+});
 
 final Provider<CategoryRepository> categoryRepositoryProvider =
-    Provider<CategoryRepository>(
-      (Ref ref) => FakeCategoryRepository(
+    Provider<CategoryRepository>((Ref ref) {
+  final BackendMode mode = ref.watch(backendModeProvider);
+  switch (mode) {
+    case BackendMode.fake:
+      return FakeCategoryRepository(
         ref.watch(demoStoreProvider),
         ref.watch(fakeConfigProvider),
-      ),
-    );
+      );
+    case BackendMode.api:
+      return ApiCategoryRepository(dio: ref.watch(dioProvider));
+  }
+});
 
 final FutureProvider<List<ExpenseCategory>> categoriesProvider =
     FutureProvider<List<ExpenseCategory>>(
