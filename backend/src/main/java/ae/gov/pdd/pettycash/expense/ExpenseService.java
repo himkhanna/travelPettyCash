@@ -4,10 +4,12 @@ import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.common.Money;
 import ae.gov.pdd.pettycash.common.MoneyDto;
 import ae.gov.pdd.pettycash.common.error.ApiException;
+import ae.gov.pdd.pettycash.common.storage.StorageService;
 import ae.gov.pdd.pettycash.expense.dto.CreateExpenseRequest;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseDto;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseSummaryDto;
 import ae.gov.pdd.pettycash.expense.dto.PatchExpenseRequest;
+import ae.gov.pdd.pettycash.expense.dto.ReceiptUrlDto;
 import ae.gov.pdd.pettycash.fund.Source;
 import ae.gov.pdd.pettycash.fund.SourceRepository;
 import ae.gov.pdd.pettycash.trip.Trip;
@@ -17,11 +19,15 @@ import ae.gov.pdd.pettycash.user.User;
 import ae.gov.pdd.pettycash.user.UserRepository;
 import ae.gov.pdd.pettycash.user.UserRole;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -38,6 +44,8 @@ public class ExpenseService {
     private final TripRepository trips;
     private final SourceRepository sources;
     private final UserRepository users;
+    private final StorageService storage;
+    private final Duration presignedTtl;
     private final Clock clock;
 
     @Autowired
@@ -46,9 +54,11 @@ public class ExpenseService {
         ExpenseCategoryRepository categories,
         TripRepository trips,
         SourceRepository sources,
-        UserRepository users
+        UserRepository users,
+        StorageService storage,
+        @Value("${pdd.storage.presigned-ttl:PT5M}") Duration presignedTtl
     ) {
-        this(expenses, categories, trips, sources, users, Clock.systemUTC());
+        this(expenses, categories, trips, sources, users, storage, presignedTtl, Clock.systemUTC());
     }
 
     ExpenseService(
@@ -57,6 +67,8 @@ public class ExpenseService {
         TripRepository trips,
         SourceRepository sources,
         UserRepository users,
+        StorageService storage,
+        Duration presignedTtl,
         Clock clock
     ) {
         this.expenses = expenses;
@@ -64,6 +76,8 @@ public class ExpenseService {
         this.trips = trips;
         this.sources = sources;
         this.users = users;
+        this.storage = storage;
+        this.presignedTtl = presignedTtl;
         this.clock = clock;
     }
 
@@ -311,6 +325,66 @@ public class ExpenseService {
             ))
             .toList();
         return new ExpenseSummaryDto(groupBy, scope, out);
+    }
+
+    // ---- receipts -----------------------------------------------------
+
+    /**
+     * Stores the uploaded bytes under {@code receipts/{expenseId}/{uuid}} and
+     * points the expense at the new object. Replacing a receipt orphans the
+     * previous object — that's intentional for v1; the audit-log slice will
+     * track every key the row has ever held.
+     */
+    @Transactional
+    public ExpenseDto uploadReceipt(
+        UUID expenseId,
+        AuthenticatedUser caller,
+        String contentType,
+        long contentLength,
+        InputStream bytes
+    ) {
+        Expense e = loadAccessible(expenseId, caller);
+        Trip trip = trips.findById(e.getTripId()).orElseThrow(() -> notFoundTrip(e.getTripId()));
+        if (trip.getStatus() == TripStatus.CLOSED) {
+            throw badRequest("trips/closed", "Trip is closed; receipts are read-only.");
+        }
+        // Only the expense owner can upload; admins record their own audit
+        // events differently (out of scope here).
+        if (!e.getUserId().equals(caller.userId())) {
+            throw forbidden("Only the expense owner can attach a receipt.");
+        }
+        String extension = guessExtension(contentType);
+        String objectKey = "receipts/" + expenseId + "/" + UUID.randomUUID() + extension;
+        storage.putObject(objectKey, contentType, contentLength, bytes);
+        e.attachReceipt(objectKey, clock.instant());
+        return ExpenseDto.from(e);
+    }
+
+    @Transactional(readOnly = true)
+    public ReceiptUrlDto receiptUrl(UUID expenseId, AuthenticatedUser caller) {
+        Expense e = loadAccessible(expenseId, caller);
+        if (e.getReceiptObjectKey() == null) {
+            throw new ApiException(
+                HttpStatus.NOT_FOUND,
+                "expenses/no-receipt",
+                "No receipt attached",
+                "This expense has no receipt object yet."
+            );
+        }
+        String url = storage.presignedGetUrl(e.getReceiptObjectKey(), presignedTtl);
+        return new ReceiptUrlDto(url, clock.instant().plus(presignedTtl));
+    }
+
+    private static String guessExtension(String contentType) {
+        if (contentType == null) return "";
+        return switch (contentType.toLowerCase()) {
+            case "image/jpeg", "image/jpg" -> ".jpg";
+            case "image/png"               -> ".png";
+            case "image/webp"              -> ".webp";
+            case "image/heic"              -> ".heic";
+            case "application/pdf"         -> ".pdf";
+            default                        -> "";
+        };
     }
 
     // ---- helpers ------------------------------------------------------

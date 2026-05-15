@@ -140,14 +140,37 @@ class ApiExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<String> uploadReceipt(String expenseId, ReceiptUpload upload) {
-    // Receipts go to MinIO in a later slice — the multipart endpoint isn't
-    // wired yet. The mobile UI falls back to FakeExpenseRepository for this
-    // method while API mode is active.
-    throw UnsupportedError(
-      'Receipt upload requires the MinIO slice; stay in fake mode to capture '
-      'receipts during this demo phase.',
-    );
+  Future<String> uploadReceipt(String expenseId, ReceiptUpload upload) async {
+    final FormData form = FormData.fromMap(<String, dynamic>{
+      'file': await MultipartFile.fromFile(
+        upload.localPath,
+        contentType: DioMediaType.parse(upload.mime),
+      ),
+    });
+    try {
+      final Response<dynamic> resp = await _dio.post<dynamic>(
+        '/api/v1/expenses/$expenseId/receipt',
+        data: form,
+      );
+      return (resp.data as Map<String, dynamic>)['receiptObjectKey'] as String;
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
+  /// Presigned GET URL for the receipt attached to this expense — the client
+  /// renders the image directly from MinIO without proxying through the
+  /// backend. Short TTL (5 min server-side); refetch when stale. Throws
+  /// [ApiError] with code {@code expenses/no-receipt} if none is set.
+  Future<String> receiptUrl(String expenseId) async {
+    try {
+      final Response<dynamic> resp = await _dio.get<dynamic>(
+        '/api/v1/expenses/$expenseId/receipt',
+      );
+      return (resp.data as Map<String, dynamic>)['url'] as String;
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
   }
 
   @override

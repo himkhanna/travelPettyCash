@@ -13,5 +13,9 @@ pdd:
   cors:
     # Flutter web dev server + Swagger UI on the same host
     allowed-origins: http://localhost:5173,http://localhost:8080,http://localhost:3000
+  storage:
+    # docker-compose maps the MinIO API to host port 9100 to avoid collisions
+    # with another local MinIO; container-to-container traffic uses minio:9000.
+    endpoint: http://localhost:9100
   demo:
     seed: true

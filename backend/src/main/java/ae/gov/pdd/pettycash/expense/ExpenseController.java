@@ -1,13 +1,16 @@
 package ae.gov.pdd.pettycash.expense;
 
 import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
+import ae.gov.pdd.pettycash.common.error.ApiException;
 import ae.gov.pdd.pettycash.common.idempotency.IdempotencyService;
 import ae.gov.pdd.pettycash.expense.dto.CreateExpenseRequest;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseDto;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseSummaryDto;
 import ae.gov.pdd.pettycash.expense.dto.PatchExpenseRequest;
 import ae.gov.pdd.pettycash.expense.dto.ReassignSourceRequest;
+import ae.gov.pdd.pettycash.expense.dto.ReceiptUrlDto;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -17,10 +20,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -100,5 +107,55 @@ public class ExpenseController {
         @AuthenticationPrincipal AuthenticatedUser caller
     ) {
         return service.summary(tripId, caller, scope, groupBy, userId);
+    }
+
+    /** Maximum receipt size: 5 MB. Larger ones are rejected at the boundary. */
+    private static final long MAX_RECEIPT_BYTES = 5L * 1024 * 1024;
+
+    private static final Set<String> ALLOWED_RECEIPT_TYPES = Set.of(
+        "image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic",
+        "application/pdf"
+    );
+
+    @PostMapping(path = "/expenses/{id}/receipt", consumes = "multipart/form-data")
+    public ExpenseDto uploadReceipt(
+        @PathVariable UUID id,
+        @RequestPart("file") MultipartFile file,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        if (file.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                "validation/empty-receipt", "Empty receipt file",
+                "The uploaded file is empty.");
+        }
+        if (file.getSize() > MAX_RECEIPT_BYTES) {
+            throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE,
+                "validation/receipt-too-large", "Receipt too large",
+                "Receipts must be at most 5 MB (got " + file.getSize() + " bytes).");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_RECEIPT_TYPES.contains(contentType.toLowerCase())) {
+            throw new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "validation/unsupported-receipt-type",
+                "Unsupported receipt type",
+                "Allowed: " + String.join(", ", ALLOWED_RECEIPT_TYPES));
+        }
+        try {
+            return service.uploadReceipt(
+                id, caller, contentType, file.getSize(), file.getInputStream()
+            );
+        } catch (IOException e) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "server/upload-failed", "Upload failed",
+                "Could not read the uploaded bytes.");
+        }
+    }
+
+    @GetMapping("/expenses/{id}/receipt")
+    public ReceiptUrlDto receiptUrl(
+        @PathVariable UUID id,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        return service.receiptUrl(id, caller);
     }
 }

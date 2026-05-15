@@ -41,11 +41,15 @@ dependencies {
     // --- OpenAPI ---
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${property("springdocVersion")}")
 
+    // --- Object storage (MinIO / S3) ---
+    implementation("io.minio:minio:8.5.17")
+
     // --- Tests ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:minio")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

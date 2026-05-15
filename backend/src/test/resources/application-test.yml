@@ -12,5 +12,12 @@ pdd:
       ttl: P30D
   cors:
     allowed-origins: ""
+  storage:
+    # Overridden per IT by @DynamicPropertySource pointing at the MinIO container.
+    endpoint: http://localhost:9000
+    access-key: pdd
+    secret-key: pdd-minio-secret
+    bucket: pdd-receipts
+    presigned-ttl: PT5M
   demo:
     seed: true

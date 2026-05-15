@@ -108,6 +108,11 @@ public class Expense {
         this.updatedAt = at;
     }
 
+    public void attachReceipt(String objectKey, Instant at) {
+        this.receiptObjectKey = objectKey;
+        this.updatedAt = at;
+    }
+
     public void apply(Patch patch, Instant at) {
         if (patch.categoryCode() != null) this.categoryCode = patch.categoryCode();
         if (patch.amountMinor() != null) this.amountMinor = patch.amountMinor();

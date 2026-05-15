@@ -67,5 +67,13 @@ pdd:
   cors:
     # Closed by default. The CMS web origin is added in -local / -prod overlays.
     allowed-origins: ${PDD_CORS_ORIGINS:}
+  storage:
+    # MinIO (S3-compatible). Override every value in prod to point at the
+    # sovereign object store and rotate keys via Vault per CLAUDE.md §12.
+    endpoint:   ${PDD_STORAGE_ENDPOINT:http://localhost:9000}
+    access-key: ${PDD_STORAGE_ACCESS_KEY:pdd}
+    secret-key: ${PDD_STORAGE_SECRET_KEY:pdd-minio-secret}
+    bucket:     ${PDD_STORAGE_BUCKET:pdd-receipts}
+    presigned-ttl: PT5M
   demo:
     seed: false

@@ -173,19 +173,35 @@ void main() {
     });
   });
 
-  group('ApiExpenseRepository.uploadReceipt', () {
-    test('is explicitly unsupported in this slice', () async {
-      expect(
-        () => expenseRepo.uploadReceipt(
-          'e-1',
-          const ReceiptUpload(
-            localPath: '/tmp/r.jpg',
-            mime: 'image/jpeg',
-            sha256: 'abc',
-            byteSize: 1234,
-          ),
-        ),
-        throwsA(isA<UnsupportedError>()),
+  group('ApiExpenseRepository.receiptUrl', () {
+    test('returns the presigned url string', () async {
+      adapter.respond(
+        path: '/api/v1/expenses/e-1/receipt',
+        body: <String, dynamic>{
+          'url': 'http://minio:9000/pdd-receipts/receipts/e-1/abc.jpg?X-Amz-…',
+          'expiresAt': '2026-05-15T10:05:00Z',
+        },
+      );
+      final String url = await expenseRepo.receiptUrl('e-1');
+      expect(url, contains('pdd-receipts'));
+    });
+
+    test('expenses/no-receipt 404 surfaces as ApiError', () async {
+      adapter.respond(
+        path: '/api/v1/expenses/e-1/receipt',
+        status: 404,
+        body: <String, dynamic>{
+          'code': 'expenses/no-receipt',
+          'title': 'No receipt attached',
+          'status': 404,
+          'detail': 'x',
+        },
+      );
+      await expectLater(
+        expenseRepo.receiptUrl('e-1'),
+        throwsA(isA<ApiError>().having(
+          (ApiError e) => e.code, 'code', 'expenses/no-receipt',
+        )),
       );
     });
   });
