@@ -5,6 +5,7 @@ import '../../../core/fake/fake_config.dart';
 import '../../../core/money/money.dart';
 import '../../notifications/domain/notification.dart';
 import '../domain/funding.dart';
+import '../domain/funds_calculations.dart';
 import 'funds_repository.dart';
 
 class FakeAllocationRepository implements AllocationRepository {
@@ -123,48 +124,33 @@ class FakeAllocationRepository implements AllocationRepository {
     throw StateError('Trip not found: $tripId');
   }
 
-  /// Helper used by the Leader allocate/manage UIs. Returns Leader's
-  /// remaining-to-allocate budget per source: their accepted admin-pool
-  /// inflow MINUS allocations they've committed (pending + accepted).
-  /// Pending counts because we don't want them to double-spend.
+  /// Wraps the shared {@link leaderAvailableBySource} computation in a way
+  /// that taps the demo store for the leader's own expenses (the expense
+  /// backend isn't wired yet). Kept on the fake repo so existing call sites
+  /// don't have to know about the expense fetch.
   Map<String, Money> leaderAvailableBySource({
     required String tripId,
     required String leaderId,
     required String currency,
   }) {
-    final Map<String, Money> totals = <String, Money>{};
-
-    for (final Allocation a in _store.allocations) {
-      if (a.tripId != tripId) continue;
-      if (a.status != AllocationStatus.accepted) continue;
-      if (a.fromUserId == null && a.toUserId == leaderId) {
-        // Inflow from admin pool
-        totals.update(
-          a.sourceId,
-          (Money v) => v + a.amount,
-          ifAbsent: () => a.amount,
-        );
-      }
-    }
-    for (final Allocation a in _store.allocations) {
-      if (a.tripId != tripId) continue;
-      if (a.fromUserId != leaderId) continue;
-      if (a.status == AllocationStatus.declined) continue;
-      totals.update(
-        a.sourceId,
-        (Money v) => v - a.amount,
-        ifAbsent: () => -a.amount,
-      );
-    }
-    // Subtract leader's own expenses for that source.
-    for (final dynamic e in _store.expenses) {
-      if (e.tripId != tripId || e.userId != leaderId) continue;
-      if (e.deletedAt != null) continue;
-      final String sid = e.sourceId as String;
-      final Money amt = e.amount as Money;
-      totals.update(sid, (Money v) => v - amt, ifAbsent: () => -amt);
-    }
-
-    return totals;
+    final List<Allocation> tripAllocs = _store.allocations
+        .where((Allocation a) => a.tripId == tripId)
+        .toList(growable: false);
+    final List<({String sourceId, Money amount})> expenses = _store.expenses
+        .where((dynamic e) =>
+            e.tripId == tripId &&
+            e.userId == leaderId &&
+            e.deletedAt == null)
+        .map<({String sourceId, Money amount})>((dynamic e) => (
+              sourceId: e.sourceId as String,
+              amount: e.amount as Money,
+            ))
+        .toList(growable: false);
+    return computeLeaderAvailableBySource(
+      allocations: tripAllocs,
+      leaderId: leaderId,
+      currency: currency,
+      leaderExpenses: expenses,
+    );
   }
 }

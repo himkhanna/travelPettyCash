@@ -4,8 +4,13 @@ import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.common.Money;
 import ae.gov.pdd.pettycash.common.MoneyDto;
 import ae.gov.pdd.pettycash.common.error.ApiException;
+import ae.gov.pdd.pettycash.fund.Allocation;
+import ae.gov.pdd.pettycash.fund.AllocationRepository;
+import ae.gov.pdd.pettycash.fund.FundsStatus;
 import ae.gov.pdd.pettycash.fund.Source;
 import ae.gov.pdd.pettycash.fund.SourceRepository;
+import ae.gov.pdd.pettycash.fund.Transfer;
+import ae.gov.pdd.pettycash.fund.TransferRepository;
 import ae.gov.pdd.pettycash.trip.dto.CreateTripRequest;
 import ae.gov.pdd.pettycash.trip.dto.TripBalancesDto;
 import ae.gov.pdd.pettycash.trip.dto.TripDto;
@@ -28,26 +33,34 @@ public class TripService {
     private final TripRepository trips;
     private final SourceRepository sources;
     private final UserRepository users;
+    private final AllocationRepository allocations;
+    private final TransferRepository transfers;
     private final Clock clock;
 
     @Autowired
     public TripService(
         TripRepository trips,
         SourceRepository sources,
-        UserRepository users
+        UserRepository users,
+        AllocationRepository allocations,
+        TransferRepository transfers
     ) {
-        this(trips, sources, users, Clock.systemUTC());
+        this(trips, sources, users, allocations, transfers, Clock.systemUTC());
     }
 
     TripService(
         TripRepository trips,
         SourceRepository sources,
         UserRepository users,
+        AllocationRepository allocations,
+        TransferRepository transfers,
         Clock clock
     ) {
         this.trips = trips;
         this.sources = sources;
         this.users = users;
+        this.allocations = allocations;
+        this.transfers = transfers;
         this.clock = clock;
     }
 
@@ -127,30 +140,92 @@ public class TripService {
     @Transactional(readOnly = true)
     public TripBalancesDto balances(UUID tripId, AuthenticatedUser caller, String scope) {
         Trip t = loadAccessible(tripId, caller);
-        Money zero = Money.zero(t.getCurrency());
-        Money budget = new Money(t.getTotalBudgetMinor(), t.getCurrency());
+        String currency = t.getCurrency();
+        String resolvedScope = scope == null ? "trip" : scope;
+
+        List<Allocation> tripAllocs = allocations.findByTripIdOrderByCreatedAtAsc(t.getId());
+        List<Transfer> tripXfers = transfers.findByTripIdOrderByCreatedAtAsc(t.getId());
 
         List<TripBalancesDto.SourceBalanceDto> perSource = sources
             .findByActiveTrueOrderByName()
             .stream()
-            .map((Source s) -> new TripBalancesDto.SourceBalanceDto(
-                s.getId(),
-                s.getName(),
-                s.getNameAr(),
-                MoneyDto.from(zero),
-                MoneyDto.from(zero),
-                MoneyDto.from(zero)
-            ))
+            .map((Source s) -> {
+                long received = sumReceived(s.getId(), resolvedScope, caller, t, tripAllocs, tripXfers);
+                long spent = sumSpent(s.getId(), resolvedScope, caller, tripXfers);
+                return new TripBalancesDto.SourceBalanceDto(
+                    s.getId(),
+                    s.getName(),
+                    s.getNameAr(),
+                    MoneyDto.from(new Money(received, currency)),
+                    MoneyDto.from(new Money(spent, currency)),
+                    MoneyDto.from(new Money(received - spent, currency))
+                );
+            })
             .toList();
 
+        long totalReceived = perSource.stream().mapToLong(b -> b.received().amount()).sum();
+        long totalSpent    = perSource.stream().mapToLong(b -> b.spent().amount()).sum();
+
+        // Headline totalBudget stays the trip's stated budget so the donut
+        // chart's outer ring keeps a stable scale across responses.
+        Money budget = new Money(t.getTotalBudgetMinor(), currency);
         return new TripBalancesDto(
             tripId,
-            scope == null ? "trip" : scope,
+            resolvedScope,
             MoneyDto.from(budget),
-            MoneyDto.from(zero),
-            MoneyDto.from(budget),
+            MoneyDto.from(new Money(totalSpent, currency)),
+            MoneyDto.from(new Money(totalReceived - totalSpent, currency)),
             perSource
         );
+    }
+
+    private long sumReceived(
+        UUID sourceId,
+        String scope,
+        AuthenticatedUser caller,
+        Trip trip,
+        List<Allocation> allocs,
+        List<Transfer> xfers
+    ) {
+        long total = 0;
+        for (Allocation a : allocs) {
+            if (!a.getSourceId().equals(sourceId)) continue;
+            if (a.getStatus() != FundsStatus.ACCEPTED) continue;
+            boolean include = switch (scope) {
+                case "me"     -> a.getToUserId().equals(caller.userId());
+                case "leader" -> a.getToUserId().equals(trip.getLeaderId())
+                                  && a.getFromUserId() == null;
+                default       -> a.getFromUserId() == null; // trip
+            };
+            if (include) total += a.getAmountMinor();
+        }
+        if ("me".equals(scope)) {
+            for (Transfer t : xfers) {
+                if (!t.getSourceId().equals(sourceId)) continue;
+                if (t.getStatus() != FundsStatus.ACCEPTED) continue;
+                if (t.getToUserId().equals(caller.userId())) total += t.getAmountMinor();
+            }
+        }
+        return total;
+    }
+
+    private long sumSpent(
+        UUID sourceId,
+        String scope,
+        AuthenticatedUser caller,
+        List<Transfer> xfers
+    ) {
+        // Expenses land in the next slice. For now "spent" tracks outbound
+        // peer transfers at me-scope only — trip/leader rollups don't subtract
+        // internal redistribution.
+        if (!"me".equals(scope)) return 0;
+        long total = 0;
+        for (Transfer t : xfers) {
+            if (!t.getSourceId().equals(sourceId)) continue;
+            if (t.getStatus() != FundsStatus.ACCEPTED) continue;
+            if (t.getFromUserId().equals(caller.userId())) total += t.getAmountMinor();
+        }
+        return total;
     }
 
     // ---- helpers ------------------------------------------------------
