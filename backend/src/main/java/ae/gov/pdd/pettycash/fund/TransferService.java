@@ -4,6 +4,9 @@ import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.common.error.ApiException;
 import ae.gov.pdd.pettycash.fund.dto.CreateTransferRequest;
 import ae.gov.pdd.pettycash.fund.dto.TransferDto;
+import ae.gov.pdd.pettycash.notification.NotificationRefType;
+import ae.gov.pdd.pettycash.notification.NotificationService;
+import ae.gov.pdd.pettycash.notification.NotificationType;
 import ae.gov.pdd.pettycash.trip.Trip;
 import ae.gov.pdd.pettycash.trip.TripRepository;
 import ae.gov.pdd.pettycash.trip.TripStatus;
@@ -15,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -25,6 +30,7 @@ public class TransferService {
     private final TripRepository trips;
     private final SourceRepository sources;
     private final UserRepository users;
+    private final NotificationService notifications;
     private final Clock clock;
 
     @Autowired
@@ -32,9 +38,10 @@ public class TransferService {
         TransferRepository transfers,
         TripRepository trips,
         SourceRepository sources,
-        UserRepository users
+        UserRepository users,
+        NotificationService notifications
     ) {
-        this(transfers, trips, sources, users, Clock.systemUTC());
+        this(transfers, trips, sources, users, notifications, Clock.systemUTC());
     }
 
     TransferService(
@@ -42,12 +49,14 @@ public class TransferService {
         TripRepository trips,
         SourceRepository sources,
         UserRepository users,
+        NotificationService notifications,
         Clock clock
     ) {
         this.transfers = transfers;
         this.trips = trips;
         this.sources = sources;
         this.users = users;
+        this.notifications = notifications;
         this.clock = clock;
     }
 
@@ -119,6 +128,25 @@ public class TransferService {
             req.note()
         );
         transfers.save(t);
+
+        // TRANSFER_RECEIVED on the recipient.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("transferId", t.getId().toString());
+        payload.put("tripId", t.getTripId().toString());
+        payload.put("sourceId", t.getSourceId().toString());
+        payload.put("amountMinor", t.getAmountMinor());
+        payload.put("currency", t.getCurrency());
+        payload.put("fromUserId", t.getFromUserId().toString());
+        if (t.getNote() != null) payload.put("note", t.getNote());
+        notifications.fanOut(
+            NotificationType.TRANSFER_RECEIVED,
+            true,
+            NotificationRefType.TRANSFER,
+            t.getId(),
+            payload,
+            List.of(t.getToUserId())
+        );
+
         return TransferDto.from(t);
     }
 
@@ -141,6 +169,25 @@ public class TransferService {
         } catch (IllegalArgumentException e) {
             throw badRequest("transfers/invalid-response", e.getMessage());
         }
+        // Flip the recipient's inbox notification to ACTED.
+        notifications.markActedByRef(NotificationRefType.TRANSFER, row.getId());
+        // Tell the sender what happened — TRANSFER_ACCEPTED on accept; the
+        // declined path is a passive non-actionable note.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("transferId", row.getId().toString());
+        payload.put("tripId", row.getTripId().toString());
+        payload.put("byUserId", row.getToUserId().toString());
+        payload.put("amountMinor", row.getAmountMinor());
+        payload.put("currency", row.getCurrency());
+        payload.put("response", response.name());
+        notifications.fanOut(
+            NotificationType.TRANSFER_ACCEPTED,
+            false,
+            NotificationRefType.TRANSFER,
+            row.getId(),
+            payload,
+            List.of(row.getFromUserId())
+        );
         return TransferDto.from(row);
     }
 

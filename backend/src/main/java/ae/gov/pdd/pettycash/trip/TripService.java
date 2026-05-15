@@ -13,6 +13,9 @@ import ae.gov.pdd.pettycash.fund.Source;
 import ae.gov.pdd.pettycash.fund.SourceRepository;
 import ae.gov.pdd.pettycash.fund.Transfer;
 import ae.gov.pdd.pettycash.fund.TransferRepository;
+import ae.gov.pdd.pettycash.notification.NotificationRefType;
+import ae.gov.pdd.pettycash.notification.NotificationService;
+import ae.gov.pdd.pettycash.notification.NotificationType;
 import ae.gov.pdd.pettycash.trip.dto.CreateTripRequest;
 import ae.gov.pdd.pettycash.trip.dto.TripBalancesDto;
 import ae.gov.pdd.pettycash.trip.dto.TripDto;
@@ -25,7 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -38,6 +44,7 @@ public class TripService {
     private final AllocationRepository allocations;
     private final TransferRepository transfers;
     private final ExpenseRepository expenses;
+    private final NotificationService notifications;
     private final Clock clock;
 
     @Autowired
@@ -47,9 +54,10 @@ public class TripService {
         UserRepository users,
         AllocationRepository allocations,
         TransferRepository transfers,
-        ExpenseRepository expenses
+        ExpenseRepository expenses,
+        NotificationService notifications
     ) {
-        this(trips, sources, users, allocations, transfers, expenses, Clock.systemUTC());
+        this(trips, sources, users, allocations, transfers, expenses, notifications, Clock.systemUTC());
     }
 
     TripService(
@@ -59,6 +67,7 @@ public class TripService {
         AllocationRepository allocations,
         TransferRepository transfers,
         ExpenseRepository expenses,
+        NotificationService notifications,
         Clock clock
     ) {
         this.trips = trips;
@@ -67,6 +76,7 @@ public class TripService {
         this.allocations = allocations;
         this.transfers = transfers;
         this.expenses = expenses;
+        this.notifications = notifications;
         this.clock = clock;
     }
 
@@ -133,6 +143,23 @@ public class TripService {
             throw badRequest("trips/already-closed", "Trip is already closed");
         }
         t.close(clock.instant());
+
+        // TRIP_CLOSED on every participant (leader + members). Passive
+        // notification: no accept/decline, just informs the inbox.
+        Set<UUID> recipients = new LinkedHashSet<>();
+        recipients.add(t.getLeaderId());
+        recipients.addAll(t.getMemberIds());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tripId", t.getId().toString());
+        payload.put("byUserId", caller.userId().toString());
+        notifications.fanOut(
+            NotificationType.TRIP_CLOSED,
+            false,
+            NotificationRefType.TRIP,
+            t.getId(),
+            payload,
+            recipients
+        );
         return TripDto.from(t);
     }
 

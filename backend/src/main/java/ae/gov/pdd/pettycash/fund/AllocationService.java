@@ -4,6 +4,9 @@ import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.common.error.ApiException;
 import ae.gov.pdd.pettycash.fund.dto.AllocationDto;
 import ae.gov.pdd.pettycash.fund.dto.CreateAllocationsRequest;
+import ae.gov.pdd.pettycash.notification.NotificationRefType;
+import ae.gov.pdd.pettycash.notification.NotificationService;
+import ae.gov.pdd.pettycash.notification.NotificationType;
 import ae.gov.pdd.pettycash.trip.Trip;
 import ae.gov.pdd.pettycash.trip.TripRepository;
 import ae.gov.pdd.pettycash.trip.TripStatus;
@@ -15,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -25,6 +30,7 @@ public class AllocationService {
     private final TripRepository trips;
     private final SourceRepository sources;
     private final UserRepository users;
+    private final NotificationService notifications;
     private final Clock clock;
 
     @Autowired
@@ -32,9 +38,10 @@ public class AllocationService {
         AllocationRepository allocations,
         TripRepository trips,
         SourceRepository sources,
-        UserRepository users
+        UserRepository users,
+        NotificationService notifications
     ) {
-        this(allocations, trips, sources, users, Clock.systemUTC());
+        this(allocations, trips, sources, users, notifications, Clock.systemUTC());
     }
 
     AllocationService(
@@ -42,12 +49,14 @@ public class AllocationService {
         TripRepository trips,
         SourceRepository sources,
         UserRepository users,
+        NotificationService notifications,
         Clock clock
     ) {
         this.allocations = allocations;
         this.trips = trips;
         this.sources = sources;
         this.users = users;
+        this.notifications = notifications;
         this.clock = clock;
     }
 
@@ -128,6 +137,28 @@ public class AllocationService {
                 r.note()
             );
             allocations.save(row);
+
+            // ALLOCATION_RECEIVED on the recipient. The notification carries
+            // enough payload that the mobile inbox can render without
+            // re-fetching the allocation row.
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("allocationId", row.getId().toString());
+            payload.put("tripId", row.getTripId().toString());
+            payload.put("sourceId", row.getSourceId().toString());
+            payload.put("amountMinor", row.getAmountMinor());
+            payload.put("currency", row.getCurrency());
+            if (row.getFromUserId() != null) {
+                payload.put("fromUserId", row.getFromUserId().toString());
+            }
+            notifications.fanOut(
+                NotificationType.ALLOCATION_RECEIVED,
+                true,
+                NotificationRefType.ALLOCATION,
+                row.getId(),
+                payload,
+                List.of(row.getToUserId())
+            );
+
             return AllocationDto.from(row);
         }).toList();
     }
@@ -155,6 +186,10 @@ public class AllocationService {
         } catch (IllegalArgumentException e) {
             throw badRequest("allocations/invalid-response", e.getMessage());
         }
+        // Mark every inbox notification that pointed at this allocation as
+        // ACTED. Recipient hit this endpoint, so their notification is
+        // no longer actionable.
+        notifications.markActedByRef(NotificationRefType.ALLOCATION, row.getId());
         return AllocationDto.from(row);
     }
 
