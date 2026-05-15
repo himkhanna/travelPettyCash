@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/fake_config.dart';
+import '../../../shared/widgets/language_toggle_button.dart';
 
 /// Landing page at "/" — picks a role and routes into either the mobile UI
 /// (rendered inside a phone frame) or the CMS web UI.
@@ -17,51 +18,62 @@ class LandingScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.brandBrownDark,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 880),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const _LandingHeader(),
-                  const SizedBox(height: AppSpacing.xl),
-                  _SectionLabel(text: 'Mobile App'.toUpperCase()),
-                  const SizedBox(height: AppSpacing.md),
-                  _RoleGrid(
-                    onPick: (FakeRole r) {
-                      cfg.setRole(r);
-                      context.go('/m/trips');
-                    },
-                    roles: const <FakeRole>[
-                      FakeRole.member,
-                      FakeRole.leader,
-                      FakeRole.admin,
-                      FakeRole.superAdmin,
+        child: Stack(
+          children: <Widget>[
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const _LandingHeader(),
+                      const SizedBox(height: AppSpacing.xl),
+                      _SectionLabel(text: 'Mobile App'.toUpperCase()),
+                      const SizedBox(height: AppSpacing.md),
+                      _RoleGrid(
+                        onPick: (FakeRole r) {
+                          cfg.setRole(r);
+                          context.go('/m/trips');
+                        },
+                        roles: const <FakeRole>[
+                          FakeRole.member,
+                          FakeRole.leader,
+                          FakeRole.admin,
+                          FakeRole.superAdmin,
+                        ],
+                        target: _RoleTarget.mobile,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      _SectionLabel(text: 'Admin Console (Web)'.toUpperCase()),
+                      const SizedBox(height: AppSpacing.md),
+                      _RoleGrid(
+                        onPick: (FakeRole r) {
+                          cfg.setRole(r);
+                          context.go(
+                            r == FakeRole.superAdmin ? '/cms/dg' : '/cms',
+                          );
+                        },
+                        roles: const <FakeRole>[
+                          FakeRole.admin,
+                          FakeRole.superAdmin,
+                        ],
+                        target: _RoleTarget.cms,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      const _DemoNotice(),
                     ],
-                    target: _RoleTarget.mobile,
                   ),
-                  const SizedBox(height: AppSpacing.xl),
-                  _SectionLabel(text: 'Admin Console (Web)'.toUpperCase()),
-                  const SizedBox(height: AppSpacing.md),
-                  _RoleGrid(
-                    onPick: (FakeRole r) {
-                      cfg.setRole(r);
-                      context.go(r == FakeRole.superAdmin ? '/cms/dg' : '/cms');
-                    },
-                    roles: const <FakeRole>[
-                      FakeRole.admin,
-                      FakeRole.superAdmin,
-                    ],
-                    target: _RoleTarget.cms,
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  const _DemoNotice(),
-                ],
+                ),
               ),
             ),
-          ),
+            const PositionedDirectional(
+              top: AppSpacing.md,
+              end: AppSpacing.md,
+              child: LanguageToggleButton(foregroundColor: AppColors.cream),
+            ),
+          ],
         ),
       ),
     );

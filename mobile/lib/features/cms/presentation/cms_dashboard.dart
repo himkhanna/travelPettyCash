@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
+import '../../../shared/widgets/language_toggle_button.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../expenses/domain/expense.dart';
@@ -92,6 +93,8 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
           ],
         ),
         actions: <Widget>[
+          const LanguageToggleButton(),
+          const SizedBox(width: AppSpacing.sm),
           if (me.role == UserRole.superAdmin) ...<Widget>[
             OutlinedButton.icon(
               icon: const Icon(Icons.shield_outlined, size: 18),

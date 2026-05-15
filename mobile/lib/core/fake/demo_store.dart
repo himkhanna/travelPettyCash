@@ -10,6 +10,7 @@ import '../../features/chat/domain/chat.dart';
 import '../../features/expenses/domain/expense.dart';
 import '../../features/funds/domain/funding.dart';
 import '../../features/notifications/domain/notification.dart';
+import '../../features/reports/domain/signed_report.dart';
 import '../../features/trips/domain/trip.dart';
 import '../api/json_parsers.dart';
 
@@ -37,6 +38,11 @@ class DemoStore {
   final List<ChatThread> chatThreads = <ChatThread>[];
   final List<ChatMessage> chatMessages = <ChatMessage>[];
   final List<AppNotification> notifications = <AppNotification>[];
+
+  /// Signatures produced by [FakeSignatureService]. Not seeded from JSON —
+  /// every entry is created in-session by an Admin tapping "Sign report"
+  /// in the Finance Letter preview. Wiped on app restart by design.
+  final List<SignedReport> signedReports = <SignedReport>[];
 
   /// Broadcasts whenever the store mutates, so providers can refresh.
   final StreamController<DemoStoreEvent> _events =
@@ -77,6 +83,7 @@ class DemoStore {
     chatThreads.clear();
     chatMessages.clear();
     notifications.clear();
+    signedReports.clear();
   }
 
   Future<void> _load() async {
@@ -198,6 +205,7 @@ enum DemoStoreEvent {
   notificationsChanged,
   chatChanged,
   tripsChanged,
+  signedReportsChanged,
 }
 
 final Provider<DemoStore> demoStoreProvider = Provider<DemoStore>(

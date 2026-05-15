@@ -28,5 +28,52 @@
   "common_back": "BACK",
   "common_pending_sync": "Pending sync",
   "common_offline": "Offline",
-  "common_loading": "Loading…"
+  "common_loading": "Loading…",
+
+  "reports_title_for": "Reports — {tripName}",
+  "@reports_title_for": {
+    "description": "Header for the four-card reports catalog. {tripName} is the trip's display name.",
+    "placeholders": { "tripName": { "type": "String" } }
+  },
+  "reports_intro": "Production reports are server-generated (Apache POI for xlsx, iText/OpenPDF for pdf), then digitally signed with PAdES per CLAUDE.md §10. The demo previews show the same data the server template will format — use browser Save As PDF.",
+
+  "reports_card_user_title": "USER REPORT",
+  "reports_card_user_subtitle": "Single user expenses for finance.\nXLSX + PDF.",
+  "reports_card_trip_title": "TRIP FULL",
+  "reports_card_trip_subtitle": "Every expense by every member with receipts.\nXLSX.",
+  "reports_card_finance_title": "FINANCE LETTER",
+  "reports_card_finance_subtitle": "Letterhead summary of sources used + balance returned.\nSigned PDF.",
+  "reports_card_dg_title": "DG REPORT",
+  "reports_card_dg_subtitle": "Per-user / per-category roll-up.\nRead-only PDF.",
+  "reports_card_preview": "PREVIEW",
+
+  "reports_preview_user_title": "User Report",
+  "reports_preview_trip_title": "Trip Full Report",
+  "reports_preview_finance_title": "Finance Department Letter",
+  "reports_preview_dg_title": "DG Report",
+  "reports_print_button": "PRINT / SAVE AS PDF",
+  "reports_print_hint": "Open browser print (Ctrl/⌘+P) to save this preview as PDF.",
+
+  "reports_sign_status_unsigned": "Status: unsigned",
+  "reports_sign_action": "SIGN REPORT",
+  "reports_signing_modal_title": "Authenticate to sign",
+  "reports_signing_modal_intro": "In production this releases your PKCS#11 / HSM key (CLAUDE.md §10). The demo simulates the same prompt.",
+  "reports_signing_method_biometric": "Use FaceID / fingerprint",
+  "reports_signing_method_pin": "Enter PIN",
+  "reports_signing_pin_hint": "4+ digits",
+  "reports_signing_cancel": "CANCEL",
+  "reports_signing_submit": "SIGN",
+
+  "reports_signed_badge": "DIGITALLY SIGNED (PAdES)",
+  "reports_signed_by": "Signed by",
+  "reports_signed_at": "At",
+  "reports_signed_thumbprint": "Thumbprint",
+  "reports_signed_resign": "RE-SIGN",
+  "reports_sign_error_pin": "PIN must be at least 4 digits.",
+  "reports_sign_error_generic": "Signing failed — try again.",
+
+  "drawer_language": "LANGUAGE",
+  "language_english": "English",
+  "language_arabic": "العربية",
+  "language_system": "System default"
 }

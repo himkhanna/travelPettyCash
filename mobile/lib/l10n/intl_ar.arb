@@ -27,5 +27,49 @@
   "common_back": "رجوع",
   "common_pending_sync": "بانتظار المزامنة",
   "common_offline": "غير متصل",
-  "common_loading": "جاري التحميل…"
+  "common_loading": "جاري التحميل…",
+
+  "reports_title_for": "التقارير — {tripName}",
+
+  "reports_intro": "التقارير الإنتاجية تُنتَج على الخادم (Apache POI لملفات xlsx، وiText/OpenPDF لملفات pdf)، ثم تُوقَّع رقمياً بصيغة PAdES وفق CLAUDE.md §10. تعرض المعاينات هنا نفس البيانات التي سيتولى الخادم تنسيقها — استخدم خاصية الحفظ كـ PDF في المتصفح.",
+
+  "reports_card_user_title": "تقرير المستخدم",
+  "reports_card_user_subtitle": "مصاريف مستخدم واحد للمالية.\nXLSX + PDF.",
+  "reports_card_trip_title": "التقرير الكامل للرحلة",
+  "reports_card_trip_subtitle": "كل المصاريف لكل عضو مع الإيصالات.\nXLSX.",
+  "reports_card_finance_title": "خطاب المالية",
+  "reports_card_finance_subtitle": "ملخص المصادر المستخدمة والمبلغ المعاد.\nPDF موقّع.",
+  "reports_card_dg_title": "تقرير المدير العام",
+  "reports_card_dg_subtitle": "إجمالي لكل مستخدم / لكل فئة.\nPDF للقراءة فقط.",
+  "reports_card_preview": "معاينة",
+
+  "reports_preview_user_title": "تقرير المستخدم",
+  "reports_preview_trip_title": "التقرير الكامل للرحلة",
+  "reports_preview_finance_title": "خطاب إدارة المالية",
+  "reports_preview_dg_title": "تقرير المدير العام",
+  "reports_print_button": "طباعة / حفظ كـ PDF",
+  "reports_print_hint": "افتح أمر الطباعة في المتصفح (Ctrl/⌘+P) لحفظ هذه المعاينة كـ PDF.",
+
+  "reports_sign_status_unsigned": "الحالة: غير موقّع",
+  "reports_sign_action": "توقيع التقرير",
+  "reports_signing_modal_title": "تأكيد الهوية للتوقيع",
+  "reports_signing_modal_intro": "في الإنتاج يحرر هذا مفتاحك المخزَّن على PKCS#11 / HSM (CLAUDE.md §10). هذا النموذج يحاكي نفس المطالبة.",
+  "reports_signing_method_biometric": "استخدم FaceID / البصمة",
+  "reports_signing_method_pin": "أدخل رمز PIN",
+  "reports_signing_pin_hint": "4 أرقام أو أكثر",
+  "reports_signing_cancel": "إلغاء",
+  "reports_signing_submit": "توقيع",
+
+  "reports_signed_badge": "تم التوقيع رقمياً (PAdES)",
+  "reports_signed_by": "وقّع بواسطة",
+  "reports_signed_at": "بتاريخ",
+  "reports_signed_thumbprint": "بصمة الشهادة",
+  "reports_signed_resign": "إعادة التوقيع",
+  "reports_sign_error_pin": "يجب أن يتألف رمز PIN من 4 أرقام على الأقل.",
+  "reports_sign_error_generic": "فشل التوقيع — حاول مرة أخرى.",
+
+  "drawer_language": "اللغة",
+  "language_english": "English",
+  "language_arabic": "العربية",
+  "language_system": "افتراضي النظام"
 }

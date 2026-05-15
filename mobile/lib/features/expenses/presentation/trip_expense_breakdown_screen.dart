@@ -296,7 +296,7 @@ class _BreakdownBody extends ConsumerWidget {
                     ),
                     if (groupBy == ExpenseGroupBy.member)
                       const Padding(
-                        padding: EdgeInsets.only(left: 6),
+                        padding: EdgeInsetsDirectional.only(start: 6),
                         child: Icon(
                           Icons.chevron_right,
                           size: 16,

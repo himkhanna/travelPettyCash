@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/fake/dev_menu.dart';
 import '../../../core/fake/fake_config.dart';
+import '../../../shared/widgets/language_toggle_button.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../notifications/application/notifications_providers.dart';
@@ -91,6 +92,9 @@ class TripDrawer extends ConsumerWidget {
               onTap: () => context.go('/m/trips/$tripId/chat'),
             ),
             const Spacer(),
+            const Divider(height: 1),
+            const LanguageToggleButton(compact: false),
+            const Divider(height: 1),
             _DrawerItem(
               icon: Icons.tune,
               label: 'DEMO CONTROLS',

@@ -5,8 +5,12 @@ import 'package:intl/intl.dart';
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../expenses/domain/expense.dart';
 import '../../funds/domain/funding.dart';
+import '../../reports/application/signature_providers.dart';
+import '../../reports/domain/signed_report.dart';
+import '../../reports/presentation/sign_report_modal.dart';
 import '../../trips/domain/trip.dart';
 
 /// Per CLAUDE.md §10 the four production report types are server-rendered
@@ -31,6 +35,7 @@ class _ReportsCatalog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l = AppLocalizations.of(context);
     return Dialog(
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(AppRadii.card),
@@ -48,7 +53,7 @@ class _ReportsCatalog extends ConsumerWidget {
                   const Icon(Icons.description_outlined),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
-                    'Reports — ${trip.name}',
+                    l.reports_title_for(trip.name),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const Spacer(),
@@ -60,10 +65,7 @@ class _ReportsCatalog extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'Production reports are server-generated (Apache POI for xlsx, '
-                'iText/OpenPDF for pdf), then digitally signed with PAdES per '
-                'CLAUDE.md §10. The demo previews show the same data the '
-                'server template will format — use browser Save As PDF.',
+                l.reports_intro,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -74,27 +76,27 @@ class _ReportsCatalog extends ConsumerWidget {
                 runSpacing: AppSpacing.md,
                 children: <Widget>[
                   _ReportCard(
-                    title: 'USER REPORT',
-                    subtitle: 'Single user expenses for finance.\nXLSX + PDF.',
+                    title: l.reports_card_user_title,
+                    subtitle: l.reports_card_user_subtitle,
                     icon: Icons.person_outline,
                     onTap: () => _showPreview(context, ReportKind.user),
                   ),
                   _ReportCard(
-                    title: 'TRIP FULL',
-                    subtitle: 'Every expense by every member with receipts.\nXLSX.',
+                    title: l.reports_card_trip_title,
+                    subtitle: l.reports_card_trip_subtitle,
                     icon: Icons.flight,
                     onTap: () => _showPreview(context, ReportKind.tripFull),
                   ),
                   _ReportCard(
-                    title: 'FINANCE LETTER',
-                    subtitle: 'Letterhead summary of sources used + balance returned.\nSigned PDF.',
+                    title: l.reports_card_finance_title,
+                    subtitle: l.reports_card_finance_subtitle,
                     icon: Icons.draw_outlined,
                     onTap: () =>
                         _showPreview(context, ReportKind.financeLetter),
                   ),
                   _ReportCard(
-                    title: 'DG REPORT',
-                    subtitle: 'Per-user / per-category roll-up.\nRead-only PDF.',
+                    title: l.reports_card_dg_title,
+                    subtitle: l.reports_card_dg_subtitle,
                     icon: Icons.shield_outlined,
                     onTap: () => _showPreview(
                       context,
@@ -167,7 +169,7 @@ class _ReportCard extends StatelessWidget {
                 Row(
                   children: <Widget>[
                     Text(
-                      'PREVIEW',
+                      AppLocalizations.of(context).reports_card_preview,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: AppColors.brandBrown,
                         fontWeight: FontWeight.w700,
@@ -199,6 +201,7 @@ class _ReportPreviewDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final DemoStore store = ref.read(demoStoreProvider);
+    final AppLocalizations l = AppLocalizations.of(context);
     return Dialog(
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(AppRadii.card),
@@ -213,20 +216,16 @@ class _ReportPreviewDialog extends ConsumerWidget {
               child: Row(
                 children: <Widget>[
                   Text(
-                    _title(kind),
+                    _title(l, kind),
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const Spacer(),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.print, size: 18),
-                    label: const Text('PRINT / SAVE AS PDF'),
+                    label: Text(l.reports_print_button),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Open browser print (Ctrl/⌘+P) to save this preview as PDF.',
-                          ),
-                        ),
+                        SnackBar(content: Text(l.reports_print_hint)),
                       );
                     },
                   ),
@@ -250,16 +249,16 @@ class _ReportPreviewDialog extends ConsumerWidget {
     );
   }
 
-  String _title(ReportKind k) {
+  String _title(AppLocalizations l, ReportKind k) {
     switch (k) {
       case ReportKind.user:
-        return 'User Report';
+        return l.reports_preview_user_title;
       case ReportKind.tripFull:
-        return 'Trip Full Report';
+        return l.reports_preview_trip_title;
       case ReportKind.financeLetter:
-        return 'Finance Department Letter';
+        return l.reports_preview_finance_title;
       case ReportKind.directorGeneral:
-        return 'DG Report';
+        return l.reports_preview_dg_title;
     }
   }
 }
@@ -379,7 +378,10 @@ class _UserReport extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _ReportHeader(title: 'User Report', trip: trip),
+        _ReportHeader(
+          title: AppLocalizations.of(context).reports_preview_user_title,
+          trip: trip,
+        ),
         Text(
           'PREPARED FOR FINANCE — ${store.userById(userId).displayName}',
           style: Theme.of(context).textTheme.titleMedium,
@@ -424,7 +426,10 @@ class _TripFullReport extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _ReportHeader(title: 'Trip Full Report', trip: trip),
+        _ReportHeader(
+          title: AppLocalizations.of(context).reports_preview_trip_title,
+          trip: trip,
+        ),
         for (final MapEntry<String, List<Expense>> g in byUser.entries) ...<Widget>[
           Row(
             children: <Widget>[
@@ -461,13 +466,14 @@ class _TripFullReport extends StatelessWidget {
   }
 }
 
-class _FinanceLetter extends StatelessWidget {
+class _FinanceLetter extends ConsumerWidget {
   const _FinanceLetter({required this.trip, required this.store});
   final Trip trip;
   final DemoStore store;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l = AppLocalizations.of(context);
     final List<Source> sources = store.sources;
     final Money totalBudget = trip.totalBudget;
     final List<Expense> expenses = store.expenses
@@ -476,10 +482,17 @@ class _FinanceLetter extends StatelessWidget {
     final Money totalSpent = _sum(expenses, trip.currency);
     final Money returned = totalBudget - totalSpent;
 
+    final AsyncValue<SignedReport?> signedAsync = ref.watch(
+      latestSignatureProvider((
+        tripId: trip.id,
+        reportKind: ReportKind.financeLetter.name,
+      )),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _ReportHeader(title: 'Finance Department Letter', trip: trip),
+        _ReportHeader(title: l.reports_preview_finance_title, trip: trip),
         Text(
           'To the Finance Department,',
           style: Theme.of(context).textTheme.bodyLarge,
@@ -522,37 +535,7 @@ class _FinanceLetter extends StatelessWidget {
         const SizedBox(height: AppSpacing.xl),
         const Divider(),
         const SizedBox(height: AppSpacing.lg),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.cream,
-            borderRadius: const BorderRadius.all(AppRadii.card),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const Icon(Icons.gpp_good_outlined, color: AppColors.success),
-              const SizedBox(height: 4),
-              Text(
-                'DIGITALLY SIGNED (PAdES) — preview only',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.success,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Signed by Admin via HSM/PKCS#11 in production (CLAUDE.md §10). '
-                'In this demo the signature is illustrative only.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
+        _SignaturePanel(tripId: trip.id, signedAsync: signedAsync),
       ],
     );
   }
@@ -576,6 +559,107 @@ class _FinanceLetter extends StatelessWidget {
       total += e.amount;
     }
     return total;
+  }
+}
+
+/// Sign-or-signed panel at the foot of the Finance Letter preview.
+class _SignaturePanel extends StatelessWidget {
+  const _SignaturePanel({required this.tripId, required this.signedAsync});
+
+  final String tripId;
+  final AsyncValue<SignedReport?> signedAsync;
+
+  Future<void> _openModal(BuildContext context) async {
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext _) => SignReportModal(
+        tripId: tripId,
+        reportKind: ReportKind.financeLetter.name,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    return signedAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppSpacing.md),
+        child: LinearProgressIndicator(),
+      ),
+      error: (Object e, _) => Text('Signature lookup error: $e'),
+      data: (SignedReport? signed) {
+        final bool isSigned = signed != null;
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.cream,
+            borderRadius: const BorderRadius.all(AppRadii.card),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(
+                    isSigned
+                        ? Icons.verified_outlined
+                        : Icons.draw_outlined,
+                    color: isSigned
+                        ? AppColors.success
+                        : AppColors.brandBrown,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      isSigned
+                          ? l.reports_signed_badge
+                          : l.reports_sign_status_unsigned,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: isSigned
+                            ? AppColors.success
+                            : AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  FilledButton.icon(
+                    icon: Icon(
+                      isSigned ? Icons.refresh : Icons.draw_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      isSigned ? l.reports_signed_resign : l.reports_sign_action,
+                    ),
+                    onPressed: () => _openModal(context),
+                  ),
+                ],
+              ),
+              if (isSigned) ...<Widget>[
+                const SizedBox(height: AppSpacing.sm),
+                _KvRow(
+                  label: l.reports_signed_by,
+                  valueLabel:
+                      '${signed.signerDisplayName} · ${signed.signerRoleLabel}',
+                ),
+                _KvRow(
+                  label: l.reports_signed_at,
+                  valueLabel: DateFormat('yyyy-MM-dd HH:mm:ss')
+                      .format(signed.signedAt.toLocal()),
+                ),
+                _KvRow(
+                  label: l.reports_signed_thumbprint,
+                  valueLabel: signed.certThumbprint,
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -612,7 +696,10 @@ class _DgReport extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _ReportHeader(title: 'Director General Report', trip: trip),
+        _ReportHeader(
+          title: AppLocalizations.of(context).reports_preview_dg_title,
+          trip: trip,
+        ),
         Text(
           'PER MEMBER',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
