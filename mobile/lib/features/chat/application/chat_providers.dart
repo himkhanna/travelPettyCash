@@ -1,19 +1,29 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_config.dart';
+import '../../../core/api/dio_client.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
+import '../data/api_chat_repository.dart';
 import '../data/chat_repository.dart';
 import '../data/fake_chat_repository.dart';
 import '../domain/chat.dart';
 
-final Provider<ChatRepository> chatRepositoryProvider = Provider<ChatRepository>(
-  (Ref ref) => FakeChatRepository(
-    ref.watch(demoStoreProvider),
-    ref.watch(fakeConfigProvider),
-  ),
-);
+final Provider<ChatRepository> chatRepositoryProvider =
+    Provider<ChatRepository>((Ref ref) {
+  final BackendMode mode = ref.watch(backendModeProvider);
+  switch (mode) {
+    case BackendMode.fake:
+      return FakeChatRepository(
+        ref.watch(demoStoreProvider),
+        ref.watch(fakeConfigProvider),
+      );
+    case BackendMode.api:
+      return ApiChatRepository(dio: ref.watch(dioProvider));
+  }
+});
 
 final FutureProviderFamily<List<ChatThread>, String> tripThreadsProvider =
     FutureProvider.family<List<ChatThread>, String>((
