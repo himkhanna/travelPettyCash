@@ -30,7 +30,45 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final User? me = ref.watch(currentUserProvider).valueOrNull;
+    final AsyncValue<User?> userAsync = ref.watch(currentUserProvider);
+    final User? me = userAsync.valueOrNull;
+
+    // If the user isn't loaded yet, OR resolved to null (role unset),
+    // never show the empty CMS — show a spinner. If we know the role
+    // is unset (hasValue + null), bounce back to the landing page.
+    if (me == null) {
+      if (userAsync.hasValue) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) context.go('/');
+        });
+      }
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              const CircularProgressIndicator(),
+              const SizedBox(height: AppSpacing.md),
+              if (userAsync.hasValue)
+                Column(
+                  children: <Widget>[
+                    const Text(
+                      'Not logged in.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    FilledButton(
+                      onPressed: () => context.go('/'),
+                      child: const Text('Go to role picker'),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final AsyncValue<List<Trip>> tripsAsync = ref.watch(_allTripsProvider);
 
     return Scaffold(
@@ -45,17 +83,16 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
             const SizedBox(width: AppSpacing.sm),
             const Text('PDD Petty Cash — Admin Console'),
             const SizedBox(width: AppSpacing.md),
-            if (me != null)
-              Chip(
-                label: Text(
-                  '${me.displayName} · ${_roleLabel(me.role)}',
-                ),
-                backgroundColor: AppColors.cream,
+            Chip(
+              label: Text(
+                '${me.displayName} · ${_roleLabel(me.role)}',
               ),
+              backgroundColor: AppColors.cream,
+            ),
           ],
         ),
         actions: <Widget>[
-          if (me?.role == UserRole.superAdmin) ...<Widget>[
+          if (me.role == UserRole.superAdmin) ...<Widget>[
             OutlinedButton.icon(
               icon: const Icon(Icons.shield_outlined, size: 18),
               label: const Text('DG DASHBOARD'),
@@ -63,7 +100,7 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
             ),
             const SizedBox(width: AppSpacing.sm),
           ],
-          if (me?.role == UserRole.admin) ...<Widget>[
+          if (me.role == UserRole.admin) ...<Widget>[
             IconButton(
               icon: const Icon(Icons.category_outlined),
               tooltip: 'Add expense category',
