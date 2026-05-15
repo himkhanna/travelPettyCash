@@ -1,0 +1,71 @@
+# Defaults — every profile inherits these. Profile-specific overrides live in
+# application-<profile>.yml. Secrets are NEVER hard-coded; the placeholders
+# below resolve from environment variables in every environment (CLAUDE.md §12).
+
+spring:
+  application:
+    name: pdd-petty-cash-backend
+
+  datasource:
+    url: ${PDD_DB_URL:jdbc:postgresql://localhost:5432/pdd_petty_cash}
+    username: ${PDD_DB_USER:pdd}
+    password: ${PDD_DB_PASSWORD:pdd}
+    hikari:
+      maximum-pool-size: 10
+      pool-name: pdd-pool
+
+  jpa:
+    hibernate:
+      ddl-auto: none      # CLAUDE.md §3: never auto-DDL; Flyway owns schema.
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+server:
+  port: ${PDD_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# --- Application configuration ------------------------------------------------
+pdd:
+  auth:
+    jwt:
+      # 32+ byte secret for HS256. MUST be overridden in every real environment.
+      secret:      ${PDD_JWT_SECRET:change-me-this-is-a-dev-only-secret-not-for-prod-32b}
+      issuer:      pdd-petty-cash
+      access-ttl:  PT15M
+    refresh:
+      ttl:         P30D
+  cors:
+    # Closed by default. The CMS web origin is added in -local / -prod overlays.
+    allowed-origins: ${PDD_CORS_ORIGINS:}
+  demo:
+    seed: false

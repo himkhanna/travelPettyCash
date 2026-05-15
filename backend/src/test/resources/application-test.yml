@@ -1,0 +1,16 @@
+# Test profile defaults. The Testcontainers integration test overrides
+# the datasource via @DynamicPropertySource so jdbc:postgresql:// host/port
+# point at the ephemeral container.
+
+pdd:
+  auth:
+    jwt:
+      secret: change-me-this-is-a-dev-only-secret-not-for-prod-32b
+      issuer: pdd-petty-cash
+      access-ttl: PT15M
+    refresh:
+      ttl: P30D
+  cors:
+    allowed-origins: ""
+  demo:
+    seed: true

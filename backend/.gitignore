@@ -1,0 +1,12 @@
+.gradle/
+build/
+out/
+*.iml
+.idea/
+.vscode/
+bin/
+
+# Local override — never commit secrets
+src/main/resources/application-local-secrets.yml
+.env
+.env.local
