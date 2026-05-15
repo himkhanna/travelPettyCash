@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import '../../../core/l10n/locale_names.dart';
 import '../../../core/money/money.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../expenses/domain/expense.dart';
@@ -296,6 +297,7 @@ class _ReportHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -315,15 +317,15 @@ class _ReportHeader extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
-                  'PROTOCOL DEPARTMENT, GOVERNMENT OF DUBAI',
-                  style: TextStyle(
+                Text(
+                  l.reports_body_letterhead_en,
+                  style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.4,
                   ),
                 ),
                 Text(
-                  'دائرة التشريفات والضيافة — دبي',
+                  l.reports_body_letterhead_ar,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.textSecondary,
                   ),
@@ -342,8 +344,8 @@ class _ReportHeader extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '${trip.name} · ${trip.countryName} · ${DateFormat.yMMMd().format(trip.createdAt)}'
-          '${trip.closedAt != null ? ' → ${DateFormat.yMMMd().format(trip.closedAt!)}' : ''}',
+          '${trip.name} · ${trip.countryName} · ${DateFormat.yMMMd(l.localeName).format(trip.createdAt)}'
+          '${trip.closedAt != null ? ' → ${DateFormat.yMMMd(l.localeName).format(trip.closedAt!)}' : ''}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -375,21 +377,22 @@ class _UserReport extends StatelessWidget {
       bySource.putIfAbsent(e.sourceId, () => <Expense>[]).add(e);
     }
 
+    final AppLocalizations l = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _ReportHeader(
-          title: AppLocalizations.of(context).reports_preview_user_title,
+          title: l.reports_preview_user_title,
           trip: trip,
         ),
         Text(
-          'PREPARED FOR FINANCE — ${store.userById(userId).displayName}',
+          l.reports_body_user_prepared_for(store.userById(userId).displayName),
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: AppSpacing.lg),
         for (final MapEntry<String, List<Expense>> g in bySource.entries) ...<Widget>[
           Text(
-            store.sourceById(g.key).name.toUpperCase(),
+            store.sourceById(g.key).localizedName(context).toUpperCase(),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.brandBrown,
@@ -401,7 +404,7 @@ class _UserReport extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
         ],
         const Divider(),
-        _TotalLine(label: 'TOTAL', amount: _sum(expenses, trip.currency)),
+        _TotalLine(label: l.reports_body_total, amount: _sum(expenses, trip.currency)),
       ],
     );
   }
@@ -423,11 +426,12 @@ class _TripFullReport extends StatelessWidget {
       byUser.putIfAbsent(e.userId, () => <Expense>[]).add(e);
     }
 
+    final AppLocalizations l = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _ReportHeader(
-          title: AppLocalizations.of(context).reports_preview_trip_title,
+          title: l.reports_preview_trip_title,
           trip: trip,
         ),
         for (final MapEntry<String, List<Expense>> g in byUser.entries) ...<Widget>[
@@ -460,7 +464,7 @@ class _TripFullReport extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
         ],
         const Divider(),
-        _TotalLine(label: 'TRIP TOTAL', amount: _sum(expenses, trip.currency)),
+        _TotalLine(label: l.reports_body_trip_total, amount: _sum(expenses, trip.currency)),
       ],
     );
   }
@@ -489,27 +493,27 @@ class _FinanceLetter extends ConsumerWidget {
       )),
     );
 
+    final String startDate = DateFormat.yMMMd(l.localeName).format(trip.createdAt);
+    final String endDate = trip.closedAt != null
+        ? DateFormat.yMMMd(l.localeName).format(trip.closedAt!)
+        : l.reports_body_finance_endate_open;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _ReportHeader(title: l.reports_preview_finance_title, trip: trip),
         Text(
-          'To the Finance Department,',
+          l.reports_body_finance_greeting,
           style: Theme.of(context).textTheme.bodyLarge,
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Please find below the reconciliation for the delegation to '
-          '${trip.countryName} held between ${DateFormat.yMMMd().format(trip.createdAt)} and '
-          '${trip.closedAt != null ? DateFormat.yMMMd().format(trip.closedAt!) : 'present'}. '
-          'The funds advanced from each source are listed against the total '
-          'expense incurred. Any positive remainder will be returned to '
-          'the appropriate pool.',
+          l.reports_body_finance_paragraph(trip.countryName, startDate, endDate),
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'SOURCES',
+          l.reports_body_sources,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
             color: AppColors.brandBrown,
             letterSpacing: 1.2,
@@ -518,17 +522,19 @@ class _FinanceLetter extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sm),
         for (final Source s in sources) ...<Widget>[
           _KvRow(
-            label: s.name,
-            valueLabel:
-                'Advanced ${_advancedFor(s.id, trip).format()} / Spent ${_spentFor(s.id, trip, store).format()}',
+            label: s.localizedName(context),
+            valueLabel: l.reports_body_source_advanced_spent(
+              _advancedFor(s.id, trip).format(),
+              _spentFor(s.id, trip, store).format(),
+            ),
           ),
         ],
         const SizedBox(height: AppSpacing.lg),
         const Divider(),
-        _TotalLine(label: 'TOTAL ADVANCED', amount: totalBudget),
-        _TotalLine(label: 'TOTAL SPENT', amount: totalSpent),
+        _TotalLine(label: l.reports_body_total_advanced, amount: totalBudget),
+        _TotalLine(label: l.reports_body_total_spent, amount: totalSpent),
         _TotalLine(
-          label: 'NET BALANCE TO RETURN',
+          label: l.reports_body_net_balance_to_return,
           amount: returned,
           highlight: true,
         ),
@@ -588,7 +594,7 @@ class _SignaturePanel extends StatelessWidget {
         padding: EdgeInsets.all(AppSpacing.md),
         child: LinearProgressIndicator(),
       ),
-      error: (Object e, _) => Text('Signature lookup error: $e'),
+      error: (Object e, _) => Text(l.reports_signature_lookup_error('$e')),
       data: (SignedReport? signed) {
         final bool isSigned = signed != null;
         return Container(
@@ -693,15 +699,16 @@ class _DgReport extends StatelessWidget {
       );
     }
 
+    final AppLocalizations l = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _ReportHeader(
-          title: AppLocalizations.of(context).reports_preview_dg_title,
+          title: l.reports_preview_dg_title,
           trip: trip,
         ),
         Text(
-          'PER MEMBER',
+          l.reports_body_per_member,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
             color: AppColors.brandBrown,
             letterSpacing: 1.2,
@@ -715,7 +722,7 @@ class _DgReport extends StatelessWidget {
           ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'PER CATEGORY',
+          l.reports_body_per_category,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
             color: AppColors.brandBrown,
             letterSpacing: 1.2,
@@ -724,12 +731,12 @@ class _DgReport extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         for (final MapEntry<String, Money> g in byCat.entries)
           _KvRow(
-            label: _safeCategoryName(store, g.key),
+            label: _safeCategoryName(context, store, g.key),
             valueLabel: g.value.format(),
           ),
         const SizedBox(height: AppSpacing.lg),
         const Divider(),
-        _TotalLine(label: 'TRIP TOTAL', amount: _sum(expenses, trip.currency)),
+        _TotalLine(label: l.reports_body_trip_total, amount: _sum(expenses, trip.currency)),
       ],
     );
   }
@@ -742,9 +749,9 @@ class _DgReport extends StatelessWidget {
     }
   }
 
-  String _safeCategoryName(DemoStore store, String code) {
+  String _safeCategoryName(BuildContext context, DemoStore store, String code) {
     try {
-      return store.categoryByCode(code).nameEn;
+      return store.categoryByCode(code).localizedName(context);
     } catch (_) {
       return code;
     }
@@ -758,6 +765,7 @@ class _ExpenseTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.divider),
@@ -772,16 +780,19 @@ class _ExpenseTable extends StatelessWidget {
               vertical: 4,
             ),
             child: Row(
-              children: const <Widget>[
-                Expanded(flex: 2, child: Text('DATE')),
-                Expanded(flex: 2, child: Text('CATEGORY')),
+              children: <Widget>[
+                Expanded(flex: 2, child: Text(l.reports_table_date)),
+                Expanded(flex: 2, child: Text(l.reports_table_category)),
                 Expanded(
                   flex: 4,
-                  child: Text('DETAILS'),
+                  child: Text(l.reports_table_details),
                 ),
                 Expanded(
                   flex: 2,
-                  child: Text('AMOUNT', textAlign: TextAlign.right),
+                  child: Text(
+                    l.reports_table_amount,
+                    textAlign: TextAlign.right,
+                  ),
                 ),
               ],
             ),
@@ -799,11 +810,13 @@ class _ExpenseTable extends StatelessWidget {
                 children: <Widget>[
                   Expanded(
                     flex: 2,
-                    child: Text(DateFormat.yMd().format(e.occurredAt)),
+                    child: Text(
+                      DateFormat.yMd(l.localeName).format(e.occurredAt),
+                    ),
                   ),
                   Expanded(
                     flex: 2,
-                    child: Text(_safeCategoryName(store, e.categoryCode)),
+                    child: Text(_safeCategoryName(context, store, e.categoryCode)),
                   ),
                   Expanded(
                     flex: 4,
@@ -829,9 +842,9 @@ class _ExpenseTable extends StatelessWidget {
     );
   }
 
-  String _safeCategoryName(DemoStore store, String code) {
+  String _safeCategoryName(BuildContext context, DemoStore store, String code) {
     try {
-      return store.categoryByCode(code).nameEn;
+      return store.categoryByCode(code).localizedName(context);
     } catch (_) {
       return code;
     }

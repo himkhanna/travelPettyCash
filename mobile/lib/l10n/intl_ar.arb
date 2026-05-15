@@ -67,6 +67,31 @@
   "reports_signed_resign": "إعادة التوقيع",
   "reports_sign_error_pin": "يجب أن يتألف رمز PIN من 4 أرقام على الأقل.",
   "reports_sign_error_generic": "فشل التوقيع — حاول مرة أخرى.",
+  "reports_signature_lookup_error": "تعذر التحقق من التوقيع: {error}",
+
+  "reports_body_letterhead_en": "PROTOCOL DEPARTMENT, GOVERNMENT OF DUBAI",
+  "reports_body_letterhead_ar": "دائرة التشريفات والضيافة — دبي",
+
+  "reports_body_user_prepared_for": "أُعدّ للمالية — {name}",
+  "reports_body_total": "الإجمالي",
+  "reports_body_trip_total": "إجمالي الرحلة",
+  "reports_body_total_advanced": "إجمالي المبالغ المسلَّمة",
+  "reports_body_total_spent": "إجمالي المنصرف",
+  "reports_body_net_balance_to_return": "صافي المبلغ المستردّ",
+
+  "reports_body_finance_greeting": "إلى إدارة المالية،",
+  "reports_body_finance_paragraph": "تجدون أدناه تسوية الوفد الموفد إلى {country} للفترة من {startDate} إلى {endDate}. المبالغ المسلَّمة من كل مصدر مرصودة مقابل إجمالي المنصرف، وأي رصيد متبقٍّ يُعاد إلى الجهة المعنية.",
+  "reports_body_finance_endate_open": "الآن",
+  "reports_body_sources": "المصادر",
+  "reports_body_source_advanced_spent": "المسلَّم {advanced} / المنصرف {spent}",
+
+  "reports_body_per_member": "حسب العضو",
+  "reports_body_per_category": "حسب الفئة",
+
+  "reports_table_date": "التاريخ",
+  "reports_table_category": "الفئة",
+  "reports_table_details": "التفاصيل",
+  "reports_table_amount": "المبلغ",
 
   "drawer_language": "اللغة",
   "language_english": "English",

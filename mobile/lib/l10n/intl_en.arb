@@ -71,6 +71,53 @@
   "reports_signed_resign": "RE-SIGN",
   "reports_sign_error_pin": "PIN must be at least 4 digits.",
   "reports_sign_error_generic": "Signing failed — try again.",
+  "reports_signature_lookup_error": "Signature lookup error: {error}",
+  "@reports_signature_lookup_error": {
+    "placeholders": { "error": { "type": "String" } }
+  },
+
+  "reports_body_letterhead_en": "PROTOCOL DEPARTMENT, GOVERNMENT OF DUBAI",
+  "reports_body_letterhead_ar": "دائرة التشريفات والضيافة — دبي",
+  "@reports_body_letterhead_en": { "description": "Government letterhead — English line. Held bilingual on every report header per the design spec, not switched by locale." },
+  "@reports_body_letterhead_ar": { "description": "Government letterhead — Arabic line. Held bilingual on every report header." },
+
+  "reports_body_user_prepared_for": "PREPARED FOR FINANCE — {name}",
+  "@reports_body_user_prepared_for": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "reports_body_total": "TOTAL",
+  "reports_body_trip_total": "TRIP TOTAL",
+  "reports_body_total_advanced": "TOTAL ADVANCED",
+  "reports_body_total_spent": "TOTAL SPENT",
+  "reports_body_net_balance_to_return": "NET BALANCE TO RETURN",
+
+  "reports_body_finance_greeting": "To the Finance Department,",
+  "reports_body_finance_paragraph": "Please find below the reconciliation for the delegation to {country} held between {startDate} and {endDate}. The funds advanced from each source are listed against the total expense incurred. Any positive remainder will be returned to the appropriate pool.",
+  "@reports_body_finance_paragraph": {
+    "placeholders": {
+      "country": { "type": "String" },
+      "startDate": { "type": "String" },
+      "endDate": { "type": "String" }
+    }
+  },
+  "reports_body_finance_endate_open": "present",
+  "@reports_body_finance_endate_open": { "description": "Fallback for the end date in the finance letter body when the trip is still open (no closedAt)." },
+  "reports_body_sources": "SOURCES",
+  "reports_body_source_advanced_spent": "Advanced {advanced} / Spent {spent}",
+  "@reports_body_source_advanced_spent": {
+    "placeholders": {
+      "advanced": { "type": "String" },
+      "spent": { "type": "String" }
+    }
+  },
+
+  "reports_body_per_member": "PER MEMBER",
+  "reports_body_per_category": "PER CATEGORY",
+
+  "reports_table_date": "DATE",
+  "reports_table_category": "CATEGORY",
+  "reports_table_details": "DETAILS",
+  "reports_table_amount": "AMOUNT",
 
   "drawer_language": "LANGUAGE",
   "language_english": "English",
