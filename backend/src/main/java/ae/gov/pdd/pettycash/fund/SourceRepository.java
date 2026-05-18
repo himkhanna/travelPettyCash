@@ -1,0 +1,8 @@
+package ae.gov.pdd.pettycash.fund;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.UUID;
+
+public interface SourceRepository extends JpaRepository<Source, UUID> {
+}

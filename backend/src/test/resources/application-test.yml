@@ -1,0 +1,25 @@
+spring:
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+pettycash:
+  jwt:
+    issuer: pettycash-test
+    secret: test-only-secret-please-do-not-use-anywhere-near-production-32b
+    access-ttl-minutes: 15
+    refresh-ttl-days: 7
+  storage:
+    endpoint: http://localhost:9000
+    access-key: test
+    secret-key: testsecret
+    bucket: pettycash-test
+    region: us-east-1
+
+logging:
+  level:
+    root: WARN
+    ae.gov.pdd.pettycash: INFO

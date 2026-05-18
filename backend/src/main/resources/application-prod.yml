@@ -1,0 +1,27 @@
+# Production profile — all secrets from env vars. Nothing committed.
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    show-sql: false
+
+pettycash:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:pettycash}
+  storage:
+    endpoint: ${MINIO_ENDPOINT}
+    access-key: ${MINIO_ACCESS_KEY}
+    secret-key: ${MINIO_SECRET_KEY}
+    bucket: ${MINIO_BUCKET}
+    region: ${MINIO_REGION:us-east-1}
+
+server:
+  forward-headers-strategy: framework
+
+logging:
+  level:
+    root: WARN
+    ae.gov.pdd.pettycash: INFO

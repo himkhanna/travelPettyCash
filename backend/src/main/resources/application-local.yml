@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pettycash
+    username: pettycash
+    password: pettycash
+  jpa:
+    show-sql: true
+
+pettycash:
+  storage:
+    endpoint: http://localhost:9000
+    access-key: minio_admin
+    secret-key: minio_admin12
+    bucket: pettycash-receipts
+
+logging:
+  level:
+    ae.gov.pdd.pettycash: DEBUG
