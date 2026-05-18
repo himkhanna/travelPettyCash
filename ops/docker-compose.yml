@@ -1,6 +1,5 @@
 # Local dev stack — Postgres + MinIO. Run from repo root: docker compose -f ops/docker-compose.yml up
-# See backend/README.md for usage.
-version: "3.9"
+# Or use the wrapper: ops/dev.sh up
 
 services:
   postgres:
