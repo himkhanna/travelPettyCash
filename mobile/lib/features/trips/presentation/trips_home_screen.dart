@@ -201,7 +201,10 @@ class _TripCard extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Row(
             children: <Widget>[
-              _FlagCircle(countryCode: trip.countryCode),
+              _TripImageCircle(
+                imageUrl: trip.imageUrl,
+                countryCode: trip.countryCode,
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -235,27 +238,58 @@ class _TripCard extends StatelessWidget {
   }
 }
 
-class _FlagCircle extends StatelessWidget {
-  const _FlagCircle({required this.countryCode});
+/// Trip card avatar — prefers `trip.imageUrl` (a remote flag/banner URL),
+/// falls back to a Unicode flag emoji built from the ISO country code on
+/// load failure or when no URL is set.
+class _TripImageCircle extends StatelessWidget {
+  const _TripImageCircle({required this.imageUrl, required this.countryCode});
+  final String? imageUrl;
   final String countryCode;
 
   @override
   Widget build(BuildContext context) {
-    final String emoji = _flagFor(countryCode);
     return Container(
       width: 48,
       height: 48,
+      clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
         color: AppColors.cream,
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
-      child: Text(emoji, style: const TextStyle(fontSize: 26)),
+      child: imageUrl == null || imageUrl!.isEmpty
+          ? _EmojiFallback(countryCode: countryCode)
+          : Image.network(
+              imageUrl!,
+              fit: BoxFit.cover,
+              width: 48,
+              height: 48,
+              errorBuilder: (_, __, ___) =>
+                  _EmojiFallback(countryCode: countryCode),
+              loadingBuilder: (BuildContext c, Widget child, ImageChunkEvent? p) {
+                if (p == null) return child;
+                return _EmojiFallback(countryCode: countryCode);
+              },
+            ),
+    );
+  }
+}
+
+class _EmojiFallback extends StatelessWidget {
+  const _EmojiFallback({required this.countryCode});
+  final String countryCode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.cream,
+      alignment: Alignment.center,
+      child: Text(_flagFor(countryCode), style: const TextStyle(fontSize: 26)),
     );
   }
 
   String _flagFor(String code) {
-    if (code.length != 2) return '🏳️';
+    if (code.length != 2) return '\u{1F3F3}';
     final int base = 0x1F1E6;
     final int a = code.toUpperCase().codeUnitAt(0) - 0x41 + base;
     final int b = code.toUpperCase().codeUnitAt(1) - 0x41 + base;

@@ -20,6 +20,13 @@
   "auth_login_password": "Password",
   "auth_login_forgot": "Forgot password?",
   "auth_login_submit": "LOGIN",
+  "auth_login_uaePass": "Sign in with UAE Pass",
+  "auth_login_pddSso": "Sign in with PDD SSO",
+  "auth_login_demoNotice": "Mock sign-in for the prototype. No credentials are validated.",
+
+  "auth_forgot_title": "FORGOT PASSWORD",
+  "auth_forgot_body": "Password resets are handled by the Protocol Department IT team. Please contact your administrator to regain access.",
+  "auth_forgot_contact": "it-support@pdd.gov.ae",
 
   "common_close": "CLOSE",
   "common_cancel": "CANCEL",
@@ -28,5 +35,130 @@
   "common_back": "BACK",
   "common_pending_sync": "Pending sync",
   "common_offline": "Offline",
-  "common_loading": "Loading…"
+  "common_loading": "Loading…",
+  "common_error": "Error",
+  "common_retry": "Retry",
+
+  "trips_home_appbar": "PDD Petty Cash",
+  "trips_home_hello": "HELLO",
+  "trips_home_activeTrips": "ACTIVE TRIPS",
+  "trips_home_empty": "No active trips for this role.",
+  "trips_home_demoUser": "DEMO USER",
+
+  "trips_allTrips_title": "ALL TRIPS",
+  "trips_allTrips_empty": "No trips on record for this user.",
+
+  "trip_status_active": "ACTIVE",
+  "trip_status_closed": "CLOSED",
+  "trip_status_draft": "DRAFT",
+  "trip_closed_banner": "Trip closed on {date}",
+  "@trip_closed_banner": {
+    "placeholders": {
+      "date": { "type": "String", "example": "20 Mar 2026" }
+    }
+  },
+  "trip_closed_readOnly": "This trip is closed. Expenses are read-only.",
+  "trip_closed_pill": "CLOSED",
+
+  "dashboard_myView": "MY VIEW",
+  "dashboard_tripView": "TRIP VIEW",
+  "dashboard_totalBudget": "TOTAL TRIP BUDGET",
+
+  "nav_home": "Home",
+  "nav_expenses": "Expenses",
+  "nav_transfer": "Transfer",
+  "nav_profile": "Profile",
+
+  "expense_add_title": "ADD EXPENSE",
+  "expense_add_source": "SOURCE",
+  "expense_add_category": "CATEGORY",
+  "expense_add_details": "DETAILS",
+  "expense_add_detailsHint": "Describe the expense (optional)",
+  "expense_add_occurredAt": "OCCURRED AT",
+  "expense_add_receipt": "RECEIPT",
+  "expense_add_receiptButton": "ADD RECEIPT",
+  "expense_add_submit": "ADD EXPENSE",
+  "expense_add_addMore": "ADD MORE",
+  "expense_add_validation_amount": "Amount must be greater than 0",
+  "expense_add_validation_source": "Please select a source",
+  "expense_add_validation_category": "Please select a category",
+  "expense_add_success_title": "EXPENSE ADDED",
+  "expense_add_success_queued": "QUEUED OFFLINE",
+  "expense_add_success_queuedBody": "The expense will sync when you go back online.",
+  "expense_add_replace": "Tap to replace",
+  "expense_add_pickFailed": "Receipt pick failed: {error}",
+  "@expense_add_pickFailed": {
+    "placeholders": { "error": { "type": "String" } }
+  },
+
+  "expense_detail_title": "EXPENSE",
+  "expense_detail_category": "CATEGORY",
+  "expense_detail_source": "SOURCE",
+  "expense_detail_details": "DETAILS",
+  "expense_detail_receipt": "RECEIPT",
+  "expense_detail_viewReceipt": "VIEW RECEIPT",
+  "expense_detail_onFile": "Receipt on file",
+  "expense_detail_pendingBanner": "This expense is queued and will sync when you return online.",
+
+  "expense_edit_title": "EDIT EXPENSE",
+  "expense_edit_amount": "AMOUNT",
+  "expense_edit_save": "SAVE CHANGES",
+  "expense_edit_locked": "Trip closed — expenses are read-only.",
+  "expense_edit_saved": "Expense updated.",
+
+  "expense_list_my": "MY EXPENSES",
+  "expense_list_trip": "TRIP EXPENSES",
+  "expense_list_empty": "No expenses for the current filter.",
+  "expense_list_noDetails": "(no details)",
+  "expense_list_filtersActive": "{count, plural, =1{1 filter active} other{{count} filters active}}",
+  "@expense_list_filtersActive": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "expense_list_clear": "CLEAR",
+  "expense_list_editAll": "Edit all (reassign sources)",
+  "expense_list_chartView": "Chart view",
+  "expense_list_filter": "Filter",
+  "expense_list_saveCount": "SAVE {count}",
+  "@expense_list_saveCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "receipt_viewer_title": "RECEIPT",
+  "receipt_viewer_unavailable": "Receipt image is not available.",
+
+  "transfer_title": "TRANSFER",
+  "transfer_from": "TRANSFER FROM",
+  "transfer_to": "TO",
+  "transfer_amount": "AMOUNT",
+  "transfer_note": "Note (optional)",
+  "transfer_submit": "TRANSFER",
+  "transfer_more": "TRANSFER MORE",
+  "transfer_available": "available",
+  "transfer_noPeers": "No other participants in this trip.",
+  "transfer_success_title": "TRANSFER SENT",
+  "transfer_success_body": "The recipient will see it in their notifications and can accept or decline.",
+
+  "notifications_title": "NOTIFICATIONS",
+  "notifications_empty": "No notifications.",
+  "notifications_accept": "ACCEPT",
+  "notifications_decline": "DECLINE",
+  "notifications_deleteAll": "DELETE ALL",
+
+  "chat_list_title": "CHATS",
+  "chat_list_empty": "No conversations yet.",
+  "chat_thread_send": "Send",
+  "chat_thread_composerHint": "Type a message",
+
+  "funds_allocate_title": "ALLOCATE FUNDS",
+  "funds_allocate_submit": "ALLOCATE FUNDS",
+  "funds_manage_title": "MANAGE FUNDS",
+  "funds_manage_allocateNew": "ALLOCATE NEW",
+  "funds_manage_currentBalance": "CURRENT TRIP BALANCE",
+
+  "drawer_logout": "LOGOUT",
+  "drawer_allTrips": "ALL TRIPS",
+  "drawer_manageFunds": "MANAGE FUNDS",
+  "drawer_notifications": "NOTIFICATIONS",
+  "drawer_chat": "CHAT",
+  "drawer_demoControls": "DEMO CONTROLS"
 }

@@ -65,15 +65,10 @@ class ExpenseDetailScreen extends ConsumerWidget {
                   child: canEdit
                       ? IconButton(
                           icon: const Icon(Icons.edit_outlined),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Inline editing lands in Milestone A slice 4.',
-                                ),
-                              ),
-                            );
-                          },
+                          tooltip: 'Edit',
+                          onPressed: () => context.go(
+                            '/m/trips/$tripId/expenses/$expenseId/edit',
+                          ),
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -135,8 +130,17 @@ class ExpenseDetailScreen extends ConsumerWidget {
                   color: AppColors.brandBrown,
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                if (e.receiptObjectKey != null)
+                if (e.receiptObjectKey != null) ...<Widget>[
                   _ReceiptViewer(objectKey: e.receiptObjectKey!),
+                  const SizedBox(height: AppSpacing.md),
+                  OutlinedButton.icon(
+                    onPressed: () => context.go(
+                      '/m/trips/$tripId/expenses/$expenseId/receipt',
+                    ),
+                    icon: const Icon(Icons.fullscreen),
+                    label: const Text('VIEW RECEIPT'),
+                  ),
+                ],
                 if (e.pendingSync) ...<Widget>[
                   const SizedBox(height: AppSpacing.md),
                   Container(

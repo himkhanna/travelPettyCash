@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/presentation/forgot_password_screen.dart';
+import '../features/auth/presentation/login_screen.dart';
 import '../features/cms/presentation/cms_dashboard.dart';
 import '../features/cms/presentation/dg_dashboard.dart';
 import '../features/expenses/presentation/add_expense_screen.dart';
 import '../features/expenses/presentation/expense_breakdown_screen.dart';
 import '../features/expenses/presentation/expense_detail_screen.dart';
+import '../features/expenses/presentation/expense_edit_screen.dart';
+import '../features/expenses/presentation/receipt_viewer_screen.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../features/chat/presentation/chats_list_screen.dart';
 import '../features/expenses/presentation/my_expenses_screen.dart';
@@ -16,6 +20,7 @@ import '../features/funds/presentation/manage_funds_screen.dart';
 import '../features/funds/presentation/transfer_screen.dart';
 import '../features/landing/presentation/landing_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/trips/presentation/all_trips_screen.dart';
 import '../features/trips/presentation/trip_dashboard_screen.dart';
 import '../features/trips/presentation/trip_tab_stub.dart';
 import '../features/trips/presentation/trips_home_screen.dart';
@@ -28,6 +33,21 @@ GoRouter buildAppRouter() {
     routes: <RouteBase>[
       GoRoute(path: '/', builder: (_, __) => const LandingScreen()),
 
+      // Real-auth path (parallel to the dev landing). Login mocks SSO and
+      // routes into /m/trips on success; see CLAUDE.md §16 for the open
+      // question on UAE Pass vs PDD AD as the production identity provider.
+      ShellRoute(
+        builder: (BuildContext context, GoRouterState state, Widget child) =>
+            PhoneViewport(child: child),
+        routes: <RouteBase>[
+          GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+          GoRoute(
+            path: '/forgot-password',
+            builder: (_, __) => const ForgotPasswordScreen(),
+          ),
+        ],
+      ),
+
       // Mobile UI — rendered inside a phone-frame on web (>=600px).
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) =>
@@ -36,6 +56,10 @@ GoRouter buildAppRouter() {
           GoRoute(
             path: '/m/trips',
             builder: (_, __) => const TripsHomeScreen(),
+          ),
+          GoRoute(
+            path: '/m/all-trips',
+            builder: (_, __) => const AllTripsScreen(),
           ),
           GoRoute(
             path: '/m/trips/:id/dashboard',
@@ -73,6 +97,22 @@ GoRouter buildAppRouter() {
             path: '/m/trips/:tripId/expenses/:expenseId',
             builder: (BuildContext context, GoRouterState state) =>
                 ExpenseDetailScreen(
+                  tripId: state.pathParameters['tripId']!,
+                  expenseId: state.pathParameters['expenseId']!,
+                ),
+          ),
+          GoRoute(
+            path: '/m/trips/:tripId/expenses/:expenseId/edit',
+            builder: (BuildContext context, GoRouterState state) =>
+                ExpenseEditScreen(
+                  tripId: state.pathParameters['tripId']!,
+                  expenseId: state.pathParameters['expenseId']!,
+                ),
+          ),
+          GoRoute(
+            path: '/m/trips/:tripId/expenses/:expenseId/receipt',
+            builder: (BuildContext context, GoRouterState state) =>
+                ReceiptViewerScreen(
                   tripId: state.pathParameters['tripId']!,
                   expenseId: state.pathParameters['expenseId']!,
                 ),

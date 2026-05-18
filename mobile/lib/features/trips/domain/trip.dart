@@ -15,6 +15,7 @@ class Trip {
     required this.totalBudget,
     required this.createdAt,
     this.closedAt,
+    this.imageUrl,
   });
 
   final String id;
@@ -29,6 +30,11 @@ class Trip {
   final Money totalBudget;
   final DateTime createdAt;
   final DateTime? closedAt;
+
+  /// Optional banner/flag image shown on the trip card and dashboard hero.
+  /// Nullable so seed data and legacy rows fall back to the country-code
+  /// emoji flag in TripsHomeScreen.
+  final String? imageUrl;
 }
 
 enum TripStatus { draft, active, closed }

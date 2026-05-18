@@ -340,6 +340,7 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
           totalBudget: old.totalBudget + inflow,
           createdAt: old.createdAt,
           closedAt: old.closedAt,
+          imageUrl: old.imageUrl,
         );
       }
 

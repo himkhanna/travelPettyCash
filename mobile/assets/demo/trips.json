@@ -10,7 +10,8 @@
     "leaderId": "u-fatima",
     "memberIds": ["u-ahmed", "u-mohammed", "u-layla"],
     "totalBudgetMinor": 9100000,
-    "createdAt": "2026-04-28T09:00:00+04:00"
+    "createdAt": "2026-04-28T09:00:00+04:00",
+    "imageUrl": "https://flagcdn.com/w320/sa.png"
   },
   {
     "id": "trip-egy-2026",
@@ -23,7 +24,8 @@
     "leaderId": "u-fatima",
     "memberIds": ["u-ahmed", "u-mohammed"],
     "totalBudgetMinor": 4500000,
-    "createdAt": "2026-05-02T10:30:00+04:00"
+    "createdAt": "2026-05-02T10:30:00+04:00",
+    "imageUrl": "https://flagcdn.com/w320/eg.png"
   },
   {
     "id": "trip-jor-2026",
@@ -37,6 +39,7 @@
     "memberIds": ["u-ahmed", "u-layla"],
     "totalBudgetMinor": 8500000,
     "createdAt": "2026-03-10T08:00:00+04:00",
-    "closedAt": "2026-03-20T18:00:00+04:00"
+    "closedAt": "2026-03-20T18:00:00+04:00",
+    "imageUrl": "https://flagcdn.com/w320/jo.png"
   }
 ]

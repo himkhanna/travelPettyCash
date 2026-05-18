@@ -224,6 +224,7 @@ class FakeTripRepository implements TripRepository {
       totalBudget: old.totalBudget,
       createdAt: old.createdAt,
       closedAt: now,
+      imageUrl: old.imageUrl,
     );
     _store.trips[i] = closed;
 

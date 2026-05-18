@@ -6,8 +6,10 @@ import '../../../app/theme.dart';
 import '../../../core/money/money.dart';
 import '../../../shared/widgets/dual_arc_donut.dart';
 import '../../../shared/widgets/source_balance_card.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/sync_status_banner.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
+import '../../../shared/widgets/trip_status_chip.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../application/trips_providers.dart';
@@ -41,11 +43,25 @@ class _TripDashboardScreenState extends ConsumerState<TripDashboardScreen> {
         user?.role == UserRole.admin ||
         user?.role == UserRole.superAdmin;
 
+    final bool isClosed = tripAsync.maybeWhen(
+      data: (Trip t) => t.status == TripStatus.closed,
+      orElse: () => false,
+    );
+
     return Scaffold(
       drawer: TripDrawer(tripId: widget.tripId),
       appBar: AppBar(
         title: tripAsync.maybeWhen(
-          data: (Trip t) => Text(t.countryName.toUpperCase()),
+          data: (Trip t) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Flexible(child: Text(t.countryName.toUpperCase())),
+              if (t.status != TripStatus.active) ...<Widget>[
+                const SizedBox(width: AppSpacing.sm),
+                TripStatusChip(status: t.status),
+              ],
+            ],
+          ),
           orElse: () => const Text('Trip'),
         ),
         actions: <Widget>[
@@ -60,6 +76,12 @@ class _TripDashboardScreenState extends ConsumerState<TripDashboardScreen> {
         child: Column(
           children: <Widget>[
             const SyncStatusBanner(),
+            tripAsync.maybeWhen(
+              data: (Trip t) => t.status == TripStatus.closed
+                  ? _TripClosedBanner(closedAt: t.closedAt)
+                  : const SizedBox.shrink(),
+              orElse: () => const SizedBox.shrink(),
+            ),
             if (leaderOrAdmin)
               _ScopeTabs(
                 scope: _scope,
@@ -74,8 +96,51 @@ class _TripDashboardScreenState extends ConsumerState<TripDashboardScreen> {
       bottomNavigationBar: TripBottomNav(
         tripId: widget.tripId,
         currentLocation: GoRouterState.of(context).matchedLocation,
+        tripClosed: isClosed,
       ),
     );
+  }
+}
+
+class _TripClosedBanner extends StatelessWidget {
+  const _TripClosedBanner({required this.closedAt});
+  final DateTime? closedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    final String date = closedAt == null ? '—' : _formatDate(closedAt!);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsetsDirectional.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
+      color: AppColors.outflow.withValues(alpha: 0.08),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.lock_outline, size: 16, color: AppColors.outflow),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              l.trip_closed_banner(date),
+              style: const TextStyle(
+                color: AppColors.outflow,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime d) {
+    const List<String> months = <String>[
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 }
 
@@ -158,7 +223,6 @@ class _DashboardBody extends ConsumerWidget {
     final AsyncValue<TripBalances> balances = ref.watch(
       tripBalancesProvider((tripId: tripId, scope: scope)),
     );
-    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
 
     return balances.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -187,13 +251,6 @@ class _DashboardBody extends ConsumerWidget {
               amount: scope == BalanceScope.trip
                   ? b.totalBudget
                   : _sumReceived(b),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            tripAsync.maybeWhen(
-              data: (Trip t) => t.status == TripStatus.closed
-                  ? const _ClosedBanner()
-                  : const SizedBox.shrink(),
-              orElse: () => const SizedBox.shrink(),
             ),
           ],
         ),
@@ -245,30 +302,3 @@ class _TotalBudgetPill extends StatelessWidget {
   }
 }
 
-class _ClosedBanner extends StatelessWidget {
-  const _ClosedBanner();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.outflow.withValues(alpha: 0.1),
-        borderRadius: const BorderRadius.all(AppRadii.card),
-      ),
-      child: Row(
-        children: <Widget>[
-          const Icon(Icons.lock_outline, color: AppColors.outflow),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              'This trip is closed. Expenses are read-only.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.outflow),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

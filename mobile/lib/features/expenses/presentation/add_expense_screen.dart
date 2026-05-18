@@ -209,9 +209,37 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _pickReceipt() async {
+    // Bottom sheet lets the user choose camera or gallery. Camera is the
+    // primary path for protocol officers in the field (CLAUDE.md §11); the
+    // gallery fallback exists for web demos where camera is unavailable.
+    final ImageSource? src = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (BuildContext ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Camera'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (src == null) return;
     try {
+      // Compression: imageQuality 80 + maxWidth 1600 keeps payloads under
+      // the 1 MB target (CLAUDE.md §11). image_cropper is intentionally
+      // out-of-scope for this milestone — it would land alongside the
+      // signed-URL receipt upload pipeline in Phase 3.
       final XFile? picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: src,
         imageQuality: 80,
         maxWidth: 1600,
       );

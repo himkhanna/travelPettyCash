@@ -71,7 +71,7 @@ class TripDrawer extends ConsumerWidget {
             _DrawerItem(
               icon: Icons.flight_takeoff,
               label: 'ALL TRIPS',
-              onTap: () => context.go('/m/trips'),
+              onTap: () => context.go('/m/all-trips'),
             ),
             if (leaderOrAdmin)
               _DrawerItem(

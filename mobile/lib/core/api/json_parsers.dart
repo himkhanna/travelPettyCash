@@ -54,6 +54,7 @@ Trip parseTrip(Map<String, Object?> json) {
     closedAt: json['closedAt'] == null
         ? null
         : DateTime.parse(json['closedAt']! as String),
+    imageUrl: json['imageUrl'] as String?,
   );
 }
 

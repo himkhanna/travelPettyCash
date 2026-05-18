@@ -19,6 +19,13 @@
   "auth_login_password": "كلمة المرور",
   "auth_login_forgot": "نسيت كلمة المرور؟",
   "auth_login_submit": "تسجيل الدخول",
+  "auth_login_uaePass": "الدخول عبر الهوية الرقمية",
+  "auth_login_pddSso": "الدخول عبر نظام دائرة التشريفات",
+  "auth_login_demoNotice": "تسجيل دخول تجريبي. لا يتم التحقق من بيانات الاعتماد.",
+
+  "auth_forgot_title": "استعادة كلمة المرور",
+  "auth_forgot_body": "تتم إعادة تعيين كلمة المرور من قِبَل قسم تقنية المعلومات في دائرة التشريفات. يرجى التواصل مع المسؤول لاستعادة الوصول.",
+  "auth_forgot_contact": "it-support@pdd.gov.ae",
 
   "common_close": "إغلاق",
   "common_cancel": "إلغاء",
@@ -27,5 +34,130 @@
   "common_back": "رجوع",
   "common_pending_sync": "بانتظار المزامنة",
   "common_offline": "غير متصل",
-  "common_loading": "جاري التحميل…"
+  "common_loading": "جاري التحميل…",
+  "common_error": "خطأ",
+  "common_retry": "إعادة المحاولة",
+
+  "trips_home_appbar": "صرفيات السفر",
+  "trips_home_hello": "مرحباً",
+  "trips_home_activeTrips": "الرحلات النشطة",
+  "trips_home_empty": "لا توجد رحلات نشطة لهذا الدور.",
+  "trips_home_demoUser": "مستخدم تجريبي",
+
+  "trips_allTrips_title": "جميع الرحلات",
+  "trips_allTrips_empty": "لا توجد رحلات مسجّلة لهذا المستخدم.",
+
+  "trip_status_active": "نشطة",
+  "trip_status_closed": "مُغلقة",
+  "trip_status_draft": "مسودّة",
+  "trip_closed_banner": "أُغلقت الرحلة بتاريخ {date}",
+  "@trip_closed_banner": {
+    "placeholders": {
+      "date": { "type": "String", "example": "٢٠ مارس ٢٠٢٦" }
+    }
+  },
+  "trip_closed_readOnly": "هذه الرحلة مُغلقة. الصرفيات للعرض فقط.",
+  "trip_closed_pill": "مُغلقة",
+
+  "dashboard_myView": "حسابي",
+  "dashboard_tripView": "الرحلة",
+  "dashboard_totalBudget": "إجمالي ميزانية الرحلة",
+
+  "nav_home": "الرئيسية",
+  "nav_expenses": "الصرفيات",
+  "nav_transfer": "تحويل",
+  "nav_profile": "الملف",
+
+  "expense_add_title": "إضافة صرفية",
+  "expense_add_source": "المصدر",
+  "expense_add_category": "التصنيف",
+  "expense_add_details": "التفاصيل",
+  "expense_add_detailsHint": "صف الصرفية (اختياري)",
+  "expense_add_occurredAt": "تاريخ الصرف",
+  "expense_add_receipt": "الإيصال",
+  "expense_add_receiptButton": "إرفاق إيصال",
+  "expense_add_submit": "إضافة الصرفية",
+  "expense_add_addMore": "إضافة المزيد",
+  "expense_add_validation_amount": "يجب أن يكون المبلغ أكبر من صفر",
+  "expense_add_validation_source": "يرجى اختيار المصدر",
+  "expense_add_validation_category": "يرجى اختيار التصنيف",
+  "expense_add_success_title": "تمت إضافة الصرفية",
+  "expense_add_success_queued": "في انتظار المزامنة",
+  "expense_add_success_queuedBody": "ستتم مزامنة الصرفية عند عودة الاتصال.",
+  "expense_add_replace": "اضغط للاستبدال",
+  "expense_add_pickFailed": "تعذّر اختيار الإيصال: {error}",
+  "@expense_add_pickFailed": {
+    "placeholders": { "error": { "type": "String" } }
+  },
+
+  "expense_detail_title": "الصرفية",
+  "expense_detail_category": "التصنيف",
+  "expense_detail_source": "المصدر",
+  "expense_detail_details": "التفاصيل",
+  "expense_detail_receipt": "الإيصال",
+  "expense_detail_viewReceipt": "عرض الإيصال",
+  "expense_detail_onFile": "الإيصال محفوظ",
+  "expense_detail_pendingBanner": "هذه الصرفية في الطابور وسيتم مزامنتها عند عودة الاتصال.",
+
+  "expense_edit_title": "تعديل الصرفية",
+  "expense_edit_amount": "المبلغ",
+  "expense_edit_save": "حفظ التعديلات",
+  "expense_edit_locked": "الرحلة مُغلقة — الصرفيات للعرض فقط.",
+  "expense_edit_saved": "تم تحديث الصرفية.",
+
+  "expense_list_my": "صرفياتي",
+  "expense_list_trip": "صرفيات الرحلة",
+  "expense_list_empty": "لا توجد صرفيات وفق التصفية الحالية.",
+  "expense_list_noDetails": "(لا توجد تفاصيل)",
+  "expense_list_filtersActive": "{count, plural, =0{لا توجد عوامل تصفية} =1{عامل تصفية واحد} =2{عاملا تصفية} few{{count} عوامل تصفية} many{{count} عاملاً للتصفية} other{{count} عامل تصفية}}",
+  "@expense_list_filtersActive": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "expense_list_clear": "مسح",
+  "expense_list_editAll": "تعديل الكل (إعادة تعيين المصدر)",
+  "expense_list_chartView": "عرض الرسم البياني",
+  "expense_list_filter": "تصفية",
+  "expense_list_saveCount": "حفظ {count}",
+  "@expense_list_saveCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "receipt_viewer_title": "الإيصال",
+  "receipt_viewer_unavailable": "صورة الإيصال غير متاحة.",
+
+  "transfer_title": "تحويل",
+  "transfer_from": "تحويل من",
+  "transfer_to": "إلى",
+  "transfer_amount": "المبلغ",
+  "transfer_note": "ملاحظة (اختيارية)",
+  "transfer_submit": "تحويل",
+  "transfer_more": "تحويل آخر",
+  "transfer_available": "متاح",
+  "transfer_noPeers": "لا يوجد مشاركون آخرون في هذه الرحلة.",
+  "transfer_success_title": "تم إرسال التحويل",
+  "transfer_success_body": "سيظهر التحويل في إشعارات المستلم ليقبله أو يرفضه.",
+
+  "notifications_title": "الإشعارات",
+  "notifications_empty": "لا توجد إشعارات.",
+  "notifications_accept": "قبول",
+  "notifications_decline": "رفض",
+  "notifications_deleteAll": "حذف الكل",
+
+  "chat_list_title": "المحادثات",
+  "chat_list_empty": "لا توجد محادثات بعد.",
+  "chat_thread_send": "إرسال",
+  "chat_thread_composerHint": "اكتب رسالة",
+
+  "funds_allocate_title": "توزيع الأموال",
+  "funds_allocate_submit": "توزيع الأموال",
+  "funds_manage_title": "إدارة الأموال",
+  "funds_manage_allocateNew": "توزيع جديد",
+  "funds_manage_currentBalance": "الرصيد الحالي للرحلة",
+
+  "drawer_logout": "تسجيل الخروج",
+  "drawer_allTrips": "جميع الرحلات",
+  "drawer_manageFunds": "إدارة الأموال",
+  "drawer_notifications": "الإشعارات",
+  "drawer_chat": "المحادثات",
+  "drawer_demoControls": "أدوات العرض التجريبي"
 }

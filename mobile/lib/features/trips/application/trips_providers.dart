@@ -29,6 +29,16 @@ final FutureProvider<List<Trip>> activeTripsProvider = FutureProvider<List<Trip>
   },
 );
 
+/// All trips visible to the current user, across DRAFT/ACTIVE/CLOSED. Drives
+/// the "All Trips" drawer destination (screen-inventory out-of-inventory).
+final FutureProvider<List<Trip>> allTripsProvider = FutureProvider<List<Trip>>(
+  (Ref ref) async {
+    final User? user = await ref.watch(currentUserProvider.future);
+    if (user == null) return <Trip>[];
+    return ref.read(tripRepositoryProvider).allTrips();
+  },
+);
+
 final FutureProviderFamily<Trip, String> tripDetailProvider =
     FutureProvider.family<Trip, String>(
       (Ref ref, String id) async {
