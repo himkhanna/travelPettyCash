@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/login_screen.dart';
+import '../features/audit/presentation/cms_audit_screen.dart';
+import '../features/auth/presentation/wrong_portal_screen.dart';
 import '../features/cms/presentation/cms_dashboard.dart';
 import '../features/cms/presentation/dg_dashboard.dart';
+import '../features/cms/presentation/users_screen.dart';
 import '../features/expenses/presentation/add_expense_screen.dart';
 import '../features/expenses/presentation/expense_breakdown_screen.dart';
 import '../features/expenses/presentation/expense_detail_screen.dart';
@@ -18,7 +21,7 @@ import '../features/funds/presentation/transfer_screen.dart';
 import '../features/landing/presentation/landing_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/trips/presentation/trip_dashboard_screen.dart';
-import '../features/trips/presentation/trip_tab_stub.dart';
+import '../features/trips/presentation/trip_profile_screen.dart';
 import '../features/trips/presentation/trips_home_screen.dart';
 import '../shared/widgets/phone_viewport.dart';
 
@@ -28,7 +31,40 @@ GoRouter buildAppRouter() {
     debugLogDiagnostics: false,
     routes: <RouteBase>[
       GoRoute(path: '/', builder: (_, __) => const LandingScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+
+      // Dedicated entry paths — each only accepts a specific role audience.
+      // Optional ?u=<username> query param pre-fills the username field, used
+      // when the other portal redirects a wrong-portal sign-in attempt.
+      GoRoute(
+        path: '/app',
+        builder: (BuildContext context, GoRouterState state) => LoginScreen(
+          audience: PortalAudience.mobileApp,
+          prefillUsername: state.uri.queryParameters['u'],
+        ),
+      ),
+      GoRoute(
+        path: '/portal',
+        builder: (BuildContext context, GoRouterState state) => LoginScreen(
+          audience: PortalAudience.webAdmin,
+          prefillUsername: state.uri.queryParameters['u'],
+        ),
+      ),
+      // Back-compat: the old single /login URL bounces to /portal (the more
+      // common reason to hit this route directly is bookmarked admin links).
+      GoRoute(
+        path: '/login',
+        redirect: (_, __) => '/portal',
+      ),
+      // 403-style page when role doesn't match portal — see WrongPortalScreen.
+      GoRoute(
+        path: '/wrong-portal',
+        builder: (BuildContext context, GoRouterState state) =>
+            WrongPortalScreen(
+          expected: state.uri.queryParameters['expected'] == 'mobileApp'
+              ? PortalAudience.mobileApp
+              : PortalAudience.webAdmin,
+        ),
+      ),
 
       // Mobile UI — rendered inside a phone-frame on web (>=600px).
       ShellRoute(
@@ -86,12 +122,8 @@ GoRouter buildAppRouter() {
           ),
           GoRoute(
             path: '/m/trips/:id/profile',
-            builder: (BuildContext context, GoRouterState state) => TripTabStub(
-              tripId: state.pathParameters['id']!,
-              title: 'Profile',
-              icon: Icons.account_circle_outlined,
-              message: 'Profile + all-trips view lands in Milestone B.',
-            ),
+            builder: (BuildContext context, GoRouterState state) =>
+                TripProfileScreen(tripId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/m/trips/:id/chat',
@@ -125,6 +157,8 @@ GoRouter buildAppRouter() {
 
       // CMS — full-width Flutter Web UI for Admin / Super Admin.
       GoRoute(path: '/cms', builder: (_, __) => const CmsDashboard()),
+      GoRoute(path: '/cms/users', builder: (_, __) => const CmsUsersScreen()),
+      GoRoute(path: '/cms/audit', builder: (_, __) => const CmsAuditScreen()),
       GoRoute(path: '/cms/dg', builder: (_, __) => const DgDashboard()),
     ],
     errorBuilder: (_, GoRouterState state) => Scaffold(

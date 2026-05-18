@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
@@ -9,9 +9,11 @@ import '../../../core/money/money.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../funds/application/funds_providers.dart';
+import '../../funds/data/funds_repository.dart';
 import '../../funds/domain/funding.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
+import 'edit_trip_dialog.dart';
 
 /// Action bar on the CMS trip-detail pane. Visible to Admin only;
 /// Super Admin sees the trip read-only.
@@ -26,6 +28,27 @@ class TripAdminActions extends ConsumerWidget {
     final bool isActive = trip.status == TripStatus.active;
     if (!isActive) return const SizedBox.shrink();
 
+    // The global OutlinedButton theme stretches every button to full width
+    // — fine on the phone screens, but on the desktop CMS we want a compact
+    // toolbar. Override with intrinsic-sized buttons.
+    final ButtonStyle compact = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 36),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      foregroundColor: AppColors.brandBrown,
+      side: const BorderSide(color: AppColors.brandBrown),
+    );
+    final ButtonStyle compactDanger = compact.copyWith(
+      foregroundColor: const WidgetStatePropertyAll<Color>(AppColors.outflow),
+      side: const WidgetStatePropertyAll<BorderSide>(
+        BorderSide(color: AppColors.outflow),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
       child: Wrap(
@@ -33,16 +56,20 @@ class TripAdminActions extends ConsumerWidget {
         runSpacing: AppSpacing.sm,
         children: <Widget>[
           OutlinedButton.icon(
-            icon: const Icon(Icons.add_card_outlined, size: 18),
+            style: compact,
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('EDIT TRIP'),
+            onPressed: () => _openEditTrip(context, ref),
+          ),
+          OutlinedButton.icon(
+            style: compact,
+            icon: const Icon(Icons.add_card_outlined, size: 16),
             label: const Text('ASSIGN ADDITIONAL FUNDS'),
             onPressed: () => _openAssignFunds(context, ref),
           ),
           OutlinedButton.icon(
-            icon: const Icon(Icons.lock_outline, size: 18),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.outflow,
-              side: const BorderSide(color: AppColors.outflow),
-            ),
+            style: compactDanger,
+            icon: const Icon(Icons.lock_outline, size: 16),
             label: const Text('CLOSE TRIP'),
             onPressed: () => _confirmCloseTrip(context, ref),
           ),
@@ -98,6 +125,25 @@ class TripAdminActions extends ConsumerWidget {
       builder: (BuildContext _) => _AssignFundsDialog(trip: trip),
     );
   }
+
+  Future<void> _openEditTrip(BuildContext context, WidgetRef ref) async {
+    final Object? result = await showDialog<Object>(
+      context: context,
+      builder: (BuildContext _) => EditTripDialog(trip: trip),
+    );
+    if (!context.mounted) return;
+    if (result == 'deleted') {
+      // Trip no longer exists — bounce the admin back to the trip list so
+      // the now-stale detail view doesn't render an error.
+      GoRouter.of(context).go('/cms');
+      return;
+    }
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Trip "${trip.name}" updated.')),
+      );
+    }
+  }
 }
 
 class _AssignFundsDialog extends ConsumerStatefulWidget {
@@ -112,7 +158,6 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
   final Map<String, TextEditingController> _ctrls =
       <String, TextEditingController>{};
   bool _saving = false;
-  static const Uuid _uuid = Uuid();
 
   TextEditingController _ctrl(String sourceId) =>
       _ctrls.putIfAbsent(sourceId, () => TextEditingController());
@@ -250,14 +295,30 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
                     ],
                   ),
                   const Spacer(),
+                  // Compact styles override the global theme's
+                  // Size(double.infinity, 52) minimumSize — without these,
+                  // CANCEL claims full width and pushes ASSIGN off the right
+                  // edge of the dialog footer.
                   OutlinedButton(
                     onPressed: _saving
                         ? null
                         : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      visualDensity: VisualDensity.compact,
+                    ),
                     child: const Text('CANCEL'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.brandBrown,
+                      foregroundColor: AppColors.cream,
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      visualDensity: VisualDensity.compact,
+                    ),
                     icon: _saving
                         ? const SizedBox(
                             width: 16,
@@ -268,7 +329,13 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
                             ),
                           )
                         : const Icon(Icons.check),
-                    label: const Text('ASSIGN'),
+                    label: const Text(
+                      'ASSIGN',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                     onPressed:
                         _saving || _grandTotal(widget.trip.currency).isZero
                         ? null
@@ -298,8 +365,8 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
     setState(() => _saving = true);
     try {
       final DemoStore store = ref.read(demoStoreProvider);
-      final DateTime now = DateTime.now();
       Money inflow = Money.zero(widget.trip.currency);
+      final List<AllocationDraftRow> rows = <AllocationDraftRow>[];
 
       _ctrls.forEach((String sourceId, TextEditingController c) {
         final String cleaned = c.text.replaceAll(',', '').trim();
@@ -308,40 +375,31 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
         if (major <= 0) return;
         final Money amount = Money.fromMajor(major, widget.trip.currency);
         inflow += amount;
-        store.allocations.add(
-          Allocation(
-            id: 'alloc-${_uuid.v4().substring(0, 8)}',
-            tripId: widget.trip.id,
-            fromUserId: null, // admin pool
-            toUserId: widget.trip.leaderId,
-            sourceId: sourceId,
-            amount: amount,
-            status: AllocationStatus.accepted,
-            createdAt: now,
-            respondedAt: now,
-          ),
-        );
+        rows.add(AllocationDraftRow(
+          toUserId: widget.trip.leaderId,
+          sourceId: sourceId,
+          amount: amount,
+        ));
       });
 
-      // Bump trip totalBudget by the inflow.
-      final int i = store.trips.indexWhere((Trip t) => t.id == widget.trip.id);
-      if (i >= 0) {
-        final Trip old = store.trips[i];
-        store.trips[i] = Trip(
-          id: old.id,
-          name: old.name,
-          countryCode: old.countryCode,
-          countryName: old.countryName,
-          currency: old.currency,
-          status: old.status,
-          createdBy: old.createdBy,
-          leaderId: old.leaderId,
-          memberIds: old.memberIds,
-          totalBudget: old.totalBudget + inflow,
-          createdAt: old.createdAt,
-          closedAt: old.closedAt,
-        );
+      if (rows.isEmpty) {
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        return;
       }
+
+      // POST /api/v1/trips/{id}/allocations (admin pool → leader), one
+      // bulk call. The repo's createMany also covers fake mode by writing
+      // straight to DemoStore.
+      final AllocationRepository repo =
+          ref.read(allocationRepositoryProvider);
+      final List<Allocation> created = await repo.createMany(
+        tripId: widget.trip.id,
+        rows: rows,
+        idempotencyKey:
+            'assign-funds-${widget.trip.id}-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      store.allocations.addAll(created);
 
       store.emit(DemoStoreEvent.allocationsChanged);
       store.emit(DemoStoreEvent.tripsChanged);

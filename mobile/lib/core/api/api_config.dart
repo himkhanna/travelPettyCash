@@ -21,13 +21,16 @@ class ApiConfig extends ChangeNotifier {
   );
 
   /// Compile-time mode override: `--dart-define=PDD_BACKEND=api|fake`.
+  /// Default is API — the backend is the source of truth from Milestone D
+  /// onwards. The fake/demo path is retained only for offline UI work and
+  /// must be opted into explicitly.
   static const String _modeFromEnv = String.fromEnvironment(
     'PDD_BACKEND',
-    defaultValue: 'fake',
+    defaultValue: 'api',
   );
 
   String _baseUrl = _baseFromEnv;
-  BackendMode _mode = _modeFromEnv == 'api' ? BackendMode.api : BackendMode.fake;
+  BackendMode _mode = _modeFromEnv == 'fake' ? BackendMode.fake : BackendMode.api;
 
   String get baseUrl => _baseUrl;
   BackendMode get mode => _mode;

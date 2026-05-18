@@ -6,6 +6,8 @@ import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/money/money.dart';
 import '../../auth/application/auth_providers.dart';
+import '../../expenses/application/expenses_providers.dart';
+import '../../expenses/domain/expense.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import '../data/api_allocation_repository.dart';
@@ -73,11 +75,23 @@ final FutureProviderFamily<List<Allocation>, String> tripAllocationsProvider =
       return ref.read(allocationRepositoryProvider).forTrip(tripId);
     });
 
+/// All transfers on a trip (peer-to-peer money moves). Mirrors
+/// [tripAllocationsProvider] for transfers so consumers can surface
+/// pending-transfer pills/banners next to pending-allocation ones.
+final FutureProviderFamily<List<Transfer>, String> tripTransfersProvider =
+    FutureProvider.family<List<Transfer>, String>((
+      Ref ref,
+      String tripId,
+    ) async {
+      ref.watch(fakeRoleProvider);
+      return ref.read(transferRepositoryProvider).forTrip(tripId);
+    });
+
 /// Leader's remaining-to-allocate budget per source. Computed via the pure
 /// [computeLeaderAvailableBySource] so both fake and api impls share
-/// the calculation. In api mode the leader's expense list is empty until
-/// the expense backend slice ships — the value will look inflated by the
-/// leader's own pending expenses, which is a documented limitation.
+/// the calculation. Both modes now fold in the leader's real expense list
+/// so the displayed available budget reflects what the leader has actually
+/// spent — no more inflated number from un-deducted spending.
 final FutureProviderFamily<Map<String, Money>, String>
 leaderAvailableBySourceProvider =
     FutureProvider.family<Map<String, Money>, String>((
@@ -90,10 +104,6 @@ leaderAvailableBySourceProvider =
       final List<Allocation> allocs =
           await ref.watch(tripAllocationsProvider(tripId).future);
 
-      // In fake mode, fold in the leader's local expenses so the
-      // available-budget display matches the data the user sees on the
-      // expenses screen. In api mode the expense backend isn't live yet
-      // so we pass an empty list.
       final List<({String sourceId, Money amount})> leaderExpenses =
           switch (mode) {
         BackendMode.fake => ref
@@ -108,7 +118,9 @@ leaderAvailableBySourceProvider =
                   amount: e.amount as Money,
                 ))
             .toList(growable: false),
-        BackendMode.api => const <({String sourceId, Money amount})>[],
+        BackendMode.api => (await ref.watch(_leaderApiExpensesProvider(tripId).future))
+            .map((Expense e) => (sourceId: e.sourceId, amount: e.amount))
+            .toList(growable: false),
       };
 
       return computeLeaderAvailableBySource(
@@ -117,4 +129,18 @@ leaderAvailableBySourceProvider =
         currency: trip.currency,
         leaderExpenses: leaderExpenses,
       );
+    });
+
+/// Internal helper: in API mode, fetch the leader's expense list on this
+/// trip. Filtered server-side by userId=leaderId.
+final FutureProviderFamily<List<Expense>, String> _leaderApiExpensesProvider =
+    FutureProvider.family<List<Expense>, String>((
+      Ref ref,
+      String tripId,
+    ) async {
+      final Trip trip = await ref.watch(tripDetailProvider(tripId).future);
+      return ref.read(expenseRepositoryProvider).list(
+            tripId: tripId,
+            userId: trip.leaderId,
+          );
     });

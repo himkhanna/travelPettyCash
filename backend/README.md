@@ -1,6 +1,7 @@
-# PDD Petty Cash — Backend
+# PDD Delegation Expenses — Backend
 
-Spring Boot 3 / Java 21 / PostgreSQL service for the Protocol Department petty-cash app.
+Spring Boot 3 / Java 21 / PostgreSQL service for the Protocol Department travel-expense app (صرفيات الوفود الرسمية).
+Internal Java root package `ae.gov.pdd.pettycash` is retained for backwards compatibility — see CLAUDE.md §1.
 See `../CLAUDE.md` for the locked architecture, domain model, and security baseline.
 
 ## Local development

@@ -8,12 +8,16 @@ import '../../../core/sync/sync_coordinator.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../data/api_category_repository.dart';
+import '../data/api_expense_comment_repository.dart';
 import '../data/api_expense_repository.dart';
 import '../data/category_repository.dart';
+import '../data/expense_comment_repository.dart';
 import '../data/expense_repository.dart';
 import '../data/fake_category_repository.dart';
+import '../data/fake_expense_comment_repository.dart';
 import '../data/fake_expense_repository.dart';
 import '../domain/expense.dart';
+import '../domain/expense_comment.dart';
 import '../presentation/widgets/expense_filter_sheet.dart';
 
 final Provider<ExpenseRepository> expenseRepositoryProvider =
@@ -28,6 +32,24 @@ final Provider<ExpenseRepository> expenseRepositoryProvider =
     case BackendMode.api:
       return ApiExpenseRepository(dio: ref.watch(dioProvider));
   }
+});
+
+final Provider<ExpenseCommentRepository> expenseCommentRepositoryProvider =
+    Provider<ExpenseCommentRepository>((Ref ref) {
+  final BackendMode mode = ref.watch(backendModeProvider);
+  switch (mode) {
+    case BackendMode.fake:
+      return FakeExpenseCommentRepository();
+    case BackendMode.api:
+      return ApiExpenseCommentRepository(dio: ref.watch(dioProvider));
+  }
+});
+
+final FutureProviderFamily<List<ExpenseComment>, String>
+    expenseCommentsProvider =
+    FutureProvider.family<List<ExpenseComment>, String>(
+        (Ref ref, String expenseId) {
+  return ref.read(expenseCommentRepositoryProvider).list(expenseId);
 });
 
 final Provider<CategoryRepository> categoryRepositoryProvider =

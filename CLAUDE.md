@@ -1,4 +1,4 @@
-# CLAUDE.md — PDD Petty Cash (Travel Expense Management)
+# CLAUDE.md — PDD Delegation Expenses (Travel Expense Management)
 
 > Operating instructions for Claude (and any AI coding assistant) working on this repository.
 > Read this file in full before generating, editing, or reviewing code.
@@ -9,9 +9,9 @@
 
 **Client:** Protocol Department, Government of Dubai (دائرة التشريفات و الضيافة – دبي), also referenced as "Ruler's Court / PDD".
 
-**Product name:** PDD Petty Cash (working title; final Arabic name to be confirmed — current scope doc uses *تطبيق صرفيات السفر*).
+**Product name:** **PDD Delegation Expenses** / *صرفيات الوفود الرسمية* (adopted 2026-05-17, superseding the working title "PDD Petty Cash" — the scope doc's *تطبيق صرفيات السفر* was rephrased to highlight the delegation/official-visit context). Internal identifiers — Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, repo directory `Travel Petty Cash`, DB name `pdd_petty_cash` — are retained as opaque IDs for backwards compatibility. Do not rename them in passing; that's a separate, planned migration.
 
-**Purpose:** A mobile-first, multi-currency petty cash and per-diem management application for protocol officers travelling on official delegations. Replaces the current paper/Excel reconciliation process with an auditable, digitally signed, multi-source fund-tracking system.
+**Purpose:** A mobile-first, multi-currency travel funds allocation and expense submission application for protocol officers travelling on official delegations. Replaces the current paper/Excel reconciliation process with an auditable, digitally signed, multi-source fund-tracking system.
 
 **Primary users (4 roles):**
 
@@ -389,11 +389,70 @@ Field staff in foreign countries with patchy connectivity is the norm.
 - [ ] UAE Pass integration: required for v1, or post-launch? **Owner:** PM.
 - [ ] Production identity provider: Spring Authorization Server self-hosted vs UAE Pass vs PDD AD. **Owner:** PDD IT.
 - [ ] Signature key custody: PDD HSM, Moro Hub HSM, or software keystore for pilot? **Owner:** Security.
-- [ ] Final Arabic product name. **Owner:** PDD.
-- [ ] CMS UI: separate Flutter Web app vs a slimmed-down view in the same mobile codebase. **Owner:** Eng + PM.
+- [x] Final Arabic product name — **resolved 2026-05-17**: *صرفيات الوفود الرسمية* (PDD Delegation Expenses). Internal IDs (`pdd_petty_cash` package / DB / Java root) retained as opaque codes; planned rename migration tracked separately (§17).
+- [x] CMS UI: separate Flutter Web app vs slimmed-down view in mobile codebase — **resolved 2026-05-16**: same Flutter codebase, role-routed entry points `/portal` (admin/super-admin) and `/app` (member/leader), with a portal-mismatch guard that bounces wrong-role tokens.
 - [ ] Push notification channel for iOS (APNs direct vs a UAE-hosted relay). **Owner:** Eng.
 - [ ] Default currency rules per country (auto-select SAR for KSA trip, etc.) — confirm with PDD operations.
 
 ---
 
-*Last updated: 2026-05-13. Update this file in the same PR as any architectural change.*
+## 17. Demo-prep status (2026-05-18 build)
+
+### Shipped this sprint
+
+**Backend** (Spring Boot 3.4, Java 21, Postgres 15 + Flyway through `V008__expense_comments.sql`):
+
+- Auth + roles (admin / leader / member / super-admin), JWT access + refresh.
+- Trips: list / create / patch / close / **delete (no-expense guard, cascades through allocations + transfers)**.
+- Funds: sources, allocations (admin → trip, leader → member), transfers (peer-to-peer), idempotency-key on every POST.
+- Expenses: full CRUD + source reassignment + receipt upload (MinIO presigned URLs) + summary by category/source/member.
+- **Mission aggregate** (`V007`) — every trip lives under a mission, missions can nest via `parent_mission_id`. `Mission` + `MissionRepository` + `MissionController`.
+- **Expense comments + @mentions** (`V008`) — `ExpenseComment` + `expense_comment_mentions` join, `ExpenseCommentService` fans out an `EXPENSE_QUERY` notification per mention (payload carries snippet + expenseId + tripId + author + amount). Mentions are clipped to trip participants and never self-notify.
+- **Audit module** — `/api/v1/audit` feed synthesized from existing aggregates (allocations, transfers, expenses, expense source-reassignments, trip lifecycle). Read-only, admin/super-admin.
+- Reports — server-rendered PDF (OpenPDF) + XLSX (Apache POI): user, trip-full, finance letter, DG. Signature stub in place.
+- Notifications inbox with fan-out, mark-read, RFC-7807 error envelope on every endpoint.
+- Seeders: users, sources, missions, categories, current-quarter trip + activity, **plus `DemoHistoricalActivitySeeder` — 3 closed trips, 6 allocations, 15 backdated expenses for credible history**.
+
+**Mobile** (Flutter Web, Riverpod 2, go_router, Inter via google_fonts):
+
+- Pixel-perfect rebuild of all 14 mobile screens against the forest-green design handoff (cream surfaces, gold accents, donut breakdowns, sticky bottom save bars).
+- Portal split: `/app` (member/leader), `/portal` (admin/super-admin), wrong-portal guard with a friendly redirect.
+- Trips home: hero balance cards replaced with compact rows under **Active / Upcoming / Archived** section labels; slim available-balance line + spent bar per active row. Five+ trips now fit on one viewport.
+- **HomeBottomNav** (Home / Inbox / Trips / Profile) for the landing; trip-scoped nav stays inside a trip.
+- Trip dashboard: leader-only "Allocate funds" + "Manage funds" action row added inside the trip (was misplaced on the landing).
+- Expense detail: comments thread + reply composer (bubble UI, initials avatars), wired to the new backend.
+- Notifications: `EXPENSE_QUERY` is now tappable → deep-links to the expense; body uses the real `snippet` + `authorId` + `tripName` payload.
+- CMS surfaces: cms_dashboard, edit_trip_dialog (Save + Delete with no-expense guard), create_trip_dialog (5-step mission-aware wizard), admin expense comment dialog with chip-picker @mentions, audit screen, users screen, dg dashboard, reports dialog with signing modal.
+- Recurring **"button clipped by global theme" bug** fixed wherever a `FilledButton` / `OutlinedButton` sat inside a `Row` without an explicit `minimumSize` override (allocate footer, edit-trip footer, create-trip footer, add-additional-fund, transfer continue, notifications accept/decline, manage-funds Allocate-New, add-category dialog, reports-dialog Sign/Resign).
+
+**Smoke-test results (2026-05-18)**: 23/23 backend endpoints return 2xx with the test fixture; all 4 report types generate real PDF/XLSX bytes; mobile button audit checked ~50 button instances across 20 files and fixed the 3 remaining clip bugs.
+
+### Still pending
+
+| Area | Item | Why outstanding |
+|---|---|---|
+| **Signing** | Real PAdES via PKCS#11 / HSM | Stub only (commit `709bfa5`); blocks finance-letter going to legal. Tracked under Milestone E. |
+| **Audit** | True append-only `audit_log` table with `hashPrev` / `hashSelf` SHA-256 chain | §5 requirement; current `/audit` feed is synthesized from existing rows and is *not* tamper-evident. |
+| **Tests** | Slice + integration tests for `mission`, `audit`, expense comments, trip delete | Code in, tests TBD. Backend invariant from §13 unmet for these modules. |
+| **Identifier migration** | Rename Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash` to a Delegation-Expenses scheme | Deferred to its own PR per §14.5 — name change is admin-only and shouldn't bundle with feature work. |
+| **Push** | FCM / HMS / APNs wiring | Sovereignty review pending (§15). In-app polling is the v1 channel. |
+| **OCR** | Receipt-photo OCR | Deferred enhancement (§15). |
+| **Open product questions** | Items still unchecked in §16 | Owners outside Eng. |
+
+### Demo-day cold-start checklist
+
+1. `gradle bootRun` in `backend/` (Flyway runs `V001..V008`; seeders auto-populate).
+2. Hard-refresh both browser tabs after pulling the latest bundle — Flutter Web caches aggressively.
+3. Demo path:
+   - Admin (`khalid`) creates a trip under an existing mission → assigns funds from a source.
+   - Leader (`fatima`) accepts → allocates to member.
+   - Member (`layla` / `ahmed`) accepts → adds an expense with a receipt.
+   - Admin opens expense from CMS → 💬 → @-mentions the member → posts comment.
+   - Member opens Inbox → taps notification → lands on expense detail → replies in the thread.
+   - Admin downloads any of the 4 reports from the trip's Reports dialog.
+
+All four roles use `demo1234` as the password.
+
+---
+
+*Last updated: 2026-05-18. Update this file in the same PR as any architectural change.*

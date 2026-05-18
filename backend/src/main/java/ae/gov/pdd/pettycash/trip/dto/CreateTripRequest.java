@@ -16,5 +16,8 @@ public record CreateTripRequest(
     @NotBlank @Pattern(regexp = "[A-Z]{3}") String currency,
     @NotNull UUID leaderId,
     @NotNull List<UUID> memberIds,
-    @NotNull MoneyDto totalBudget
+    @NotNull MoneyDto totalBudget,
+    /** Optional mission grouping — required by the CMS UI but server-side
+     * nullable for backwards-compat with API clients that predate V007. */
+    UUID missionId
 ) {}

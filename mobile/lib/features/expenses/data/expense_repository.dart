@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../../core/money/money.dart';
 import '../domain/expense.dart';
 
@@ -38,6 +40,11 @@ abstract class ExpenseRepository {
 
   Future<String> uploadReceipt(String expenseId, ReceiptUpload upload);
 
+  /// Presigned URL for fetching the receipt directly from object storage.
+  /// In API mode this is a short-lived MinIO link; in fake mode it returns
+  /// a `data:` URL or the original file:// path.
+  Future<String> receiptUrl(String expenseId);
+
   Future<List<ExpenseSummary>> summary({
     required String tripId,
     required ExpenseSummaryScope scope,
@@ -72,10 +79,25 @@ class ReceiptUpload {
     required this.mime,
     required this.sha256,
     required this.byteSize,
+    this.bytes,
+    this.filename,
   });
 
+  /// Local filesystem path. On Flutter Web this is a `blob:` URL — opaque
+  /// to dart:io and unusable with `MultipartFile.fromFile`. Use [bytes]
+  /// instead in that case.
   final String localPath;
   final String mime;
   final String sha256;
   final int byteSize;
+
+  /// In-memory bytes for the receipt. Required on Flutter Web where
+  /// [localPath] is a blob URL; optional on native where the file can be
+  /// read from disk by path. When set, the API repository should prefer
+  /// this over [localPath].
+  final Uint8List? bytes;
+
+  /// Display name for the multipart part. Defaults to the basename of
+  /// [localPath] when not provided.
+  final String? filename;
 }

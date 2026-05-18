@@ -141,11 +141,21 @@ class ApiExpenseRepository implements ExpenseRepository {
 
   @override
   Future<String> uploadReceipt(String expenseId, ReceiptUpload upload) async {
+    // On Flutter Web, upload.localPath is a `blob:` URL that
+    // MultipartFile.fromFile can't read. Prefer in-memory bytes when the
+    // caller provided them — the picker reads them via XFile.readAsBytes.
+    final MultipartFile filePart = upload.bytes != null
+        ? MultipartFile.fromBytes(
+            upload.bytes!,
+            filename: upload.filename ?? 'receipt',
+            contentType: DioMediaType.parse(upload.mime),
+          )
+        : await MultipartFile.fromFile(
+            upload.localPath,
+            contentType: DioMediaType.parse(upload.mime),
+          );
     final FormData form = FormData.fromMap(<String, dynamic>{
-      'file': await MultipartFile.fromFile(
-        upload.localPath,
-        contentType: DioMediaType.parse(upload.mime),
-      ),
+      'file': filePart,
     });
     try {
       final Response<dynamic> resp = await _dio.post<dynamic>(
@@ -162,6 +172,7 @@ class ApiExpenseRepository implements ExpenseRepository {
   /// renders the image directly from MinIO without proxying through the
   /// backend. Short TTL (5 min server-side); refetch when stale. Throws
   /// [ApiError] with code {@code expenses/no-receipt} if none is set.
+  @override
   Future<String> receiptUrl(String expenseId) async {
     try {
       final Response<dynamic> resp = await _dio.get<dynamic>(

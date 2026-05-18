@@ -115,7 +115,15 @@ class _AddCategoryDialogState extends ConsumerState<AddCategoryDialog> {
               Row(
                 children: <Widget>[
                   const Spacer(),
+                  // Compact overrides: global theme sets minimumSize to
+                  // (double.infinity, 48), which makes both buttons claim
+                  // the entire Row and one overflows. Pin to content width.
                   OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      visualDensity: VisualDensity.compact,
+                    ),
                     onPressed: _saving
                         ? null
                         : () => Navigator.of(context).pop(),
@@ -123,6 +131,11 @@ class _AddCategoryDialogState extends ConsumerState<AddCategoryDialog> {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      visualDensity: VisualDensity.compact,
+                    ),
                     icon: _saving
                         ? const SizedBox(
                             width: 16,

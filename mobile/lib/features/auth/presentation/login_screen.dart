@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/api/api_config.dart';
 import '../../../core/api/api_error.dart';
+import '../../../core/api/hydration_service.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/language_toggle_button.dart';
@@ -12,12 +13,62 @@ import '../application/auth_providers.dart';
 import '../data/auth_repository.dart';
 import '../domain/user.dart';
 
-/// Real-backend login screen. Lives behind the "Sign in (API)" button on the
-/// landing page and `/login`. The fake-mode role picker on the landing page
-/// stays as the default demo path — this screen is only reachable once the
-/// DevMenu has flipped BackendMode to api.
+/// Which portal the user is signing into. Each portal accepts a different
+/// subset of roles; cross-portal sign-in (e.g. an Admin logging in at /app)
+/// is rejected with a hint that points to the right portal.
+enum PortalAudience {
+  /// Phone app for field officers — Member + Leader only.
+  mobileApp,
+
+  /// Web admin console for HQ staff — Admin + Super Admin only.
+  webAdmin,
+}
+
+extension PortalAudienceX on PortalAudience {
+  bool accepts(UserRole r) {
+    switch (this) {
+      case PortalAudience.mobileApp:
+        return r == UserRole.member || r == UserRole.leader;
+      case PortalAudience.webAdmin:
+        return r == UserRole.admin || r == UserRole.superAdmin;
+    }
+  }
+
+  String get homePath {
+    switch (this) {
+      case PortalAudience.mobileApp:
+        return '/m/trips';
+      case PortalAudience.webAdmin:
+        return '/cms';
+    }
+  }
+
+  PortalAudience get other => this == PortalAudience.mobileApp
+      ? PortalAudience.webAdmin
+      : PortalAudience.mobileApp;
+
+  String get loginPath => switch (this) {
+        PortalAudience.mobileApp => '/app',
+        PortalAudience.webAdmin => '/portal',
+      };
+}
+
+/// Real-backend login screen. Two entry points: `/portal` (admin console)
+/// and `/app` (phone app for field officers). Each only accepts the role
+/// subset its portal serves — see [PortalAudience].
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({
+    super.key,
+    this.audience = PortalAudience.mobileApp,
+    this.prefillUsername,
+  });
+
+  final PortalAudience audience;
+
+  /// Optional username to seed the form with. Used when the other portal
+  /// redirects a wrong-portal sign-in attempt so the user doesn't have to
+  /// retype it.
+  final String? prefillUsername;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -31,6 +82,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _error;
   bool _obscure = true;
 
+  /// When non-null, the credentials matched a valid user whose role belongs
+  /// to the *other* portal. The error panel then renders a one-tap button
+  /// that navigates to the correct portal.
+  PortalAudience? _redirectTo;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.prefillUsername != null &&
+        widget.prefillUsername!.trim().isNotEmpty) {
+      _username.text = widget.prefillUsername!.trim();
+    }
+  }
+
   @override
   void dispose() {
     _username.dispose();
@@ -43,6 +108,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _submitting = true;
       _error = null;
+      _redirectTo = null;
     });
     try {
       final AuthRepository repo = ref.read(authRepositoryProvider);
@@ -50,17 +116,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         username: _username.text.trim(),
         password: _password.text,
       );
+      // Role gate: each portal only accepts its audience. If a Member signs
+      // in at /portal or an Admin at /app, drop the session and surface a
+      // pointer to the right portal — never silently bounce them.
+      if (!widget.audience.accepts(session.user.role)) {
+        await repo.logout();
+        if (!mounted) return;
+        final bool roleIsAdmin =
+            session.user.role == UserRole.admin ||
+                session.user.role == UserRole.superAdmin;
+        setState(() {
+          _redirectTo = roleIsAdmin
+              ? PortalAudience.webAdmin
+              : PortalAudience.mobileApp;
+          _error = _wrongPortalMessage(session.user.role);
+          _submitting = false;
+        });
+        return;
+      }
       // Mirror the FakeConfig.role so the existing routing reads the
       // user's role from the same place regardless of backend mode.
       ref.read(fakeConfigProvider).setRole(_roleFor(session.user.role));
+      // Pull every dataset the UI reads from DemoStore into the cache so
+      // post-login screens (trip list, dashboards, allocate/transfer
+      // pickers, chat, notifications) all render against backend data.
+      await ref.read(hydrationServiceProvider).hydrateAll();
       // Refresh /me-derived providers.
       ref.invalidate(currentUserProvider);
       if (!mounted) return;
-      context.go(
-        session.user.role == UserRole.admin || session.user.role == UserRole.superAdmin
-            ? (session.user.role == UserRole.superAdmin ? '/cms/dg' : '/cms')
-            : '/m/trips',
-      );
+      // Director General lands on the DG read-only view; everyone else goes
+      // to their portal's default home.
+      final String dest = session.user.role == UserRole.superAdmin
+          ? '/cms/dg'
+          : widget.audience.homePath;
+      context.go(dest);
     } on ApiError catch (e) {
       setState(() {
         _error = _messageFor(e);
@@ -72,6 +161,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _submitting = false;
       });
     }
+  }
+
+  String _wrongPortalMessage(UserRole role) {
+    final String roleName = switch (role) {
+      UserRole.member => 'Team Member',
+      UserRole.leader => 'Team Leader',
+      UserRole.admin => 'Admin',
+      UserRole.superAdmin => 'Director General',
+    };
+    final bool roleIsAdmin =
+        role == UserRole.admin || role == UserRole.superAdmin;
+    if (roleIsAdmin) {
+      return 'This account ($roleName) belongs to the Admin Portal. '
+          'Tap below to switch.';
+    }
+    return 'This account ($roleName) belongs to the Mobile App. '
+        'Tap below to switch.';
   }
 
   String _messageFor(ApiError e) {
@@ -129,6 +235,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          widget.audience == PortalAudience.webAdmin
+                              ? 'Admin Portal · لوحة الإدارة'
+                              : 'Mobile App · تطبيق الميدان',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AppColors.goldOlive,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         Text(
                           api.baseUrl,
                           textAlign: TextAlign.center,
@@ -189,31 +307,83 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               if (_error != null) ...<Widget>[
                                 const SizedBox(height: AppSpacing.md),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.md,
-                                    vertical: AppSpacing.sm,
-                                  ),
+                                  padding: const EdgeInsets.all(AppSpacing.md),
                                   decoration: BoxDecoration(
-                                    color: AppColors.outflow.withValues(alpha: 0.1),
-                                    borderRadius: const BorderRadius.all(AppRadii.chip),
+                                    color: _redirectTo != null
+                                        ? AppColors.warning.withValues(alpha: 0.12)
+                                        : AppColors.outflow.withValues(alpha: 0.1),
+                                    borderRadius:
+                                        const BorderRadius.all(AppRadii.chip),
                                     border: Border.all(
-                                      color: AppColors.outflow.withValues(alpha: 0.4),
+                                      color: _redirectTo != null
+                                          ? AppColors.warning.withValues(alpha: 0.5)
+                                          : AppColors.outflow.withValues(alpha: 0.4),
                                     ),
                                   ),
-                                  child: Row(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
                                     children: <Widget>[
-                                      Icon(
-                                        Icons.error_outline,
-                                        color: AppColors.outflow,
-                                        size: 18,
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Icon(
+                                            _redirectTo != null
+                                                ? Icons.swap_horiz_outlined
+                                                : Icons.error_outline,
+                                            color: _redirectTo != null
+                                                ? AppColors.brandBrownDark
+                                                : AppColors.outflow,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: AppSpacing.sm),
+                                          Expanded(
+                                            child: Text(
+                                              _error!,
+                                              style: TextStyle(
+                                                color: _redirectTo != null
+                                                    ? AppColors.brandBrownDark
+                                                    : AppColors.outflow,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: Text(
-                                          _error!,
-                                          style: TextStyle(color: AppColors.outflow),
+                                      if (_redirectTo != null) ...<Widget>[
+                                        const SizedBox(height: AppSpacing.sm),
+                                        FilledButton.icon(
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor:
+                                                AppColors.brandBrown,
+                                            foregroundColor: AppColors.cream,
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                                    vertical: 12),
+                                          ),
+                                          icon: const Icon(Icons.arrow_forward),
+                                          label: Text(
+                                            _redirectTo == PortalAudience.webAdmin
+                                                ? 'GO TO ADMIN PORTAL'
+                                                : 'GO TO MOBILE APP',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 1.2,
+                                            ),
+                                          ),
+                                          onPressed: () {
+                                            // Pre-fill the username so the
+                                            // user doesn't retype it on the
+                                            // correct portal.
+                                            final String u = _username.text.trim();
+                                            context.go(
+                                              '${_redirectTo!.loginPath}'
+                                              '${u.isEmpty ? '' : '?u=$u'}',
+                                            );
+                                          },
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -247,8 +417,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               TextButton(
                                 onPressed: _submitting
                                     ? null
-                                    : () => context.go('/'),
-                                child: Text(l.auth_login_back_to_landing),
+                                    : () => context.go(widget.audience.other.loginPath),
+                                child: Text(
+                                  widget.audience == PortalAudience.mobileApp
+                                      ? 'Switch to Admin Portal'
+                                      : 'Switch to Mobile App',
+                                ),
                               ),
                             ],
                           ),

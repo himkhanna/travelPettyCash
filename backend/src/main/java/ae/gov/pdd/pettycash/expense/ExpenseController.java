@@ -3,7 +3,9 @@ package ae.gov.pdd.pettycash.expense;
 import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.common.error.ApiException;
 import ae.gov.pdd.pettycash.common.idempotency.IdempotencyService;
+import ae.gov.pdd.pettycash.expense.dto.CreateExpenseCommentRequest;
 import ae.gov.pdd.pettycash.expense.dto.CreateExpenseRequest;
+import ae.gov.pdd.pettycash.expense.dto.ExpenseCommentDto;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseDto;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseSummaryDto;
 import ae.gov.pdd.pettycash.expense.dto.PatchExpenseRequest;
@@ -35,10 +37,16 @@ import java.util.UUID;
 public class ExpenseController {
 
     private final ExpenseService service;
+    private final ExpenseCommentService comments;
     private final IdempotencyService idempotency;
 
-    public ExpenseController(ExpenseService service, IdempotencyService idempotency) {
+    public ExpenseController(
+        ExpenseService service,
+        ExpenseCommentService comments,
+        IdempotencyService idempotency
+    ) {
         this.service = service;
+        this.comments = comments;
         this.idempotency = idempotency;
     }
 
@@ -157,5 +165,24 @@ public class ExpenseController {
         @AuthenticationPrincipal AuthenticatedUser caller
     ) {
         return service.receiptUrl(id, caller);
+    }
+
+    // ---- comments + @mentions ----------------------------------------
+
+    @GetMapping("/expenses/{id}/comments")
+    public List<ExpenseCommentDto> listComments(
+        @PathVariable UUID id,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        return comments.list(id, caller);
+    }
+
+    @PostMapping("/expenses/{id}/comments")
+    public ExpenseCommentDto postComment(
+        @PathVariable UUID id,
+        @Valid @RequestBody CreateExpenseCommentRequest body,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        return comments.post(id, body, caller);
     }
 }

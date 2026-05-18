@@ -4,18 +4,26 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/api/hydration_service.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
-import '../../../shared/widgets/language_toggle_button.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
+import '../../expenses/application/expenses_providers.dart';
 import '../../expenses/domain/expense.dart';
+import '../../funds/application/funds_providers.dart';
+import '../../funds/domain/funding.dart';
+import '../../missions/application/mission_providers.dart';
+import '../../missions/domain/mission.dart';
+import '../../reports/presentation/save_to_disk.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import 'add_category_dialog.dart';
+import 'admin_expense_comment_dialog.dart';
 import 'create_trip_dialog.dart';
 import 'reports_dialog.dart';
 import 'trip_admin_actions.dart';
+import 'widgets/cms_layout.dart';
 
 /// Admin / Super Admin console. Trip list on the left, selected-trip
 /// expenses + balances on the right.
@@ -36,11 +44,11 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
 
     // If the user isn't loaded yet, OR resolved to null (role unset),
     // never show the empty CMS — show a spinner. If we know the role
-    // is unset (hasValue + null), bounce back to the landing page.
+    // is unset (hasValue + null), bounce back to the portal sign-in.
     if (me == null) {
       if (userAsync.hasValue) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) context.go('/');
+          if (context.mounted) context.go('/portal');
         });
       }
       return Scaffold(
@@ -59,8 +67,8 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     FilledButton(
-                      onPressed: () => context.go('/'),
-                      child: const Text('Go to role picker'),
+                      onPressed: () => context.go('/portal'),
+                      child: const Text('Sign in to Admin Portal'),
                     ),
                   ],
                 ),
@@ -70,71 +78,68 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
       );
     }
 
+    // Portal guard: only Admin / Super Admin belong in the CMS. A Member
+    // or Leader who lands here (bookmark, link share) is bounced to the
+    // wrong-portal screen rather than seeing an empty/forbidden state.
+    if (me.role != UserRole.admin && me.role != UserRole.superAdmin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.go('/wrong-portal?expected=mobileApp');
+        }
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    // Wait for the API → DemoStore hydration to land before rendering pickers,
+    // reports, etc. The user can hard-refresh straight to /cms with a stored
+    // token; in that path login_screen never fires hydrateAll, so this gate
+    // is the safety net.
+    final AsyncValue<bool> hydrationAsync =
+        ref.watch(authenticatedHydrationProvider);
+
     final AsyncValue<List<Trip>> tripsAsync = ref.watch(_allTripsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
-        ),
-        title: Row(
-          children: <Widget>[
-            const Icon(Icons.shield_outlined, color: AppColors.brandBrown),
-            const SizedBox(width: AppSpacing.sm),
-            const Text('PDD Petty Cash — Admin Console'),
-            const SizedBox(width: AppSpacing.md),
-            Chip(
-              label: Text(
-                '${me.displayName} · ${_roleLabel(me.role)}',
-              ),
-              backgroundColor: AppColors.cream,
+    return CmsLayout(
+      active: CmsNavItem.dashboard,
+      trailing: <Widget>[
+        if (me.role == UserRole.admin)
+          IconButton(
+            icon: const Icon(Icons.category_outlined),
+            tooltip: 'Add expense category',
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (BuildContext _) => const AddCategoryDialog(),
             ),
-          ],
-        ),
-        actions: <Widget>[
-          const LanguageToggleButton(),
-          const SizedBox(width: AppSpacing.sm),
-          if (me.role == UserRole.superAdmin) ...<Widget>[
-            OutlinedButton.icon(
-              icon: const Icon(Icons.shield_outlined, size: 18),
-              label: const Text('DG DASHBOARD'),
-              onPressed: () => context.go('/cms/dg'),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          if (me.role == UserRole.admin) ...<Widget>[
-            IconButton(
-              icon: const Icon(Icons.category_outlined),
-              tooltip: 'Add expense category',
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (BuildContext _) => const AddCategoryDialog(),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            if (_selectedTripId != null)
-              OutlinedButton.icon(
-                icon: const Icon(Icons.description_outlined, size: 18),
-                label: const Text('REPORTS'),
-                onPressed: () {
-                  final Trip? t = tripsAsync.valueOrNull
-                      ?.where((Trip t) => t.id == _selectedTripId)
-                      .firstOrNull;
-                  if (t != null) showReportsCatalog(context, trip: t);
-                },
-              ),
-            const SizedBox(width: AppSpacing.sm),
-            FilledButton.icon(
-              icon: const Icon(Icons.add, size: 18),
+          ),
+        if (me.role == UserRole.admin && _selectedTripId != null)
+          IconButton(
+            icon: const Icon(Icons.description_outlined),
+            tooltip: 'Reports for selected trip',
+            onPressed: () {
+              final Trip? t = tripsAsync.valueOrNull
+                  ?.where((Trip t) => t.id == _selectedTripId)
+                  .firstOrNull;
+              if (t != null) showReportsCatalog(context, trip: t);
+            },
+          ),
+      ],
+      floatingActionButton: me.role == UserRole.admin
+          ? FloatingActionButton.extended(
+              backgroundColor: AppColors.brandBrown,
+              foregroundColor: AppColors.cream,
+              icon: const Icon(Icons.add),
               label: const Text('CREATE TRIP'),
-              onPressed: () => _openCreateTrip(),
-            ),
-            const SizedBox(width: AppSpacing.md),
-          ],
-        ],
-      ),
-      body: tripsAsync.when(
+              onPressed: _openCreateTrip,
+            )
+          : null,
+      child: hydrationAsync.when(
+        loading: () => const _HydrationLoading(),
+        error: (Object e, _) => Center(
+          child: Text('Could not load reference data: $e'),
+        ),
+        data: (bool ready) => !ready
+            ? const _HydrationLoading()
+            : tripsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(child: Text('Error: $e')),
         data: (List<Trip> trips) {
@@ -169,6 +174,7 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
           );
         },
       ),
+      ),
     );
   }
 
@@ -180,17 +186,6 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
     );
     if (created == true && mounted) {
       ref.invalidate(_allTripsProvider);
-    }
-  }
-
-  String _roleLabel(UserRole r) {
-    switch (r) {
-      case UserRole.admin:
-        return 'Admin';
-      case UserRole.superAdmin:
-        return 'Director General';
-      default:
-        return r.apiCode;
     }
   }
 }
@@ -364,6 +359,29 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+class _HydrationLoading extends StatelessWidget {
+  const _HydrationLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          const CircularProgressIndicator(),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Loading directory + trips…',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EmptyDetail extends StatelessWidget {
   const _EmptyDetail();
 
@@ -397,10 +415,12 @@ class _TripDetail extends ConsumerWidget {
     final AsyncValue<TripBalances> balancesAsync = ref.watch(
       tripBalancesProvider((tripId: tripId, scope: BalanceScope.trip)),
     );
+    // Expenses now come straight from the API via tripExpensesProvider —
+    // previously this read store.expenses (DemoStore cache), so new member
+    // expenses created on mobile never appeared here until next hydration.
+    final AsyncValue<List<Expense>> expensesAsync =
+        ref.watch(tripExpensesProvider(tripId));
     final DemoStore store = ref.read(demoStoreProvider);
-    final List<Expense> tripExpenses =
-        store.expenses.where((Expense e) => e.tripId == tripId).toList()
-          ..sort((Expense a, Expense b) => b.occurredAt.compareTo(a.occurredAt));
 
     return tripAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -429,6 +449,10 @@ class _TripDetail extends ConsumerWidget {
                           color: AppColors.textSecondary,
                         ),
                       ),
+                      if (trip.missionId != null) ...<Widget>[
+                        const SizedBox(height: 6),
+                        _MissionChip(missionId: trip.missionId!),
+                      ],
                     ],
                   ),
                 ),
@@ -443,23 +467,41 @@ class _TripDetail extends ConsumerWidget {
                 child: LinearProgressIndicator(),
               ),
               error: (Object e, _) => Text('Balance error: $e'),
-              data: (TripBalances b) => _BalanceCards(balances: b),
+              data: (TripBalances b) =>
+                  _BalanceCards(balances: b, tripId: tripId),
             ),
             const SizedBox(height: AppSpacing.lg),
             _PeopleSection(trip: trip, store: store),
             const SizedBox(height: AppSpacing.lg),
-            Text(
-              'EXPENSES (${tripExpenses.length})',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: AppColors.textSecondary,
-                letterSpacing: 1.6,
+            expensesAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                child: LinearProgressIndicator(),
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _ExpensesTable(
-              expenses: tripExpenses,
-              currency: trip.currency,
-              store: store,
+              error: (Object e, _) => Text('Expense load error: $e'),
+              data: (List<Expense> list) {
+                final List<Expense> sorted = <Expense>[...list]
+                  ..sort((Expense a, Expense b) =>
+                      b.occurredAt.compareTo(a.occurredAt));
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'EXPENSES (${sorted.length})',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                        letterSpacing: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _ExpensesTable(
+                      expenses: sorted,
+                      currency: trip.currency,
+                      store: store,
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -468,39 +510,120 @@ class _TripDetail extends ConsumerWidget {
   }
 }
 
-class _BalanceCards extends StatelessWidget {
-  const _BalanceCards({required this.balances});
+class _BalanceCards extends ConsumerWidget {
+  const _BalanceCards({required this.balances, required this.tripId});
   final TripBalances balances;
+  final String tripId;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Admin top-ups create new admin→leader allocations but don't mutate the
+    // trip's static `totalBudget` field. Sum every admin allocation (pending
+    // + accepted) so this card reflects all the cash the admin has committed
+    // to the trip, not just the value at create-time. Declined allocations
+    // are excluded.
+    final List<Allocation> allocs =
+        ref.watch(tripAllocationsProvider(tripId)).valueOrNull ??
+            const <Allocation>[];
+    final Money committed = allocs
+        .where((Allocation a) =>
+            a.fromUserId == null &&
+            a.status != AllocationStatus.declined)
+        .fold<Money>(
+          balances.totalBudget.isZero
+              ? Money.zero(balances.totalSpent.currencyCode)
+              : Money.zero(balances.totalBudget.currencyCode),
+          (Money acc, Allocation a) => acc + a.amount,
+        );
+    // Prefer the larger of (static budget, sum of allocations). On a fresh
+    // trip these are equal; after an Assign Additional Funds run the sum
+    // overtakes the static field.
+    final Money totalBudget =
+        committed.amountMinor > balances.totalBudget.amountMinor
+            ? committed
+            : balances.totalBudget;
+
+    // Pending top-ups not yet accepted — surfaced inline so the admin sees
+    // the gap explicitly rather than wondering why nothing changed.
+    final Money pendingTopup = allocs
+        .where((Allocation a) =>
+            a.fromUserId == null &&
+            a.status == AllocationStatus.pending)
+        .fold<Money>(
+          Money.zero(totalBudget.currencyCode),
+          (Money acc, Allocation a) => acc + a.amount,
+        );
+
+    final Money remaining = totalBudget - balances.totalSpent;
+    final bool spentNonZero = !balances.totalSpent.isZero;
+    return Column(
       children: <Widget>[
-        Expanded(
-          child: _StatCard(
-            label: 'TOTAL BUDGET',
-            value: balances.totalBudget.format(),
-            color: AppColors.brandBrown,
-          ),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _StatCard(
+                label: 'TOTAL BUDGET',
+                value: totalBudget.format(),
+                color: AppColors.brandBrown,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _StatCard(
+                label: 'TOTAL SPENT',
+                value: balances.totalSpent.format(),
+                color:
+                    spentNonZero ? AppColors.outflow : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _StatCard(
+                label: 'REMAINING',
+                value: remaining.format(),
+                color: remaining.isNegative
+                    ? AppColors.outflow
+                    : AppColors.success,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _StatCard(
-            label: 'TOTAL SPENT',
-            value: balances.totalSpent.format(),
-            color: AppColors.outflow,
+        if (!pendingTopup.isZero) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.amberSoft,
+              borderRadius: const BorderRadius.all(AppRadii.sm),
+              border: Border.all(
+                color: AppColors.amber.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: <Widget>[
+                const Icon(
+                  Icons.hourglass_top_outlined,
+                  color: AppColors.goldDeep,
+                  size: 16,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Pending leader acceptance: ${pendingTopup.format()}',
+                    style: const TextStyle(
+                      color: AppColors.goldDeep,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _StatCard(
-            label: 'REMAINING',
-            value: balances.totalBalance.format(),
-            color: balances.totalBalance.isNegative
-                ? AppColors.outflow
-                : AppColors.success,
-          ),
-        ),
+        ],
       ],
     );
   }
@@ -647,7 +770,7 @@ class _PersonChip extends StatelessWidget {
   }
 }
 
-class _ExpensesTable extends StatelessWidget {
+class _ExpensesTable extends ConsumerWidget {
   const _ExpensesTable({
     required this.expenses,
     required this.currency,
@@ -659,7 +782,7 @@ class _ExpensesTable extends StatelessWidget {
   final DemoStore store;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (expenses.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -712,6 +835,8 @@ class _ExpensesTable extends StatelessWidget {
                   flex: 2,
                   child: _Th(label: 'AMOUNT', align: TextAlign.right),
                 ),
+                SizedBox(width: 48, child: _Th(label: 'RX', align: TextAlign.center)),
+                SizedBox(width: 48, child: _Th(label: 'CHAT', align: TextAlign.center)),
               ],
             ),
           ),
@@ -781,6 +906,34 @@ class _ExpensesTable extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
+                  SizedBox(
+                    width: 48,
+                    child: _ReceiptCell(expense: e),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.chat_bubble_outline,
+                        size: 18,
+                        color: AppColors.brandBrown,
+                      ),
+                      tooltip: 'Comment on this expense',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                      // Inline comment dialog. Routing to /m/trips/<id>/chat
+                      // here would bounce admin via the wrong-portal guard;
+                      // the dialog posts straight to the trip chat thread.
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (_) =>
+                            AdminExpenseCommentDialog(expense: e),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -835,6 +988,103 @@ class _Th extends StatelessWidget {
         color: AppColors.textSecondary,
         letterSpacing: 1.2,
         fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
+/// "View receipt" affordance on each expense row. Empty when no receipt
+/// is attached; tapping fetches a fresh presigned MinIO URL and opens it
+/// in a new browser tab.
+class _ReceiptCell extends ConsumerStatefulWidget {
+  const _ReceiptCell({required this.expense});
+  final Expense expense;
+
+  @override
+  ConsumerState<_ReceiptCell> createState() => _ReceiptCellState();
+}
+
+class _ReceiptCellState extends ConsumerState<_ReceiptCell> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.expense.receiptObjectKey == null) {
+      return const SizedBox.shrink();
+    }
+    return IconButton(
+      icon: _busy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(
+              Icons.receipt_long_outlined,
+              size: 18,
+              color: AppColors.brandBrown,
+            ),
+      tooltip: 'View receipt',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      onPressed: _busy ? null : _open,
+    );
+  }
+
+  Future<void> _open() async {
+    setState(() => _busy = true);
+    try {
+      final String url = await ref
+          .read(expenseRepositoryProvider)
+          .receiptUrl(widget.expense.id);
+      openUrl(url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open receipt: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+/// Inline pill for the trip detail header that resolves a mission id into
+/// its name + code. Falls back to "Mission" if the missions list hasn't
+/// loaded yet (rare; missionsProvider is small and pre-warmed by hydration).
+class _MissionChip extends ConsumerWidget {
+  const _MissionChip({required this.missionId});
+  final String missionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final List<Mission>? missions =
+        ref.watch(missionsProvider).valueOrNull;
+    final Mission? mission =
+        missions?.where((Mission m) => m.id == missionId).firstOrNull;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.brandTint,
+        borderRadius: const BorderRadius.all(AppRadii.chip),
+        border: Border.all(color: AppColors.brandSoft),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(Icons.flag_outlined, size: 14, color: AppColors.brand),
+          const SizedBox(width: 6),
+          Text(
+            mission != null
+                ? '${mission.code} · ${mission.name}'
+                : 'Mission',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.brand,
+            ),
+          ),
+        ],
       ),
     );
   }

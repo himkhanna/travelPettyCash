@@ -77,7 +77,15 @@ class ManageFundsScreen extends ConsumerWidget {
                                 ),
                           ),
                           const Spacer(),
+                          // Compact override: global theme's
+                          // minimumSize=(double.infinity, 48) would clip
+                          // this button against the section label.
                           OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 36),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              visualDensity: VisualDensity.compact,
+                            ),
                             icon: const Icon(Icons.add, size: 16),
                             label: const Text('ALLOCATE NEW'),
                             onPressed: () => context.go(

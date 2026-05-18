@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: PDD Petty Cash API
+  title: PDD Delegation Expenses API
   description: |
-    REST API for the PDD Petty Cash (Travel Expense Management) app.
+    REST API for the PDD Delegation Expenses (صرفيات الوفود الرسمية) app — travel funds allocation and expense submission.
     See CLAUDE.md §9 for conventions: camelCase JSON, RFC 7807 errors, cursor pagination,
     Idempotency-Key required on POST /expenses, /transfers, /allocations.
   version: 0.1.0

@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/api/api_config.dart';
 import '../../../core/fake/fake_config.dart';
-import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/language_toggle_button.dart';
 
 /// Landing page at "/" — picks a role and routes into either the mobile UI
@@ -29,50 +28,9 @@ class LandingScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 880),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const _LandingHeader(),
-                      const SizedBox(height: AppSpacing.xl),
-                      _SectionLabel(text: 'Mobile App'.toUpperCase()),
-                      const SizedBox(height: AppSpacing.md),
-                      _RoleGrid(
-                        onPick: (FakeRole r) {
-                          cfg.setRole(r);
-                          context.go('/m/trips');
-                        },
-                        roles: const <FakeRole>[
-                          FakeRole.member,
-                          FakeRole.leader,
-                          FakeRole.admin,
-                          FakeRole.superAdmin,
-                        ],
-                        target: _RoleTarget.mobile,
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      _SectionLabel(text: 'Admin Console (Web)'.toUpperCase()),
-                      const SizedBox(height: AppSpacing.md),
-                      _RoleGrid(
-                        onPick: (FakeRole r) {
-                          cfg.setRole(r);
-                          context.go(
-                            r == FakeRole.superAdmin ? '/cms/dg' : '/cms',
-                          );
-                        },
-                        roles: const <FakeRole>[
-                          FakeRole.admin,
-                          FakeRole.superAdmin,
-                        ],
-                        target: _RoleTarget.cms,
-                      ),
-                      if (mode == BackendMode.api) ...<Widget>[
-                        const SizedBox(height: AppSpacing.xl),
-                        _ApiSignInCard(baseUrl: api.baseUrl),
-                      ],
-                      const SizedBox(height: AppSpacing.xl),
-                      const _DemoNotice(),
-                    ],
-                  ),
+                  child: mode == BackendMode.api
+                      ? _ApiLanding(baseUrl: api.baseUrl)
+                      : _FakeLanding(cfg: cfg),
                 ),
               ),
             ),
@@ -88,8 +46,12 @@ class LandingScreen extends ConsumerWidget {
   }
 }
 
-class _LandingHeader extends StatelessWidget {
-  const _LandingHeader();
+/// Existing prototype landing — visible only in fake mode. Role cards route
+/// directly into the mobile UI / CMS without an auth round-trip; the role is
+/// stashed on FakeConfig and the FakeAuthRepository resolves the seed user.
+class _FakeLanding extends StatelessWidget {
+  const _FakeLanding({required this.cfg});
+  final FakeConfig cfg;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +59,7 @@ class _LandingHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'PDD Petty Cash',
+          'PDD Delegation Expenses',
           style: Theme.of(context).textTheme.displaySmall?.copyWith(
             color: AppColors.cream,
             fontWeight: FontWeight.w600,
@@ -109,6 +71,86 @@ class _LandingHeader extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: AppColors.cream.withValues(alpha: 0.8),
           ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        _SectionLabel(text: 'Mobile App'.toUpperCase()),
+        const SizedBox(height: AppSpacing.md),
+        _RoleGrid(
+          onPick: (FakeRole r) {
+            cfg.setRole(r);
+            GoRouter.of(context).go('/m/trips');
+          },
+          roles: const <FakeRole>[
+            FakeRole.member,
+            FakeRole.leader,
+            FakeRole.admin,
+            FakeRole.superAdmin,
+          ],
+          target: _RoleTarget.mobile,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        _SectionLabel(text: 'Admin Console (Web)'.toUpperCase()),
+        const SizedBox(height: AppSpacing.md),
+        _RoleGrid(
+          onPick: (FakeRole r) {
+            cfg.setRole(r);
+            GoRouter.of(context).go(
+              r == FakeRole.superAdmin ? '/cms/dg' : '/cms',
+            );
+          },
+          roles: const <FakeRole>[FakeRole.admin, FakeRole.superAdmin],
+          target: _RoleTarget.cms,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        const _DemoNotice(),
+      ],
+    );
+  }
+}
+
+/// API-mode landing — no demo verbiage, no prototype role cards (those don't
+/// log you in through the backend so they'd dead-end on the mobile UI). The
+/// SIGN IN call-to-action is the whole page.
+class _ApiLanding extends StatelessWidget {
+  const _ApiLanding({required this.baseUrl});
+  final String baseUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'PDD Delegation Expenses',
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+            color: AppColors.cream,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Choose your portal to sign in.',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: AppColors.cream.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        _PortalEntry(
+          path: '/portal',
+          title: 'ADMIN PORTAL',
+          subtitle: 'For supervisors and the Director General (web).',
+          arabic: 'لوحة الإدارة',
+          icon: Icons.shield_outlined,
+          baseUrl: baseUrl,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _PortalEntry(
+          path: '/app',
+          title: 'MOBILE APP',
+          subtitle: 'For coordinators and trip leaders in the field.',
+          arabic: 'تطبيق الميدان',
+          icon: Icons.smartphone_outlined,
+          baseUrl: baseUrl,
         ),
       ],
     );
@@ -263,56 +305,125 @@ class _RoleCard extends StatelessWidget {
   }
 }
 
-class _ApiSignInCard extends StatelessWidget {
-  const _ApiSignInCard({required this.baseUrl});
+class _PortalEntry extends StatelessWidget {
+  const _PortalEntry({
+    required this.path,
+    required this.title,
+    required this.subtitle,
+    required this.arabic,
+    required this.icon,
+    required this.baseUrl,
+  });
+
+  final String path;
+  final String title;
+  final String subtitle;
+  final String arabic;
+  final IconData icon;
   final String baseUrl;
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l = AppLocalizations.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: Material(
         color: AppColors.goldOlive.withValues(alpha: 0.12),
         borderRadius: const BorderRadius.all(AppRadii.card),
-        border: Border.all(color: AppColors.goldOlive.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.vpn_key_outlined, color: AppColors.goldOlive, size: 32),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: InkWell(
+          borderRadius: const BorderRadius.all(AppRadii.card),
+          onTap: () => GoRouter.of(context).go(path),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.all(AppRadii.card),
+              border: Border.all(
+                color: AppColors.goldOlive.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                Text(
-                  l.landing_sign_in_api,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.cream,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.goldOlive.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.goldOlive.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  child: Icon(icon, color: AppColors.goldOlive, size: 22),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Text(
+                            title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                              color: AppColors.cream,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            '· $arabic',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                              color: AppColors.cream.withValues(alpha: 0.75),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style:
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.cream.withValues(alpha: 0.75),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              AppColors.brandBrownDark.withValues(alpha: 0.4),
+                          borderRadius: const BorderRadius.all(AppRadii.chip),
+                        ),
+                        child: Text(
+                          '$path · $baseUrl',
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            color: AppColors.cream.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  l.landing_sign_in_api_subtitle(baseUrl),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.cream.withValues(alpha: 0.75),
-                  ),
-                ),
+                const SizedBox(width: AppSpacing.md),
+                Icon(Icons.arrow_forward,
+                    color: AppColors.goldOlive, size: 28),
               ],
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.goldOlive,
-              foregroundColor: AppColors.brandBrownDark,
-            ),
-            onPressed: () => GoRouter.of(context).go('/login'),
-            child: const Icon(Icons.arrow_forward),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -413,6 +413,16 @@ public class ExpenseService {
         return e;
     }
 
+    /**
+     * Public access-controlled load for sibling services (e.g.
+     * {@code ExpenseCommentService}). Mirrors {@link #loadAccessible} but
+     * returns the row instead of being a private helper.
+     */
+    @Transactional(readOnly = true)
+    public Expense loadAccessibleExpense(UUID expenseId, AuthenticatedUser caller) {
+        return loadAccessible(expenseId, caller);
+    }
+
     private static boolean isParticipant(Trip t, UUID userId) {
         return t.getLeaderId().equals(userId)
             || t.getCreatedById().equals(userId)

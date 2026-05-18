@@ -1,7 +1,9 @@
-# PDD Petty Cash
+# PDD Delegation Expenses
 
-Mobile-first, multi-currency petty cash and per-diem management for the
-Protocol Department, Government of Dubai.
+*صرفيات الوفود الرسمية*
+
+Mobile-first, multi-currency travel funds allocation and expense submission for
+the Protocol Department, Government of Dubai.
 
 > **Phase 0 scaffold.** The mobile app boots, the role-switcher lands you in
 > a phone-frame on web (or full-screen on a device), and the Demo Controls

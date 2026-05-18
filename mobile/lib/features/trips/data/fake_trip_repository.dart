@@ -195,11 +195,65 @@ class FakeTripRepository implements TripRepository {
   Future<Trip> createTrip({
     required String name,
     required String countryCode,
+    required String countryName,
     required String currency,
     required String leaderId,
     required List<String> memberIds,
-  }) {
-    throw UnimplementedError('Admin createTrip lands in Milestone D');
+    required Money totalBudget,
+    String? missionId,
+  }) async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    _cfg.maybeFail(op: 'trips.create');
+    final DateTime now = _cfg.now();
+    final Trip trip = Trip(
+      id: 'trip-${DateTime.now().microsecondsSinceEpoch}',
+      name: name,
+      countryCode: countryCode,
+      countryName: countryName,
+      currency: currency,
+      status: TripStatus.active,
+      createdBy: _currentUserId(),
+      leaderId: leaderId,
+      memberIds: memberIds,
+      totalBudget: totalBudget,
+      createdAt: now,
+      missionId: missionId,
+    );
+    _store.trips.add(trip);
+    _store.emit(DemoStoreEvent.tripsChanged);
+    return trip;
+  }
+
+  @override
+  Future<Trip> updateTrip({
+    required String tripId,
+    String? name,
+    String? leaderId,
+    List<String>? memberIds,
+  }) async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    final int i = _store.trips.indexWhere((Trip t) => t.id == tripId);
+    if (i < 0) throw StateError('Trip not found: $tripId');
+    final Trip old = _store.trips[i];
+    final Trip updated = Trip(
+      id: old.id,
+      name: name ?? old.name,
+      countryCode: old.countryCode,
+      countryName: old.countryName,
+      currency: old.currency,
+      status: old.status,
+      createdBy: old.createdBy,
+      leaderId: leaderId ?? old.leaderId,
+      memberIds: memberIds ?? old.memberIds,
+      totalBudget: old.totalBudget,
+      createdAt: old.createdAt,
+      closedAt: old.closedAt,
+    );
+    _store.trips[i] = updated;
+    _store.emit(DemoStoreEvent.tripsChanged);
+    return updated;
   }
 
   @override
@@ -245,5 +299,25 @@ class FakeTripRepository implements TripRepository {
     _store.emit(DemoStoreEvent.tripsChanged);
     _store.emit(DemoStoreEvent.notificationsChanged);
     return closed;
+  }
+
+  @override
+  Future<void> deleteTrip(String tripId) async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    _cfg.maybeFail(op: 'trips.deleteTrip');
+    // Match the backend guard: refuse if any expense exists.
+    final bool hasExpenses =
+        _store.expenses.any((dynamic e) => e.tripId == tripId);
+    if (hasExpenses) {
+      throw StateError(
+        'Trip has expenses and cannot be deleted — close it instead.',
+      );
+    }
+    _store.trips.removeWhere((Trip t) => t.id == tripId);
+    _store.allocations.removeWhere((dynamic a) => a.tripId == tripId);
+    _store.transfers.removeWhere((dynamic t) => t.tripId == tripId);
+    _store.emit(DemoStoreEvent.tripsChanged);
+    _store.emit(DemoStoreEvent.allocationsChanged);
   }
 }

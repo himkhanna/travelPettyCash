@@ -37,7 +37,13 @@
       "PowerShell(flutter devices *)",
       "PowerShell(flutter run *)",
       "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3737/\" -UseBasicParsing -TimeoutSec 5; Write-Output \"Status: $\\($r.StatusCode\\) OK\" } catch { Write-Output \"Error: $_\" })",
-      "PowerShell(Get-Content *)"
+      "PowerShell(Get-Content *)",
+      "Bash(flutter analyze *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(Get-ChildItem -Path \"mobile/lib/features\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(flutter gen-l10n *)"
     ]
   }
 }

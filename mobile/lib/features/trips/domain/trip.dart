@@ -15,6 +15,7 @@ class Trip {
     required this.totalBudget,
     required this.createdAt,
     this.closedAt,
+    this.missionId,
   });
 
   final String id;
@@ -29,6 +30,9 @@ class Trip {
   final Money totalBudget;
   final DateTime createdAt;
   final DateTime? closedAt;
+
+  /// Optional mission this trip belongs under. Nullable for legacy trips.
+  final String? missionId;
 }
 
 enum TripStatus { draft, active, closed }

@@ -205,6 +205,20 @@ class FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
+  Future<String> receiptUrl(String expenseId) async {
+    await _cfg.waitLatency();
+    final Expense? e = _store.expenses
+        .where((Expense x) => x.id == expenseId)
+        .firstOrNull;
+    if (e?.receiptObjectKey == null) {
+      throw StateError('Expense $expenseId has no receipt');
+    }
+    // Fake mode has no object store; return a placeholder data URL so any
+    // UI consumers don't crash on a missing implementation.
+    return 'data:text/plain;charset=utf-8,Fake receipt for $expenseId';
+  }
+
+  @override
   Future<List<ExpenseSummary>> summary({
     required String tripId,
     required ExpenseSummaryScope scope,

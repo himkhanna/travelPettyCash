@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdd_petty_cash/core/api/api_error.dart';
+import 'package:pdd_petty_cash/core/money/money.dart';
 import 'package:pdd_petty_cash/features/trips/data/api_trip_repository.dart';
 import 'package:pdd_petty_cash/features/trips/domain/trip.dart';
 
@@ -129,9 +130,11 @@ void main() {
       final Trip t = await repo.createTrip(
         name: 'Doha Visit',
         countryCode: 'QA',
+        countryName: 'Qatar',
         currency: 'QAR',
         leaderId: 'u-fatima',
         memberIds: <String>['u-ahmed'],
+        totalBudget: const Money(500000, 'QAR'),
       );
       expect(t.id, 'trip-new');
     });
@@ -151,9 +154,11 @@ void main() {
         repo.createTrip(
           name: 'X',
           countryCode: 'AE',
+          countryName: 'UAE',
           currency: 'AED',
           leaderId: 'u-fatima',
           memberIds: <String>[],
+          totalBudget: const Money(0, 'AED'),
         ),
         throwsA(isA<ApiError>().having((ApiError e) => e.isForbidden, 'isForbidden', true)),
       );

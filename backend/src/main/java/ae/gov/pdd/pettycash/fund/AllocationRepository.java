@@ -8,4 +8,10 @@ import java.util.UUID;
 public interface AllocationRepository extends JpaRepository<Allocation, UUID> {
     List<Allocation> findByTripIdOrderByCreatedAtAsc(UUID tripId);
     List<Allocation> findByTripIdAndToUserIdOrderByCreatedAtAsc(UUID tripId, UUID toUserId);
+    List<Allocation> findByTripIdAndToUserIdAndStatus(
+        UUID tripId, UUID toUserId, FundsStatus status
+    );
+
+    /** Cascade helper for trip-delete. */
+    long deleteByTripId(UUID tripId);
 }

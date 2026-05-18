@@ -65,9 +65,12 @@ class ApiTripRepository implements TripRepository {
   Future<Trip> createTrip({
     required String name,
     required String countryCode,
+    required String countryName,
     required String currency,
     required String leaderId,
     required List<String> memberIds,
+    required Money totalBudget,
+    String? missionId,
   }) async {
     try {
       final Response<dynamic> resp = await _dio.post<dynamic>(
@@ -75,11 +78,15 @@ class ApiTripRepository implements TripRepository {
         data: <String, dynamic>{
           'name': name,
           'countryCode': countryCode,
-          'countryName': countryCode, // server requires both; UI passes name elsewhere
+          'countryName': countryName,
           'currency': currency,
           'leaderId': leaderId,
           'memberIds': memberIds,
-          'totalBudget': <String, dynamic>{'amount': 0, 'currency': currency},
+          'totalBudget': <String, dynamic>{
+            'amount': totalBudget.amountMinor,
+            'currency': totalBudget.currencyCode,
+          },
+          if (missionId != null) 'missionId': missionId,
         },
       );
       return _tripFromJson(resp.data as Map<String, dynamic>);
@@ -93,6 +100,37 @@ class ApiTripRepository implements TripRepository {
     try {
       final Response<dynamic> resp = await _dio.patch<dynamic>(
         '/api/v1/trips/$tripId/close',
+      );
+      return _tripFromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
+  @override
+  Future<void> deleteTrip(String tripId) async {
+    try {
+      await _dio.delete<dynamic>('/api/v1/trips/$tripId');
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
+  @override
+  Future<Trip> updateTrip({
+    required String tripId,
+    String? name,
+    String? leaderId,
+    List<String>? memberIds,
+  }) async {
+    final Map<String, dynamic> body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (leaderId != null) body['leaderId'] = leaderId;
+    if (memberIds != null) body['memberIds'] = memberIds;
+    try {
+      final Response<dynamic> resp = await _dio.patch<dynamic>(
+        '/api/v1/trips/$tripId',
+        data: body,
       );
       return _tripFromJson(resp.data as Map<String, dynamic>);
     } on DioException catch (e) {
@@ -119,6 +157,7 @@ class ApiTripRepository implements TripRepository {
       closedAt: j['closedAt'] == null
           ? null
           : DateTime.parse(j['closedAt'] as String),
+      missionId: j['missionId'] as String?,
     );
   }
 

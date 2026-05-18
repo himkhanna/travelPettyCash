@@ -1,13 +1,35 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
+import '../../expenses/application/expenses_providers.dart';
 import '../../expenses/domain/expense.dart';
+import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
+import 'widgets/cms_layout.dart';
+
+/// Cross-trip rollup for the Director General view. Fans out one API call
+/// per trip to collect expenses, then aggregates client-side. A dedicated
+/// backend aggregate endpoint would be cheaper at scale; for the current
+/// trip volume the fan-out is fine and avoids a parallel schema.
+final FutureProvider<({List<Trip> trips, List<Expense> expenses})>
+    dgAggregateProvider = FutureProvider<({List<Trip> trips, List<Expense> expenses})>(
+  (Ref ref) async {
+    final List<Trip> trips =
+        await ref.read(tripRepositoryProvider).allTrips();
+    final List<List<Expense>> perTrip = await Future.wait(<Future<List<Expense>>>[
+      for (final Trip t in trips)
+        ref.read(expenseRepositoryProvider).list(tripId: t.id),
+    ]);
+    final List<Expense> all = <Expense>[
+      for (final List<Expense> chunk in perTrip) ...chunk,
+    ];
+    return (trips: trips, expenses: all);
+  },
+);
 
 /// Read-only oversight view per CLAUDE.md §1 — the Director General sees
 /// every trip, every balance, every spend without action affordances.
@@ -16,89 +38,88 @@ class DgDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final DemoStore store = ref.watch(demoStoreProvider);
-    // Trips are loaded lazily — kick that off if needed.
-    if (store.trips.isEmpty) {
-      return Scaffold(
-        body: FutureBuilder<void>(
-          future: store.ensureLoaded(),
-          builder: (_, __) => const Center(child: CircularProgressIndicator()),
-        ),
-      );
-    }
-    final List<Trip> trips = store.trips;
-    final List<Expense> expenses = store.expenses;
+    final AsyncValue<({List<Trip> trips, List<Expense> expenses})> aggAsync =
+        ref.watch(dgAggregateProvider);
 
-    // Active trips list
-    final List<Trip> activeTrips = trips
-        .where((Trip t) => t.status == TripStatus.active)
-        .toList();
-
-    // Per-trip totals
-    final Map<String, Trip> tripById = <String, Trip>{
-      for (final Trip t in trips) t.id: t,
-    };
-    final Map<String, Money> spentByTrip = <String, Money>{};
-    for (final Expense e in expenses) {
-      final Trip? trip = tripById[e.tripId];
-      if (trip == null) continue;
-      spentByTrip.update(
-        e.tripId,
-        (Money v) => v + e.amount,
-        ifAbsent: () => e.amount,
-      );
-    }
-
-    // Per-category roll-up (currency may differ across trips — keyed in
-    // each trip's own currency, summed only within same-currency group).
-    final Map<String, Money> byCategorySameCurrency = <String, Money>{};
-    final String dominantCurrency = trips.isEmpty
-        ? 'SAR'
-        : trips
-              .map((Trip t) => t.currency)
-              .fold(
-                <String, int>{},
-                (Map<String, int> m, String c) =>
-                    m..update(c, (int v) => v + 1, ifAbsent: () => 1),
-              )
-              .entries
-              .reduce(
-                (MapEntry<String, int> a, MapEntry<String, int> b) =>
-                    a.value >= b.value ? a : b,
-              )
-              .key;
-
-    for (final Expense e in expenses) {
-      final Trip? trip = tripById[e.tripId];
-      if (trip == null) continue;
-      if (trip.currency != dominantCurrency) continue;
-      byCategorySameCurrency.update(
-        e.categoryCode,
-        (Money v) => v + e.amount,
-        ifAbsent: () => e.amount,
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/cms'),
-        ),
-        title: Row(
-          children: <Widget>[
-            const Icon(Icons.shield_outlined, color: AppColors.brandBrown),
-            const SizedBox(width: AppSpacing.sm),
-            const Text('Director General Dashboard'),
-            const SizedBox(width: AppSpacing.md),
-            const Chip(
-              label: Text('READ-ONLY'),
-              backgroundColor: AppColors.cream,
-            ),
-          ],
-        ),
+    return aggAsync.when(
+      loading: () => const CmsLayout(
+        active: CmsNavItem.dg,
+        child: Center(child: CircularProgressIndicator()),
       ),
-      body: SingleChildScrollView(
+      error: (Object e, _) => CmsLayout(
+        active: CmsNavItem.dg,
+        child: Center(child: Text('Could not load DG view: $e')),
+      ),
+      data: (({List<Trip> trips, List<Expense> expenses}) agg) {
+        final List<Trip> trips = agg.trips;
+        final List<Expense> expenses = agg.expenses;
+
+        // Active trips list
+        final List<Trip> activeTrips = trips
+            .where((Trip t) => t.status == TripStatus.active)
+            .toList();
+
+        // Per-trip totals
+        final Map<String, Trip> tripById = <String, Trip>{
+          for (final Trip t in trips) t.id: t,
+        };
+        final Map<String, Money> spentByTrip = <String, Money>{};
+        for (final Expense e in expenses) {
+          final Trip? trip = tripById[e.tripId];
+          if (trip == null) continue;
+          spentByTrip.update(
+            e.tripId,
+            (Money v) => v + e.amount,
+            ifAbsent: () => e.amount,
+          );
+        }
+
+        // Per-category roll-up (currency may differ across trips — keyed in
+        // each trip's own currency, summed only within same-currency group).
+        final Map<String, Money> byCategorySameCurrency = <String, Money>{};
+        final String dominantCurrency = trips.isEmpty
+            ? 'SAR'
+            : trips
+                  .map((Trip t) => t.currency)
+                  .fold(
+                    <String, int>{},
+                    (Map<String, int> m, String c) =>
+                        m..update(c, (int v) => v + 1, ifAbsent: () => 1),
+                  )
+                  .entries
+                  .reduce(
+                    (MapEntry<String, int> a, MapEntry<String, int> b) =>
+                        a.value >= b.value ? a : b,
+                  )
+                  .key;
+
+        for (final Expense e in expenses) {
+          final Trip? trip = tripById[e.tripId];
+          if (trip == null) continue;
+          if (trip.currency != dominantCurrency) continue;
+          byCategorySameCurrency.update(
+            e.categoryCode,
+            (Money v) => v + e.amount,
+            ifAbsent: () => e.amount,
+          );
+        }
+
+        return CmsLayout(
+      active: CmsNavItem.dg,
+      trailing: const <Widget>[
+        Chip(
+          label: Text(
+            'READ-ONLY',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          backgroundColor: AppColors.cream,
+        ),
+      ],
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1200),
@@ -137,6 +158,8 @@ class DgDashboard extends ConsumerWidget {
           ),
         ),
       ),
+    );
+      },
     );
   }
 }

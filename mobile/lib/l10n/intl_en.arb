@@ -1,7 +1,7 @@
 {
   "@@locale": "en",
 
-  "appTitle": "PDD Petty Cash",
+  "appTitle": "PDD Delegation Expenses",
   "@appTitle": { "description": "Product name shown on the title bar and app stores" },
 
   "landingTitle": "Demo Console",

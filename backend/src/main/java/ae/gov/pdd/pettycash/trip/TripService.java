@@ -130,7 +130,87 @@ public class TripService {
             req.totalBudget().amount(),
             members
         );
+        // Mission optional — the CMS picker enforces the requirement on the
+        // client; here we just attach the FK if provided.
+        if (req.missionId() != null) {
+            t.setMissionId(req.missionId());
+        }
         trips.save(t);
+        return TripDto.from(t);
+    }
+
+    /**
+     * Partial update — admin-only. Any null field on the request is left
+     * unchanged. {@code memberIds} is the full replacement set when present
+     * (passing {@code []} clears every member; not a delta).
+     *
+     * <p>When members are removed: their PENDING allocations + transfers
+     * on this trip are auto-DECLINED (the user shouldn't be expected to
+     * respond to a request that no longer concerns them, and the trip's
+     * balance math shouldn't keep counting them). Accepted rows are kept
+     * for audit history.
+     *
+     * <p>Closed trips reject the patch entirely — once history is sealed,
+     * roster changes would invalidate the report.
+     */
+    @Transactional
+    public TripDto update(
+        UUID tripId,
+        ae.gov.pdd.pettycash.trip.dto.PatchTripRequest req,
+        AuthenticatedUser caller
+    ) {
+        requireAdmin(caller);
+        Trip t = trips.findById(tripId).orElseThrow(() -> notFound(tripId));
+        if (t.getStatus() == TripStatus.CLOSED) {
+            throw badRequest("trips/closed", "Closed trips cannot be edited.");
+        }
+
+        if (req.name() != null && !req.name().isBlank()) {
+            t.rename(req.name().trim());
+        }
+
+        if (req.leaderId() != null && !req.leaderId().equals(t.getLeaderId())) {
+            if (!users.existsById(req.leaderId())) {
+                throw badRequest("trips/leader-not-found", "Leader does not exist");
+            }
+            t.reassignLeader(req.leaderId());
+        }
+
+        if (req.memberIds() != null) {
+            java.util.Set<java.util.UUID> requested =
+                new java.util.HashSet<>(req.memberIds());
+            for (UUID m : requested) {
+                if (!users.existsById(m)) {
+                    throw badRequest(
+                        "trips/member-not-found",
+                        "Member " + m + " does not exist"
+                    );
+                }
+            }
+            // Removed = on the trip but not in the new set. Cascade-decline
+            // their pending activity on this trip.
+            java.util.Set<UUID> removed = new java.util.HashSet<>(t.getMemberIds());
+            removed.removeAll(requested);
+            java.time.Instant now = clock.instant();
+            for (UUID r : removed) {
+                for (ae.gov.pdd.pettycash.fund.Allocation a :
+                        allocations.findByTripIdAndToUserIdAndStatus(
+                            t.getId(), r,
+                            ae.gov.pdd.pettycash.fund.FundsStatus.PENDING)) {
+                    a.respond(
+                        ae.gov.pdd.pettycash.fund.FundsStatus.DECLINED, now
+                    );
+                }
+                for (ae.gov.pdd.pettycash.fund.Transfer x :
+                        transfers.findPendingInvolvingUser(t.getId(), r)) {
+                    x.respond(
+                        ae.gov.pdd.pettycash.fund.FundsStatus.DECLINED, now
+                    );
+                }
+            }
+            t.replaceMembers(requested);
+        }
+
         return TripDto.from(t);
     }
 
@@ -161,6 +241,38 @@ public class TripService {
             recipients
         );
         return TripDto.from(t);
+    }
+
+    /**
+     * Hard-delete a trip and cascade its allocations + transfers. Refuses
+     * if any expenses are logged against the trip — those represent real
+     * financial activity that must be preserved; the admin should close
+     * the trip instead, which keeps it read-only.
+     */
+    @Transactional
+    public void delete(UUID tripId, AuthenticatedUser caller) {
+        requireAdmin(caller);
+        Trip t = trips.findById(tripId)
+            .orElseThrow(() -> notFound(tripId));
+        List<Expense> tripExpenses =
+            expenses.findByTripIdAndDeletedAtIsNullOrderByOccurredAtDesc(t.getId());
+        if (!tripExpenses.isEmpty()) {
+            throw new ApiException(
+                HttpStatus.CONFLICT,
+                "trips/has-expenses",
+                "Trip cannot be deleted",
+                "This trip has " + tripExpenses.size() +
+                    " expense(s) logged. Close the trip instead — closed "
+                    + "trips become read-only but preserve the audit trail."
+            );
+        }
+        // Cascade the lightweight associations. Notifications + chat are
+        // append-only and reference trip by id only; orphaned rows are fine
+        // (they continue to surface in the audit feed with a now-deleted
+        // tripId, which is desirable: the deletion itself is the event).
+        allocations.deleteByTripId(t.getId());
+        transfers.deleteByTripId(t.getId());
+        trips.deleteById(t.getId());
     }
 
     /**

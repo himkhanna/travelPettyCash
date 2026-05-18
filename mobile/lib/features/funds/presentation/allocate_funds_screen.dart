@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
+import '../../../shared/widgets/pdd_primitives.dart';
+import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
@@ -62,21 +64,45 @@ class _AllocateFundsScreenState extends ConsumerState<AllocateFundsScreen> {
     );
     final DemoStore store = ref.read(demoStoreProvider);
 
+    final User? me = ref.watch(currentUserProvider).valueOrNull;
+
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(_review ? Icons.arrow_back : Icons.close),
-          onPressed: () {
-            if (_review) {
-              setState(() => _review = false);
-            } else {
-              context.go('/m/trips/${widget.tripId}/dashboard');
-            }
-          },
+      backgroundColor: AppColors.bgApp,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            PddTopBar(
+              user: me,
+              leadingBack: true,
+              onBack: () {
+                if (_review) {
+                  setState(() => _review = false);
+                } else {
+                  context.go('/m/trips/${widget.tripId}/dashboard');
+                }
+              },
+              title: _review ? 'Confirm allocation' : 'Allocate',
+              subtitle: _review
+                  ? 'Review before sending'
+                  : 'Distribute to team',
+            ),
+            Expanded(
+              child: _buildBody(tripAsync, sourcesAsync, availableAsync, store),
+            ),
+          ],
         ),
-        title: Text(_review ? 'CONFIRM ALLOCATION' : 'ALLOCATE FUNDS'),
       ),
-      body: tripAsync.when(
+    );
+  }
+
+  Widget _buildBody(
+    AsyncValue<Trip> tripAsync,
+    AsyncValue<List<Source>> sourcesAsync,
+    AsyncValue<Map<String, Money>> availableAsync,
+    DemoStore store,
+  ) {
+    return tripAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(child: Text('Error: $e')),
         data: (Trip trip) => sourcesAsync.when(
@@ -158,8 +184,7 @@ class _AllocateFundsScreenState extends ConsumerState<AllocateFundsScreen> {
             },
           ),
         ),
-      ),
-    );
+      );
   }
 
   Money _remaining(
@@ -566,7 +591,23 @@ class _Footer extends StatelessWidget {
               ],
             ),
             const Spacer(),
+            // Compact style override: global theme sets minimumSize to
+            // (double.infinity, 52), which makes this button claim the
+            // entire row width and push the TOTAL/CONFIRM combo off the
+            // phone-frame viewport. Pin to the actual button size.
             FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.brandBrown,
+                foregroundColor: AppColors.cream,
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  fontSize: 13,
+                ),
+              ),
               icon: saving
                   ? const SizedBox(
                       width: 16,
@@ -576,7 +617,7 @@ class _Footer extends StatelessWidget {
                         color: AppColors.cream,
                       ),
                     )
-                  : Icon(review ? Icons.check : Icons.arrow_forward),
+                  : Icon(review ? Icons.check : Icons.arrow_forward, size: 18),
               label: Text(review ? 'CONFIRM' : 'REVIEW'),
               onPressed: saving ? null : onPrimary,
             ),

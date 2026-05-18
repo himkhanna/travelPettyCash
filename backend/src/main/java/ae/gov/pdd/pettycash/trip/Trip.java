@@ -47,6 +47,14 @@ public class Trip {
     private UUID leaderId;
 
     /**
+     * Optional mission grouping. Nullable so existing trips don't break;
+     * new trips created via the CMS now require a mission selection. See
+     * {@code V007__missions.sql} and {@link ae.gov.pdd.pettycash.mission.Mission}.
+     */
+    @Column(name = "mission_id")
+    private UUID missionId;
+
+    /**
      * BIGINT minor units (CLAUDE.md §6). Currency lives on the trip — every
      * Money attached to this trip uses {@link #currency}.
      */
@@ -103,13 +111,28 @@ public class Trip {
     public TripStatus getStatus() { return status; }
     public UUID getCreatedById() { return createdById; }
     public UUID getLeaderId() { return leaderId; }
+    public UUID getMissionId() { return missionId; }
     public long getTotalBudgetMinor() { return totalBudgetMinor; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getClosedAt() { return closedAt; }
     public Set<UUID> getMemberIds() { return memberIds; }
 
+    public void setMissionId(UUID missionId) { this.missionId = missionId; }
+
     public void close(Instant at) {
         this.status = TripStatus.CLOSED;
         this.closedAt = at;
+    }
+
+    public void rename(String newName) {
+        this.name = newName;
+    }
+
+    public void reassignLeader(UUID newLeaderId) {
+        this.leaderId = newLeaderId;
+    }
+
+    public void replaceMembers(Set<UUID> newMembers) {
+        this.memberIds = new HashSet<>(newMembers);
     }
 }

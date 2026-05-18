@@ -6,6 +6,9 @@ import 'package:intl/intl.dart';
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
+import '../../../shared/widgets/pdd_primitives.dart';
+import '../../auth/application/auth_providers.dart';
+import '../../auth/domain/user.dart';
 import '../../trips/application/trips_providers.dart';
 import '../application/notifications_providers.dart';
 import '../data/notifications_repository.dart';
@@ -22,78 +25,78 @@ class NotificationsScreen extends ConsumerWidget {
       myNotificationsProvider,
     );
 
+    final User? me = ref.watch(currentUserProvider).valueOrNull;
+    final int pending = async.maybeWhen(
+      data: (List<AppNotification> list) => list
+          .where((AppNotification n) =>
+              n.actionable && n.state != NotificationState.acted)
+          .length,
+      orElse: () => 0,
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).canPop()
-              ? Navigator.of(context).pop()
-              : context.go('/m/trips'),
-        ),
-        title: const Text('NOTIFICATIONS'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () async {
-              final bool? confirm = await showDialog<bool>(
-                context: context,
-                builder: (BuildContext ctx) => AlertDialog(
-                  title: const Text('Delete all notifications?'),
-                  actions: <Widget>[
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(false),
-                      child: const Text('CANCEL'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.of(ctx).pop(true),
-                      child: const Text('DELETE ALL'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await ref.read(notificationsRepositoryProvider).deleteAll();
-              }
-            },
-            child: const Text(
-              'DELETE ALL',
-              style: TextStyle(color: AppColors.outflow),
+      backgroundColor: AppColors.bgApp,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            PddTopBar(
+              user: me,
+              leadingBack: true,
+              onBack: () => Navigator.of(context).canPop()
+                  ? Navigator.of(context).pop()
+                  : context.go('/m/trips'),
+              title: 'Inbox',
+              subtitle: pending > 0
+                  ? '$pending pending'
+                  : 'All caught up',
             ),
-          ),
-        ],
-      ),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, _) => Center(child: Text('Error: $e')),
-        data: (List<AppNotification> list) => list.isEmpty
-            ? const _EmptyState()
-            : ListView.separated(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                itemCount: list.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (BuildContext context, int i) {
-                  final AppNotification n = list[i];
-                  return Dismissible(
-                    key: ValueKey<String>(n.id),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: AlignmentDirectional.centerEnd,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.outflow,
-                        borderRadius: const BorderRadius.all(AppRadii.card),
-                      ),
-                      child: const Icon(Icons.delete, color: Colors.white),
-                    ),
-                    onDismissed: (_) => ref
-                        .read(notificationsRepositoryProvider)
-                        .delete(n.id),
-                    child: _NotificationCard(notification: n),
+            Expanded(
+              child: async.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
+                error: (Object e, _) => Center(child: Text('Error: $e')),
+                data: (List<AppNotification> list) {
+                  if (list.isEmpty) {
+                    return const PddEmptyState(
+                      icon: Icons.notifications_none_outlined,
+                      title: 'All caught up',
+                      body: 'You have no new notifications.',
+                    );
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                    itemCount: list.length,
+                    itemBuilder: (BuildContext context, int i) {
+                      final AppNotification n = list[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Dismissible(
+                          key: ValueKey<String>(n.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: AlignmentDirectional.centerEnd,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: AppColors.red,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(Icons.delete,
+                                color: Colors.white),
+                          ),
+                          onDismissed: (_) => ref
+                              .read(notificationsRepositoryProvider)
+                              .delete(n.id),
+                          child: _NotificationCard(notification: n),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -120,6 +123,18 @@ class _NotificationCard extends ConsumerWidget {
             await ref
                 .read(notificationsRepositoryProvider)
                 .markRead(notification.id);
+          }
+          // Deep-link an EXPENSE_QUERY mention to the expense detail
+          // so the recipient can read the full thread and reply inline.
+          if (notification.type == NotificationType.expenseQuery &&
+              context.mounted) {
+            final String? tripId =
+                notification.payload['tripId'] as String?;
+            final String? expenseId =
+                notification.payload['expenseId'] as String?;
+            if (tripId != null && expenseId != null) {
+              context.go('/m/trips/$tripId/expenses/$expenseId');
+            }
           }
         },
         borderRadius: const BorderRadius.all(AppRadii.card),
@@ -159,21 +174,54 @@ class _NotificationCard extends ConsumerWidget {
               ),
               if (actionable) ...<Widget>[
                 const SizedBox(height: AppSpacing.md),
+                // Compact styles override the global theme's
+                // Size(double.infinity, 52) — otherwise DECLINE claims
+                // full-width inside this Row and pushes ACCEPT off-screen
+                // on the phone-frame viewport.
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: <Widget>[
                     OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: AppColors.outflow,
+                        side: BorderSide(
+                          color: AppColors.outflow.withValues(alpha: 0.5),
+                        ),
+                      ),
                       onPressed: () => _respond(
                         context,
                         ref,
                         NotificationAction.decline,
                       ),
-                      child: const Text('DECLINE'),
+                      child: const Text(
+                        'DECLINE',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        visualDensity: VisualDensity.compact,
+                      ),
                       onPressed: () =>
                           _respond(context, ref, NotificationAction.accept),
-                      child: const Text('ACCEPT'),
+                      child: const Text(
+                        'ACCEPT',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -237,7 +285,19 @@ class _NotificationCard extends ConsumerWidget {
       case NotificationType.tripClosed:
         return 'A trip you participated in has been closed.';
       case NotificationType.expenseQuery:
-        return 'An admin has a question on one of your expenses: "${n.payload['question'] ?? ''}"';
+        // Server writes the comment text into `snippet` (truncated to
+        // 140 chars). `question` was the older field name; kept as a
+        // fallback for any rows still in flight.
+        final String byName = _userName(
+          store,
+          n.payload['authorId'] as String?,
+        );
+        final String text = (n.payload['snippet'] as String?) ??
+            (n.payload['question'] as String?) ??
+            '';
+        final String tripName = (n.payload['tripName'] as String?) ?? 'a trip';
+        return '$byName mentioned you on an expense in $tripName: '
+            '"$text"';
     }
   }
 

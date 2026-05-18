@@ -32,11 +32,14 @@ class TripBottomNav extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: <Widget>[
+              // HOME → trips list (top-level mobile entry), not the current
+              // trip's dashboard. The dashboard has its own back-arrow that
+              // also lands on /m/trips, so this is the consistent route.
               _NavItem(
-                icon: Icons.donut_large_outlined,
+                icon: Icons.home_outlined,
                 label: 'Home',
-                active: currentLocation.endsWith('/dashboard'),
-                onTap: () => context.go('/m/trips/$tripId/dashboard'),
+                active: currentLocation == '/m/trips',
+                onTap: () => context.go('/m/trips'),
               ),
               _NavItem(
                 icon: Icons.receipt_long_outlined,

@@ -21,8 +21,8 @@ public class OpenApiConfig {
 
         return new OpenAPI()
             .info(new Info()
-                .title("PDD Petty Cash API")
-                .description("Travel expense management for the Protocol Department, Government of Dubai.")
+                .title("PDD Delegation Expenses API")
+                .description("Travel funds allocation and expense submission for the Protocol Department, Government of Dubai.")
                 .version("v1")
                 .license(new License().name("Internal").url("https://pdd.gov.ae"))
             )

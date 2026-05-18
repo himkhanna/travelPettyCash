@@ -1,4 +1,4 @@
-# Screen Inventory — PDD Petty Cash
+# Screen Inventory — PDD Delegation Expenses
 
 > One row per screen in `Petty_Cash_Final_Design.pdf`. For each screen: the entities it touches, the API endpoint(s) behind it, the Riverpod provider(s) that own its state, and the role(s) that can reach it.
 >

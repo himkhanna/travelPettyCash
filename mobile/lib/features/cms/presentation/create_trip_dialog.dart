@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
 import '../../auth/domain/user.dart';
+import '../../funds/application/funds_providers.dart';
+import '../../funds/data/funds_repository.dart';
 import '../../funds/domain/funding.dart';
+import '../../missions/application/mission_providers.dart';
+import '../../missions/domain/mission.dart';
+import '../../trips/application/trips_providers.dart';
+import '../../trips/data/trip_repository.dart';
 import '../../trips/domain/trip.dart';
 
 /// Admin-only dialog for creating a trip end-to-end:
@@ -26,12 +31,11 @@ class CreateTripDialog extends ConsumerStatefulWidget {
 }
 
 class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
-  static const Uuid _uuid = Uuid();
-
   final TextEditingController _nameCtrl = TextEditingController();
   String _country = 'SA';
   String _currency = 'SAR';
   String? _leaderId;
+  String? _missionId;
   final Set<String> _memberIds = <String>{};
   final Map<String, TextEditingController> _sourceAmounts =
       <String, TextEditingController>{};
@@ -55,7 +59,15 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
     final List<Source> sources = store.sources;
 
     for (final Source s in sources) {
-      _sourceAmounts.putIfAbsent(s.id, () => TextEditingController());
+      _sourceAmounts.putIfAbsent(s.id, () {
+        // Rebuild on every keystroke so the TOTAL BUDGET line at the
+        // bottom of the dialog recomputes live as the admin types.
+        final TextEditingController c = TextEditingController();
+        c.addListener(() {
+          if (mounted) setState(() {});
+        });
+        return c;
+      });
     }
 
     return Dialog(
@@ -75,7 +87,14 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _section('1. TRIP DETAILS'),
+                    _section('1. MISSION'),
+                    _MissionPicker(
+                      selected: _missionId,
+                      onPick: (String? id) =>
+                          setState(() => _missionId = id),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _section('2. TRIP DETAILS'),
                     _TripMetaFields(
                       nameCtrl: _nameCtrl,
                       country: _country,
@@ -87,7 +106,7 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
                       onCurrency: (String c) => setState(() => _currency = c),
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    _section('2. ASSIGN LEADER'),
+                    _section('3. ASSIGN LEADER'),
                     _LeaderPicker(
                       users: assignableUsers,
                       selected: _leaderId,
@@ -97,7 +116,7 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
                       }),
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    _section('3. PICK MEMBERS'),
+                    _section('4. PICK MEMBERS'),
                     _MembersPicker(
                       users: assignableUsers
                           .where((User u) => u.id != _leaderId)
@@ -112,7 +131,7 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
                       }),
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    _section('4. INITIAL BUDGET PER SOURCE'),
+                    _section('5. INITIAL BUDGET PER SOURCE'),
                     Text(
                       'Funds are credited to the Leader, who can sub-allocate '
                       'to Members from the Manage Funds screen.',
@@ -158,6 +177,10 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
       _toast('Trip name is required');
       return;
     }
+    if (_missionId == null) {
+      _toast('Please pick a mission for this trip');
+      return;
+    }
     if (_leaderId == null) {
       _toast('Please assign a leader');
       return;
@@ -169,12 +192,15 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
 
     setState(() => _saving = true);
     try {
+      // Sources are read from DemoStore here as reference data (Source list
+      // is seeded and rarely changes). The trip + allocations themselves are
+      // persisted through the API repositories below.
       final DemoStore store = ref.read(demoStoreProvider);
-      final String tripId = 'trip-${_uuid.v4().substring(0, 8)}';
-      final DateTime now = DateTime.now();
 
+      // Sum the per-source amounts into one totalBudget and prepare the
+      // initial allocations list for the bulk-create call.
       int totalBudgetMinor = 0;
-      final List<Allocation> initialAllocations = <Allocation>[];
+      final List<AllocationDraftRow> draftRows = <AllocationDraftRow>[];
       for (final Source s in store.sources) {
         final int minor = _amountToMinor(
           _sourceAmounts[s.id]?.text ?? '',
@@ -182,44 +208,56 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
         );
         if (minor <= 0) continue;
         totalBudgetMinor += minor;
-        initialAllocations.add(
-          Allocation(
-            id: 'alloc-${_uuid.v4().substring(0, 8)}',
-            tripId: tripId,
-            fromUserId: null,
-            toUserId: _leaderId!,
-            sourceId: s.id,
-            amount: Money(minor, _currency),
-            status: AllocationStatus.accepted,
-            createdAt: now,
-            respondedAt: now,
-          ),
-        );
+        draftRows.add(AllocationDraftRow(
+          toUserId: _leaderId!,
+          sourceId: s.id,
+          amount: Money(minor, _currency),
+        ));
       }
 
-      final Trip trip = Trip(
-        id: tripId,
+      // 1. Create the trip via the trip repo (in API mode this POSTs to
+      //    /api/v1/trips; in fake mode it mutates DemoStore).
+      final TripRepository trips = ref.read(tripRepositoryProvider);
+      final Trip trip = await trips.createTrip(
         name: _nameCtrl.text.trim(),
         countryCode: _country,
         countryName: _countryName(_country),
         currency: _currency,
-        status: TripStatus.active,
-        createdBy: 'u-khalid',
         leaderId: _leaderId!,
         memberIds: _memberIds.toList(),
         totalBudget: Money(totalBudgetMinor, _currency),
-        createdAt: now,
+        missionId: _missionId,
       );
-      store.trips.add(trip);
-      store.allocations.addAll(initialAllocations);
-      store.emit(DemoStoreEvent.tripsChanged);
-      store.emit(DemoStoreEvent.allocationsChanged);
+
+      // 2. Initial admin-pool allocations per source. The server returns
+      //    the canonical rows; we don't write them to DemoStore — the
+      //    tripAllocationsProvider invalidation below refetches them.
+      if (draftRows.isNotEmpty) {
+        final AllocationRepository allocs =
+            ref.read(allocationRepositoryProvider);
+        await allocs.createMany(
+          tripId: trip.id,
+          rows: draftRows,
+          idempotencyKey: 'trip-create-${trip.id}',
+        );
+      }
+
+      // 3. Invalidate providers so the CMS list and any open trip detail
+      //    re-fetch from the server. Avoids the race where a local cache
+      //    write disagrees with the next list response.
+      ref.invalidate(activeTripsProvider);
+      ref.invalidate(tripAllocationsProvider(trip.id));
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } finally {
-      if (mounted) setState(() => _saving = false);
+    } catch (e) {
+      if (mounted) {
+        _toast('Could not create trip: $e');
+        setState(() => _saving = false);
+      }
+      return;
     }
+    if (mounted) setState(() => _saving = false);
   }
 
   void _toast(String msg) {
@@ -367,12 +405,27 @@ class _Footer extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          // Both buttons need explicit compact styles to override the global
+          // theme's Size(double.infinity, 52) minimumSize — otherwise Cancel
+          // expands and pushes CREATE TRIP off the right edge of the dialog.
           OutlinedButton(
             onPressed: saving ? null : onCancel,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              visualDensity: VisualDensity.compact,
+            ),
             child: const Text('CANCEL'),
           ),
           const SizedBox(width: AppSpacing.sm),
           FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.brandBrown,
+              foregroundColor: AppColors.cream,
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              visualDensity: VisualDensity.compact,
+            ),
             icon: saving
                 ? const SizedBox(
                     width: 16,
@@ -383,7 +436,10 @@ class _Footer extends StatelessWidget {
                     ),
                   )
                 : const Icon(Icons.check),
-            label: const Text('CREATE TRIP'),
+            label: const Text(
+              'CREATE TRIP',
+              style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 1.2),
+            ),
             onPressed: saving ? null : onConfirm,
           ),
         ],
@@ -615,5 +671,196 @@ class _SourceBudgetRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Mission selector — required for new trips. Pulls the live list from the
+/// backend; an inline "+ New mission" tile opens a tiny dialog to create
+/// one without leaving the trip wizard.
+class _MissionPicker extends ConsumerWidget {
+  const _MissionPicker({required this.selected, required this.onPick});
+
+  final String? selected;
+  final ValueChanged<String?> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<Mission>> async = ref.watch(missionsProvider);
+    return async.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (Object e, _) => Text('Could not load missions: $e'),
+      data: (List<Mission> missions) {
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: <Widget>[
+            for (final Mission m in missions)
+              ChoiceChip(
+                label: Text(
+                  m.code,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                avatar: const Icon(
+                  Icons.flag_outlined,
+                  size: 16,
+                  color: AppColors.brandBrown,
+                ),
+                tooltip: m.name,
+                selected: selected == m.id,
+                onSelected: (_) => onPick(m.id),
+                selectedColor: AppColors.brandBrown,
+                labelStyle: TextStyle(
+                  color: selected == m.id
+                      ? AppColors.cream
+                      : AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ActionChip(
+              avatar: const Icon(
+                Icons.add,
+                size: 16,
+                color: AppColors.brandBrown,
+              ),
+              label: const Text('New mission'),
+              onPressed: () async {
+                final Mission? created =
+                    await _openCreateMissionDialog(context, ref);
+                if (created != null) {
+                  ref.invalidate(missionsProvider);
+                  onPick(created.id);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<Mission?> _openCreateMissionDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) {
+    return showDialog<Mission>(
+      context: context,
+      builder: (BuildContext ctx) => const _NewMissionDialog(),
+    );
+  }
+}
+
+class _NewMissionDialog extends ConsumerStatefulWidget {
+  const _NewMissionDialog();
+
+  @override
+  ConsumerState<_NewMissionDialog> createState() => _NewMissionDialogState();
+}
+
+class _NewMissionDialogState extends ConsumerState<_NewMissionDialog> {
+  final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _codeCtrl = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(AppRadii.card),
+      ),
+      title: const Text('New mission'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Mission name',
+                hintText: 'e.g. Gulf State Tour 2026',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _codeCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Code (optional)',
+                hintText: 'auto-generated if blank',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            if (_error != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              Text(_error!, style: const TextStyle(color: AppColors.outflow)),
+            ],
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          child: const Text('CANCEL'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.brandBrown,
+            foregroundColor: AppColors.cream,
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+          ),
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.cream,
+                  ),
+                )
+              : const Text('CREATE'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    if (_nameCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'Mission name is required');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final Mission m = await ref.read(missionRepositoryProvider).create(
+            name: _nameCtrl.text.trim(),
+            code: _codeCtrl.text.trim().isEmpty
+                ? null
+                : _codeCtrl.text.trim(),
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop(m);
+    } catch (e) {
+      setState(() {
+        _error = 'Could not save: $e';
+        _saving = false;
+      });
+    }
   }
 }

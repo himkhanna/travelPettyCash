@@ -76,7 +76,27 @@ public class User {
     public boolean isActive() { return active; }
     public Instant getCreatedAt() { return createdAt; }
 
-    void setPasswordHash(String passwordHash) {
+    public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public void setDisplayNameAr(String displayNameAr) {
+        this.displayNameAr = displayNameAr;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public void setRole(UserRole role) {
+        this.role = role;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 }

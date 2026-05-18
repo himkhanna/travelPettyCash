@@ -7,10 +7,14 @@ import '../../../core/fake/demo_store.dart';
 import '../../../core/l10n/locale_names.dart';
 import '../../../core/money/money.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../expenses/application/expenses_providers.dart';
 import '../../expenses/domain/expense.dart';
 import '../../funds/domain/funding.dart';
+import '../../reports/application/report_download_providers.dart';
 import '../../reports/application/signature_providers.dart';
+import '../../reports/data/report_download_repository.dart';
 import '../../reports/domain/signed_report.dart';
+import '../../reports/presentation/save_to_disk.dart';
 import '../../reports/presentation/sign_report_modal.dart';
 import '../../trips/domain/trip.dart';
 
@@ -194,15 +198,28 @@ class _ReportCard extends StatelessWidget {
   }
 }
 
-class _ReportPreviewDialog extends ConsumerWidget {
+class _ReportPreviewDialog extends ConsumerStatefulWidget {
   const _ReportPreviewDialog({required this.kind, required this.trip});
   final ReportKind kind;
   final Trip trip;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ReportPreviewDialog> createState() =>
+      _ReportPreviewDialogState();
+}
+
+class _ReportPreviewDialogState extends ConsumerState<_ReportPreviewDialog> {
+  bool _downloading = false;
+
+  @override
+  Widget build(BuildContext context) {
     final DemoStore store = ref.read(demoStoreProvider);
     final AppLocalizations l = AppLocalizations.of(context);
+    // Load expenses for this trip from the live provider, then pass the
+    // list down to every report-section widget. Previously each section
+    // read store.expenses directly which only reflected hydration-time data.
+    final AsyncValue<List<Expense>> expensesAsync =
+        ref.watch(tripExpensesProvider(widget.trip.id));
     return Dialog(
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(AppRadii.card),
@@ -216,20 +233,15 @@ class _ReportPreviewDialog extends ConsumerWidget {
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Row(
                 children: <Widget>[
-                  Text(
-                    _title(l, kind),
-                    style: Theme.of(context).textTheme.titleMedium,
+                  Expanded(
+                    child: Text(
+                      _title(l, widget.kind),
+                      style: Theme.of(context).textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const Spacer(),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.print, size: 18),
-                    label: Text(l.reports_print_button),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(l.reports_print_hint)),
-                      );
-                    },
-                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  ..._downloadButtons(),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
@@ -241,13 +253,117 @@ class _ReportPreviewDialog extends ConsumerWidget {
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(AppSpacing.xl),
-                child: _ReportBody(kind: kind, trip: trip, store: store),
+                child: expensesAsync.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (Object e, _) => Text('Could not load expenses: $e'),
+                  data: (List<Expense> expenses) => _ReportBody(
+                    kind: widget.kind,
+                    trip: widget.trip,
+                    store: store,
+                    expenses: expenses,
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// PDF is always offered. XLSX is offered for the two tabular reports
+  /// (User and Trip Full). Finance Letter + DG are PDF-only.
+  List<Widget> _downloadButtons() {
+    final ReportDownloadKind kind = _downloadKind(widget.kind);
+    final bool xlsxAvailable = kind == ReportDownloadKind.user ||
+        kind == ReportDownloadKind.tripFull;
+
+    final ButtonStyle compact = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 36),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      visualDensity: VisualDensity.compact,
+    );
+
+    return <Widget>[
+      OutlinedButton.icon(
+        style: compact,
+        icon: _downloading
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.picture_as_pdf, size: 18),
+        label: const Text('PDF'),
+        onPressed: _downloading
+            ? null
+            : () => _download(kind, ReportFormat.pdf),
+      ),
+      if (xlsxAvailable) ...<Widget>[
+        const SizedBox(width: AppSpacing.sm),
+        OutlinedButton.icon(
+          style: compact,
+          icon: _downloading
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.table_chart_outlined, size: 18),
+          label: const Text('EXCEL'),
+          onPressed: _downloading
+              ? null
+              : () => _download(kind, ReportFormat.xlsx),
+        ),
+      ],
+      const SizedBox(width: AppSpacing.sm),
+    ];
+  }
+
+  ReportDownloadKind _downloadKind(ReportKind k) {
+    switch (k) {
+      case ReportKind.user:
+        return ReportDownloadKind.user;
+      case ReportKind.tripFull:
+        return ReportDownloadKind.tripFull;
+      case ReportKind.financeLetter:
+        return ReportDownloadKind.financeLetter;
+      case ReportKind.directorGeneral:
+        return ReportDownloadKind.dg;
+    }
+  }
+
+  Future<void> _download(ReportDownloadKind kind, ReportFormat format) async {
+    setState(() => _downloading = true);
+    try {
+      final DownloadedReport report = await ref
+          .read(reportDownloadRepositoryProvider)
+          .download(
+            kind: kind,
+            tripId: widget.trip.id,
+            userId: kind == ReportDownloadKind.user
+                ? widget.trip.leaderId
+                : null,
+            format: format,
+          );
+      saveBytesToDisk(
+        bytes: report.bytes,
+        filename: report.filename,
+        contentType: report.contentType,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Downloaded ${report.filename}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Download failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
   }
 
   String _title(AppLocalizations l, ReportKind k) {
@@ -269,23 +385,25 @@ class _ReportBody extends StatelessWidget {
     required this.kind,
     required this.trip,
     required this.store,
+    required this.expenses,
   });
 
   final ReportKind kind;
   final Trip trip;
   final DemoStore store;
+  final List<Expense> expenses;
 
   @override
   Widget build(BuildContext context) {
     switch (kind) {
       case ReportKind.user:
-        return _UserReport(trip: trip, store: store);
+        return _UserReport(trip: trip, store: store, expenses: expenses);
       case ReportKind.tripFull:
-        return _TripFullReport(trip: trip, store: store);
+        return _TripFullReport(trip: trip, store: store, expenses: expenses);
       case ReportKind.financeLetter:
-        return _FinanceLetter(trip: trip, store: store);
+        return _FinanceLetter(trip: trip, store: store, expenses: expenses);
       case ReportKind.directorGeneral:
-        return _DgReport(trip: trip, store: store);
+        return _DgReport(trip: trip, store: store, expenses: expenses);
     }
   }
 }
@@ -359,21 +477,24 @@ class _ReportHeader extends StatelessWidget {
 }
 
 class _UserReport extends StatelessWidget {
-  const _UserReport({required this.trip, required this.store});
+  const _UserReport({
+    required this.trip,
+    required this.store,
+    required this.expenses,
+  });
   final Trip trip;
   final DemoStore store;
+  final List<Expense> expenses;
 
   @override
   Widget build(BuildContext context) {
     final String userId = trip.leaderId;
-    final List<Expense> expenses =
-        store.expenses
-            .where((Expense e) => e.tripId == trip.id && e.userId == userId)
-            .toList()
+    final List<Expense> filtered =
+        expenses.where((Expense e) => e.userId == userId).toList()
           ..sort((Expense a, Expense b) => a.occurredAt.compareTo(b.occurredAt));
 
     final Map<String, List<Expense>> bySource = <String, List<Expense>>{};
-    for (final Expense e in expenses) {
+    for (final Expense e in filtered) {
       bySource.putIfAbsent(e.sourceId, () => <Expense>[]).add(e);
     }
 
@@ -404,25 +525,29 @@ class _UserReport extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
         ],
         const Divider(),
-        _TotalLine(label: l.reports_body_total, amount: _sum(expenses, trip.currency)),
+        _TotalLine(label: l.reports_body_total, amount: _sum(filtered, trip.currency)),
       ],
     );
   }
 }
 
 class _TripFullReport extends StatelessWidget {
-  const _TripFullReport({required this.trip, required this.store});
+  const _TripFullReport({
+    required this.trip,
+    required this.store,
+    required this.expenses,
+  });
   final Trip trip;
   final DemoStore store;
+  final List<Expense> expenses;
 
   @override
   Widget build(BuildContext context) {
-    final List<Expense> expenses =
-        store.expenses.where((Expense e) => e.tripId == trip.id).toList()
-          ..sort((Expense a, Expense b) => a.occurredAt.compareTo(b.occurredAt));
+    final List<Expense> sorted = <Expense>[...expenses]
+      ..sort((Expense a, Expense b) => a.occurredAt.compareTo(b.occurredAt));
 
     final Map<String, List<Expense>> byUser = <String, List<Expense>>{};
-    for (final Expense e in expenses) {
+    for (final Expense e in sorted) {
       byUser.putIfAbsent(e.userId, () => <Expense>[]).add(e);
     }
 
@@ -471,18 +596,20 @@ class _TripFullReport extends StatelessWidget {
 }
 
 class _FinanceLetter extends ConsumerWidget {
-  const _FinanceLetter({required this.trip, required this.store});
+  const _FinanceLetter({
+    required this.trip,
+    required this.store,
+    required this.expenses,
+  });
   final Trip trip;
   final DemoStore store;
+  final List<Expense> expenses;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l = AppLocalizations.of(context);
     final List<Source> sources = store.sources;
     final Money totalBudget = trip.totalBudget;
-    final List<Expense> expenses = store.expenses
-        .where((Expense e) => e.tripId == trip.id)
-        .toList();
     final Money totalSpent = _sum(expenses, trip.currency);
     final Money returned = totalBudget - totalSpent;
 
@@ -525,7 +652,7 @@ class _FinanceLetter extends ConsumerWidget {
             label: s.localizedName(context),
             valueLabel: l.reports_body_source_advanced_spent(
               _advancedFor(s.id, trip).format(),
-              _spentFor(s.id, trip, store).format(),
+              _spentFor(s.id, trip, expenses).format(),
             ),
           ),
         ],
@@ -558,10 +685,10 @@ class _FinanceLetter extends ConsumerWidget {
     return total;
   }
 
-  Money _spentFor(String sourceId, Trip trip, DemoStore store) {
+  Money _spentFor(String sourceId, Trip trip, List<Expense> expenses) {
     Money total = Money.zero(trip.currency);
-    for (final Expense e in store.expenses) {
-      if (e.tripId != trip.id || e.sourceId != sourceId) continue;
+    for (final Expense e in expenses) {
+      if (e.sourceId != sourceId) continue;
       total += e.amount;
     }
     return total;
@@ -632,7 +759,15 @@ class _SignaturePanel extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // Compact overrides: global theme's
+                  // minimumSize=(double.infinity, 48) would push this
+                  // button past the Expanded(Text) and overflow the row.
                   FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      visualDensity: VisualDensity.compact,
+                    ),
                     icon: Icon(
                       isSigned ? Icons.refresh : Icons.draw_outlined,
                       size: 18,
@@ -670,15 +805,17 @@ class _SignaturePanel extends StatelessWidget {
 }
 
 class _DgReport extends StatelessWidget {
-  const _DgReport({required this.trip, required this.store});
+  const _DgReport({
+    required this.trip,
+    required this.store,
+    required this.expenses,
+  });
   final Trip trip;
   final DemoStore store;
+  final List<Expense> expenses;
 
   @override
   Widget build(BuildContext context) {
-    final List<Expense> expenses = store.expenses
-        .where((Expense e) => e.tripId == trip.id)
-        .toList();
 
     // Per-user
     final Map<String, Money> byUser = <String, Money>{};

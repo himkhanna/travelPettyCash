@@ -2,11 +2,14 @@ package ae.gov.pdd.pettycash.trip;
 
 import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.trip.dto.CreateTripRequest;
+import ae.gov.pdd.pettycash.trip.dto.PatchTripRequest;
 import ae.gov.pdd.pettycash.trip.dto.TripBalancesDto;
 import ae.gov.pdd.pettycash.trip.dto.TripDto;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,6 +64,31 @@ public class TripController {
         @AuthenticationPrincipal AuthenticatedUser caller
     ) {
         return service.close(id, caller);
+    }
+
+    @PatchMapping("/trips/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    public TripDto patch(
+        @PathVariable UUID id,
+        @Valid @RequestBody PatchTripRequest body,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        return service.update(id, body, caller);
+    }
+
+    /**
+     * Hard-delete a trip and its allocations + chat threads. Service guards
+     * against deleting trips that have expenses logged — those must be
+     * closed (read-only) instead. Admin-only.
+     */
+    @DeleteMapping("/trips/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> delete(
+        @PathVariable UUID id,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        service.delete(id, caller);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/trips/{id}/balances")

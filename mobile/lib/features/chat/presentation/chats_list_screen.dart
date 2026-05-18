@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import '../../../shared/widgets/trip_bottom_nav.dart';
 import '../../auth/application/auth_providers.dart';
 import '../application/chat_providers.dart';
 import '../domain/chat.dart';
@@ -29,6 +30,10 @@ class ChatsListScreen extends ConsumerWidget {
           onPressed: () => context.go('/m/trips/$tripId/dashboard'),
         ),
         title: const Text('CHATS'),
+      ),
+      bottomNavigationBar: TripBottomNav(
+        tripId: tripId,
+        currentLocation: '/m/trips/$tripId/chat',
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),

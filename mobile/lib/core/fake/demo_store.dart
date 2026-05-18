@@ -66,6 +66,14 @@ class DemoStore {
     _loaded = true;
   }
 
+  /// Called by HydrationService after a successful API pull so subsequent
+  /// {@code ensureLoaded} calls short-circuit instead of loading the JSON
+  /// assets on top of the API-sourced data.
+  void markLoadedAfterApiHydration() {
+    _loaded = true;
+    _loading = Future<void>.value();
+  }
+
   /// Resets the load flag and clears all collections — pair with
   /// markLoadedForTest in tests that need to leave a clean store behind.
   @visibleForTesting
