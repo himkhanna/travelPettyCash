@@ -195,8 +195,8 @@ CREATE TABLE audit_log (
     after_state   JSONB,
     at            TIMESTAMPTZ  NOT NULL DEFAULT now(),
     request_id    VARCHAR(64),
-    hash_prev     CHAR(64)     NOT NULL,
-    hash_self     CHAR(64)     NOT NULL
+    hash_prev     VARCHAR(64)  NOT NULL,
+    hash_self     VARCHAR(64)  NOT NULL
 );
 CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
 CREATE INDEX idx_audit_actor  ON audit_log(actor_id);

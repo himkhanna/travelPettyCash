@@ -59,7 +59,7 @@ public class Trip {
     @Column(name = "closed_at")
     private OffsetDateTime closedAt;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "trip_member", joinColumns = @JoinColumn(name = "trip_id"),
         indexes = @Index(name = "idx_trip_member_trip", columnList = "trip_id"))
     @Column(name = "user_id", nullable = false)

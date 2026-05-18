@@ -3,10 +3,10 @@ package ae.gov.pdd.pettycash.auth;
 import ae.gov.pdd.pettycash.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -29,7 +29,10 @@ public class JwtService {
         if (keyBytes.length < 32) {
             throw new IllegalStateException("pettycash.jwt.secret must be at least 32 bytes");
         }
-        this.key = Keys.hmacShaKeyFor(keyBytes);
+        // Pin HmacSHA256 regardless of key length — matches the resource-server
+        // decoder (SecurityConfig). Long keys are fine; HS256 just uses the
+        // first 32 bytes of entropy.
+        this.key = new SecretKeySpec(keyBytes, "HmacSHA256");
     }
 
     public String issueAccessToken(String subjectUserId, String username, String role) {
@@ -45,7 +48,7 @@ public class JwtService {
                 "role", role,
                 "scope", "access"
             ))
-            .signWith(key)
+            .signWith(key, Jwts.SIG.HS256)
             .compact();
     }
 
@@ -58,7 +61,7 @@ public class JwtService {
             .issuedAt(Date.from(now))
             .expiration(Date.from(exp))
             .claims(Map.of("scope", "refresh"))
-            .signWith(key)
+            .signWith(key, Jwts.SIG.HS256)
             .compact();
     }
 

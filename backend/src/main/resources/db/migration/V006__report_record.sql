@@ -8,7 +8,7 @@ CREATE TABLE report_record (
     format        VARCHAR(8)   NOT NULL,
     scope_user_id UUID         REFERENCES app_user(id),
     object_key    VARCHAR(512) NOT NULL,
-    sha256        CHAR(64)     NOT NULL,
+    sha256        VARCHAR(64)  NOT NULL,
     created_by    UUID         NOT NULL REFERENCES app_user(id),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );

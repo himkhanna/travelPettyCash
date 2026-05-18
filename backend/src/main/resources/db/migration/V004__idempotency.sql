@@ -4,7 +4,7 @@
 CREATE TABLE idempotency_record (
     key            VARCHAR(80)  NOT NULL,
     actor_id       UUID         NOT NULL,
-    request_hash   CHAR(64)     NOT NULL,
+    request_hash   VARCHAR(64)  NOT NULL,
     response_body  JSONB,
     status_code    INTEGER      NOT NULL,
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
