@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
@@ -37,6 +38,12 @@ class DemoStore {
   final List<ChatThread> chatThreads = <ChatThread>[];
   final List<ChatMessage> chatMessages = <ChatMessage>[];
   final List<AppNotification> notifications = <AppNotification>[];
+
+  /// Slice 3C — in-memory receipt byte store keyed by receipt object key.
+  /// Real backend stores these in S3 (MinIO on-prem); the fake echoes the
+  /// bytes as a `data:` URL from [receiptUrl]. Drained on [resetForTest].
+  final Map<String, Uint8List> receiptBytes = <String, Uint8List>{};
+  final Map<String, String> receiptMime = <String, String>{};
 
   /// Broadcasts whenever the store mutates, so providers can refresh.
   final StreamController<DemoStoreEvent> _events =
@@ -77,6 +84,8 @@ class DemoStore {
     chatThreads.clear();
     chatMessages.clear();
     notifications.clear();
+    receiptBytes.clear();
+    receiptMime.clear();
   }
 
   Future<void> _load() async {

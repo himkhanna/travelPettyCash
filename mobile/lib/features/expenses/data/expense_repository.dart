@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../../core/money/money.dart';
 import '../domain/expense.dart';
 
@@ -6,6 +8,20 @@ abstract class ExpenseRepository {
     required String tripId,
     String? userId,
     ExpenseFilter? filter,
+    String? cursor,
+    int limit = 20,
+  });
+
+  /// Cursor-paginated variant of [list], for infinite-scroll feeds.
+  ///
+  /// Backend wires up to `GET /api/v1/trips/{id}/expenses?cursor=...&limit=...`
+  /// and returns `{ items, nextCursor }`. Sort order is `occurredAt DESC,
+  /// id DESC`. Filters are not applied at this layer yet — the scoped
+  /// providers compose [scope] into the right userId before calling.
+  Future<ExpensePage> pageForTrip({
+    required String tripId,
+    required ExpenseSummaryScope scope,
+    String? userId,
     String? cursor,
     int limit = 20,
   });
@@ -38,6 +54,21 @@ abstract class ExpenseRepository {
   Future<List<Expense>> bulkReassignSource(Map<String, String> idToSourceId);
 
   Future<String> uploadReceipt(String expenseId, ReceiptUpload upload);
+
+  /// Slice 3C — direct byte upload. Real impl POSTs multipart to
+  /// `/api/v1/expenses/{id}/receipt` and returns the server-assigned
+  /// receiptObjectKey (S3 key). Fake impl stores bytes in DemoStore.
+  Future<String> uploadReceiptBytes(
+    String expenseId,
+    Uint8List bytes,
+    String filename,
+  );
+
+  /// Resolves a viewable URL for the receipt attached to [expenseId]. Real
+  /// impl calls `GET /api/v1/expenses/{id}/receipt` and returns the
+  /// presigned URL. Fake impl returns a `data:` URL backed by the bytes
+  /// queued via [uploadReceiptBytes].
+  Future<String?> receiptUrl(String expenseId);
 
   Future<List<ExpenseSummary>> summary({
     required String tripId,

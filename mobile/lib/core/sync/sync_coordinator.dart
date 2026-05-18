@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/expenses/application/pending_receipt_uploads.dart';
 import '../../features/expenses/domain/expense.dart';
 import '../fake/demo_store.dart';
 import '../fake/fake_config.dart';
@@ -14,13 +15,19 @@ import '../fake/fake_config.dart';
 /// drain pending_expenses one at a time with a short delay so the UI can
 /// reflect progress.
 class SyncCoordinator extends ChangeNotifier {
-  SyncCoordinator(this._store, this._cfg) {
+  SyncCoordinator(this._store, this._cfg, {this.onAfterExpenseDrain}) {
     _cfg.addListener(_onConfigChange);
     _wasOffline = _cfg.offlineMode;
   }
 
   final DemoStore _store;
   final FakeConfig _cfg;
+
+  /// Optional hook fired after every expense in the pending queue has been
+  /// accepted by the server. Slice 3C wires this to drain queued receipt
+  /// uploads, since a receipt cannot be uploaded until its parent expense
+  /// has a real id on the server. Errors are not propagated.
+  final Future<void> Function()? onAfterExpenseDrain;
 
   bool _wasOffline = false;
   bool _syncing = false;
@@ -85,6 +92,15 @@ class SyncCoordinator extends ChangeNotifier {
       _remaining = 0;
       notifyListeners();
     }
+    // Run after-drain hook outside the syncing flag so the receipt drain
+    // can show its own progress without confusing pendingCount.
+    if (onAfterExpenseDrain != null) {
+      try {
+        await onAfterExpenseDrain!();
+      } catch (_) {
+        // Best-effort. The receipt queue keeps its order on failure.
+      }
+    }
   }
 
   @override
@@ -99,6 +115,8 @@ final Provider<SyncCoordinator> syncCoordinatorProvider =
       final SyncCoordinator c = SyncCoordinator(
         ref.watch(demoStoreProvider),
         ref.watch(fakeConfigProvider),
+        // Slice 3C — after expenses sync, attempt the receipt drain.
+        onAfterExpenseDrain: () => drainPendingReceiptUploads(ref.read),
       );
       ref.onDispose(c.dispose);
       return c;

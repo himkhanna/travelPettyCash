@@ -82,6 +82,20 @@ class Expense {
   }
 }
 
+/// A single page of expenses with an optional cursor for the next page.
+///
+/// Cursor pagination contract (mirrors backend `GET /trips/{id}/expenses`):
+/// `nextCursor == null` means the caller has reached the end of the feed.
+/// Items are already sorted server-side (`occurredAt DESC, id DESC`).
+class ExpensePage {
+  const ExpensePage({required this.items, required this.nextCursor});
+
+  final List<Expense> items;
+  final String? nextCursor;
+
+  bool get hasMore => nextCursor != null;
+}
+
 class ExpenseCategory {
   const ExpenseCategory({
     required this.code,

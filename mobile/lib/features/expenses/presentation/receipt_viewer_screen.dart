@@ -6,15 +6,15 @@ import '../../../app/theme.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../application/expenses_providers.dart';
 import '../data/expense_repository.dart';
-import '../domain/expense.dart';
 
 /// Out-of-inventory: full-screen receipt viewer. Opened from the "VIEW
 /// RECEIPT" button on screen #9. Pinch-to-zoom via [InteractiveViewer].
 ///
-/// The receipt URL is sourced from `expense.receiptObjectKey`. In production
-/// this is an S3 object key that the backend resolves into a signed URL via
-/// `GET /expenses/:id/receipt`. The fake repo returns either a `blob:` URL
-/// (image_picker on web) or a placeholder asset key.
+/// Slice 3C — the URL is sourced via [ExpenseRepository.receiptUrl], which
+/// the real backend resolves to a presigned URL from
+/// `GET /api/v1/expenses/{id}/receipt`. The fake returns a `data:` URL
+/// backed by the bytes that the [pendingReceiptUploadsProvider] queue
+/// (or the eager online path) put into [DemoStore.receiptBytes].
 class ReceiptViewerScreen extends ConsumerStatefulWidget {
   const ReceiptViewerScreen({
     super.key,
@@ -31,8 +31,23 @@ class ReceiptViewerScreen extends ConsumerStatefulWidget {
 }
 
 class _ReceiptViewerScreenState extends ConsumerState<ReceiptViewerScreen> {
-  late final Future<Expense> _expenseFuture =
-      ref.read(expenseRepositoryProvider).byId(widget.expenseId);
+  late Future<String?> _urlFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlFuture = _load();
+  }
+
+  Future<String?> _load() {
+    return ref.read(expenseRepositoryProvider).receiptUrl(widget.expenseId);
+  }
+
+  void _retry() {
+    setState(() {
+      _urlFuture = _load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,18 +66,20 @@ class _ReceiptViewerScreenState extends ConsumerState<ReceiptViewerScreen> {
         ),
         title: Text(l.receipt_viewer_title),
       ),
-      body: FutureBuilder<Expense>(
-        future: _expenseFuture,
-        builder: (BuildContext context, AsyncSnapshot<Expense> snap) {
+      body: FutureBuilder<String?>(
+        future: _urlFuture,
+        builder: (BuildContext context, AsyncSnapshot<String?> snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.white),
+            return _LoadingTile(message: l.receipt_loadingViewer);
+          }
+          if (snap.hasError) {
+            return _ErrorRetry(
+              message: l.receipt_viewer_unavailable,
+              retryLabel: l.common_retry,
+              onRetry: _retry,
             );
           }
-          if (snap.hasError || !snap.hasData) {
-            return _Unavailable(message: l.receipt_viewer_unavailable);
-          }
-          final String? url = signedReceiptUrl(snap.data!);
+          final String? url = snap.data;
           if (url == null) {
             return _Unavailable(message: l.receipt_viewer_unavailable);
           }
@@ -73,8 +90,11 @@ class _ReceiptViewerScreenState extends ConsumerState<ReceiptViewerScreen> {
               child: Image.network(
                 url,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
-                    _Unavailable(message: l.receipt_viewer_unavailable),
+                errorBuilder: (_, __, ___) => _ErrorRetry(
+                  message: l.receipt_viewer_unavailable,
+                  retryLabel: l.common_retry,
+                  onRetry: _retry,
+                ),
               ),
             ),
           );
@@ -84,21 +104,22 @@ class _ReceiptViewerScreenState extends ConsumerState<ReceiptViewerScreen> {
   }
 }
 
-/// Returns a viewable URL for the receipt attached to [expense], or null when
-/// the expense has no receipt at all. In production this hits the
-/// `GET /expenses/:id/receipt` endpoint and returns a signed URL; the demo
-/// echoes the locally-attached `blob:` URL from image_picker, or the asset
-/// path for seed expenses.
-String? signedReceiptUrl(Expense expense) {
-  final String? key = expense.receiptObjectKey;
-  if (key == null || key.isEmpty) return null;
-  if (key.startsWith('blob:') || key.startsWith('http')) return key;
-  // Seed receipts ship under assets/demo/receipts/. They aren't fetchable via
-  // Image.network in production, but on web the asset path works as a
-  // relative URL when the app is served from the same origin.
-  if (key.startsWith('assets/')) return key;
-  // Stub: pretend we hit a signed-URL endpoint.
-  return 'https://demo.invalid/$key';
+class _LoadingTile extends StatelessWidget {
+  const _LoadingTile({required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const CircularProgressIndicator(color: Colors.white),
+          const SizedBox(height: AppSpacing.md),
+          Text(message, style: const TextStyle(color: Colors.white70)),
+        ],
+      ),
+    );
+  }
 }
 
 class _Unavailable extends StatelessWidget {
@@ -122,6 +143,50 @@ class _Unavailable extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorRetry extends StatelessWidget {
+  const _ErrorRetry({
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+  });
+  final String message;
+  final String retryLabel;
+  final VoidCallback onRetry;
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsetsDirectional.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white54,
+              size: 48,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
+              ),
+              onPressed: onRetry,
+              child: Text(retryLabel),
             ),
           ],
         ),

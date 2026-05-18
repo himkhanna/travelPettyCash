@@ -132,6 +132,25 @@
   "@expense_list_saveCount": {
     "placeholders": { "count": { "type": "int" } }
   },
+  "expense_list_loadingMore": "Loading more…",
+  "expense_list_endOfList": "— END OF LIST —",
+
+  "receipt_uploadFailed": "Receipt didn't upload",
+  "receipt_uploadRetry": "RETRY",
+  "receipt_uploadPending": "Receipt pending upload",
+  "receipt_loadingViewer": "Loading receipt…",
+
+  "report_user": "USER REPORT",
+  "report_trip": "TRIP REPORT",
+  "report_finance": "FINANCE LETTER",
+  "report_dg": "DG REPORT",
+  "report_format_xlsx": "XLSX",
+  "report_format_pdf": "PDF",
+  "report_generate": "GENERATE",
+  "report_download": "DOWNLOAD",
+  "report_generating": "Generating…",
+  "report_signing_deferred": "Signing pending — see ADR-003.",
+  "report_copiedLink": "Download link copied to clipboard.",
 
   "receipt_viewer_title": "RECEIPT",
   "receipt_viewer_unavailable": "Receipt image is not available.",

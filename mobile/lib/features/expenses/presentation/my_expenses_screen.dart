@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/sync_status_banner.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
 import '../../auth/application/auth_providers.dart';
@@ -11,12 +12,20 @@ import '../../funds/application/funds_providers.dart';
 import '../../funds/domain/funding.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
+import '../application/expense_paging_controller.dart';
 import '../application/expenses_providers.dart';
+import '../application/pending_receipt_uploads.dart';
+import '../data/expense_repository.dart';
 import '../domain/expense.dart';
 import 'widgets/expense_filter_sheet.dart';
 
 /// Screen-inventory #7 — My Expenses list with filter (#8) and bulk source
 /// reassignment (#25).
+///
+/// Slice 3A: list is now cursor-paginated via [pagingControllerProvider].
+/// The previous one-shot fetch is replaced with a [ListView.builder] that
+/// asks the controller for the next page when the viewport gets within
+/// 200px of the bottom. Pull-to-refresh resets the cursor.
 class MyExpensesScreen extends ConsumerStatefulWidget {
   const MyExpensesScreen({super.key, required this.tripId});
   final String tripId;
@@ -29,12 +38,37 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
   bool _editMode = false;
   final Map<String, String> _pendingSourceChange = <String, String>{};
   bool _saving = false;
+  final ScrollController _scrollCtrl = ScrollController();
+
+  ExpensePagingKey get _key =>
+      ExpensePagingKey(tripId: widget.tripId, scope: ExpenseSummaryScope.mine);
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final double remaining =
+        _scrollCtrl.position.maxScrollExtent - _scrollCtrl.position.pixels;
+    if (remaining < 200) {
+      ref.read(pagingControllerProvider(_key).notifier).loadMore();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<List<Expense>> expenses = ref.watch(
-      myExpensesProvider(widget.tripId),
-    );
+    final ExpensePagingState paging =
+        ref.watch(pagingControllerProvider(_key));
     final AsyncValue<Trip> tripAsync = ref.watch(
       tripDetailProvider(widget.tripId),
     );
@@ -107,41 +141,30 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
           if (filter.count > 0 && !_editMode)
             _ActiveFilterChip(filter: filter, tripId: widget.tripId),
           Expanded(
-            child: expenses.when(
+            child: tripAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (Object e, _) => Center(child: Text('Error: $e')),
-              data: (List<Expense> rows) => tripAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (Object e, _) => Center(child: Text('Error: $e')),
-                data: (Trip trip) => rows.isEmpty
-                    ? const _EmptyState()
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        itemCount: rows.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: AppSpacing.sm),
-                        itemBuilder: (BuildContext context, int i) {
-                          final Expense e = rows[i];
-                          return _ExpenseRow(
-                            expense: e,
-                            trip: trip,
-                            editMode: _editMode,
-                            pendingSourceId: _pendingSourceChange[e.id],
-                            onTap: _editMode
-                                ? null
-                                : () => context.go(
-                                    '/m/trips/${widget.tripId}/expenses/${e.id}',
-                                  ),
-                            onChangeSource: (String newId) => setState(() {
-                              if (newId == e.sourceId) {
-                                _pendingSourceChange.remove(e.id);
-                              } else {
-                                _pendingSourceChange[e.id] = newId;
-                              }
-                            }),
-                          );
-                        },
-                      ),
+              data: (Trip trip) => _PagedList(
+                paging: paging,
+                trip: trip,
+                scrollCtrl: _scrollCtrl,
+                filter: filter,
+                editMode: _editMode,
+                pendingSourceChange: _pendingSourceChange,
+                onTapRow: (Expense e) => context.go(
+                  '/m/trips/${widget.tripId}/expenses/${e.id}',
+                ),
+                onChangeSource: (Expense e, String newId) =>
+                    setState(() {
+                  if (newId == e.sourceId) {
+                    _pendingSourceChange.remove(e.id);
+                  } else {
+                    _pendingSourceChange[e.id] = newId;
+                  }
+                }),
+                onRefresh: () => ref
+                    .read(pagingControllerProvider(_key).notifier)
+                    .refresh(),
               ),
             ),
           ),
@@ -160,7 +183,7 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
       await ref
           .read(expenseRepositoryProvider)
           .bulkReassignSource(_pendingSourceChange);
-      ref.invalidate(myExpensesProvider(widget.tripId));
+      ref.read(pagingControllerProvider(_key).notifier).refresh();
       ref.invalidate(tripBalancesProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -182,6 +205,166 @@ class _MyExpensesScreenState extends ConsumerState<MyExpensesScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+/// The list itself, factored out so [MyExpensesScreen] focuses on chrome.
+class _PagedList extends StatelessWidget {
+  const _PagedList({
+    required this.paging,
+    required this.trip,
+    required this.scrollCtrl,
+    required this.filter,
+    required this.editMode,
+    required this.pendingSourceChange,
+    required this.onTapRow,
+    required this.onChangeSource,
+    required this.onRefresh,
+  });
+
+  final ExpensePagingState paging;
+  final Trip trip;
+  final ScrollController scrollCtrl;
+  final ExpenseFilterState filter;
+  final bool editMode;
+  final Map<String, String> pendingSourceChange;
+  final ValueChanged<Expense> onTapRow;
+  final void Function(Expense expense, String newSourceId) onChangeSource;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+
+    if (paging.loading && paging.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (paging.error != null && paging.items.isEmpty) {
+      return Center(child: Text('${l.common_error}: ${paging.error}'));
+    }
+
+    // Filters apply client-side over the loaded items. The backend cursor
+    // contract doesn't carry filter args yet (deferred — see comment on
+    // [ExpenseRepository.pageForTrip]); composing filter-aware pagination
+    // is a Phase 3 server task.
+    final List<Expense> rows =
+        filter.isEmpty ? paging.items : _applyFilter(paging.items, filter);
+
+    if (rows.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          children: <Widget>[
+            const SizedBox(height: 80),
+            Center(
+              child: Text(
+                l.expense_list_empty,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final int footerCount = _shouldShowFooter(paging) ? 1 : 0;
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.separated(
+        controller: scrollCtrl,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        itemCount: rows.length + footerCount,
+        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (BuildContext context, int i) {
+          if (i >= rows.length) return _PagingFooter(paging: paging);
+          final Expense e = rows[i];
+          return _ExpenseRow(
+            expense: e,
+            trip: trip,
+            editMode: editMode,
+            pendingSourceId: pendingSourceChange[e.id],
+            onTap: editMode ? null : () => onTapRow(e),
+            onChangeSource: (String newId) => onChangeSource(e, newId),
+          );
+        },
+      ),
+    );
+  }
+
+  bool _shouldShowFooter(ExpensePagingState p) =>
+      p.loadingMore || (!p.hasMore && p.items.isNotEmpty);
+
+  List<Expense> _applyFilter(
+    List<Expense> items,
+    ExpenseFilterState filter,
+  ) {
+    return items.where((Expense e) {
+      if (filter.categoryCodes.isNotEmpty &&
+          !filter.categoryCodes.contains(e.categoryCode)) {
+        return false;
+      }
+      if (filter.sourceIds.isNotEmpty &&
+          !filter.sourceIds.contains(e.sourceId)) {
+        return false;
+      }
+      if (filter.memberIds.isNotEmpty &&
+          !filter.memberIds.contains(e.userId)) {
+        return false;
+      }
+      if (filter.from != null && e.occurredAt.isBefore(filter.from!)) {
+        return false;
+      }
+      if (filter.to != null && e.occurredAt.isAfter(filter.to!)) {
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
+  }
+}
+
+class _PagingFooter extends StatelessWidget {
+  const _PagingFooter({required this.paging});
+  final ExpensePagingState paging;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    if (paging.loadingMore) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              l.expense_list_loadingMore,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Center(
+        child: Text(
+          l.expense_list_endOfList,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppColors.textSecondary,
+                letterSpacing: 1.4,
+              ),
+        ),
+      ),
+    );
   }
 }
 
@@ -418,6 +601,12 @@ class _ExpenseRow extends ConsumerWidget {
                       const SizedBox(height: 6),
                       const _PendingChip(),
                     ],
+                    if (ref
+                        .watch(pendingReceiptExpenseIdsProvider)
+                        .contains(expense.id)) ...<Widget>[
+                      const SizedBox(height: 6),
+                      const _PendingReceiptChip(),
+                    ],
                   ],
                 ),
               ),
@@ -561,31 +750,37 @@ class _PendingChip extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+/// Slice 3C — sibling chip to [_PendingChip] when the receipt for an
+/// expense is queued but the parent expense itself has already synced (or
+/// when an online upload failed and is awaiting retry).
+class _PendingReceiptChip extends StatelessWidget {
+  const _PendingReceiptChip();
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              Icons.receipt_long_outlined,
-              size: 48,
-              color: AppColors.goldOlive,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'No expenses for the current filter.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
+    final AppLocalizations l = AppLocalizations.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.goldOlive.withValues(alpha: 0.18),
+        borderRadius: const BorderRadius.all(AppRadii.chip),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(
+            Icons.cloud_upload_outlined,
+            size: 13,
+            color: AppColors.goldOlive,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            l.receipt_uploadPending,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.goldOlive,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
       ),
     );
   }

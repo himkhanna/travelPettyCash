@@ -4,26 +4,64 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/sync_status_banner.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
-import '../application/expenses_providers.dart';
+import '../application/expense_paging_controller.dart';
+import '../data/expense_repository.dart';
 import '../domain/expense.dart';
 import 'widgets/expense_filter_sheet.dart';
 
 /// Screen-inventory #26 — Trip Expenses (all members) for Leader/Admin/SuperAdmin.
-class TripExpensesScreen extends ConsumerWidget {
+///
+/// Slice 3A: cursor-paginated infinite scroll. See [pagingControllerProvider]
+/// for the state machine.
+class TripExpensesScreen extends ConsumerStatefulWidget {
   const TripExpensesScreen({super.key, required this.tripId});
   final String tripId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<Expense>> async = ref.watch(
-      tripExpensesProvider(tripId),
-    );
-    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
-    final ExpenseFilterState filter = ref.watch(expenseFilterProvider(tripId));
+  ConsumerState<TripExpensesScreen> createState() =>
+      _TripExpensesScreenState();
+}
+
+class _TripExpensesScreenState extends ConsumerState<TripExpensesScreen> {
+  final ScrollController _scrollCtrl = ScrollController();
+
+  ExpensePagingKey get _key =>
+      ExpensePagingKey(tripId: widget.tripId, scope: ExpenseSummaryScope.all);
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final double remaining =
+        _scrollCtrl.position.maxScrollExtent - _scrollCtrl.position.pixels;
+    if (remaining < 200) {
+      ref.read(pagingControllerProvider(_key).notifier).loadMore();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ExpensePagingState paging =
+        ref.watch(pagingControllerProvider(_key));
+    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(widget.tripId));
+    final ExpenseFilterState filter =
+        ref.watch(expenseFilterProvider(widget.tripId));
     final DemoStore store = ref.read(demoStoreProvider);
 
     return Scaffold(
@@ -34,14 +72,14 @@ class TripExpensesScreen extends ConsumerWidget {
             icon: const Icon(Icons.donut_large_outlined),
             tooltip: 'Chart view',
             onPressed: () => context.go(
-              '/m/trips/$tripId/expenses/all/chart',
+              '/m/trips/${widget.tripId}/expenses/all/chart',
             ),
           ),
           _FilterButton(
             count: filter.count,
             onTap: () => showExpenseFilterSheet(
               context,
-              tripId: tripId,
+              tripId: widget.tripId,
               showMembers: true,
             ),
           ),
@@ -50,7 +88,7 @@ class TripExpensesScreen extends ConsumerWidget {
       body: Column(
         children: <Widget>[
           const SyncStatusBanner(),
-          _ScopeTabs(tripId: tripId, active: 'all'),
+          _ScopeTabs(tripId: widget.tripId, active: 'all'),
           if (filter.count > 0)
             Container(
               padding: const EdgeInsets.symmetric(
@@ -76,47 +114,183 @@ class TripExpensesScreen extends ConsumerWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () =>
-                        ref.read(expenseFilterProvider(tripId).notifier).state =
-                            const ExpenseFilterState(),
+                    onPressed: () => ref
+                            .read(expenseFilterProvider(widget.tripId).notifier)
+                            .state =
+                        const ExpenseFilterState(),
                     child: const Text('CLEAR'),
                   ),
                 ],
               ),
             ),
           Expanded(
-            child: async.when(
+            child: tripAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (Object e, _) => Center(child: Text('Error: $e')),
-              data: (List<Expense> rows) => tripAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (Object e, _) => Center(child: Text('Error: $e')),
-                data: (Trip trip) => rows.isEmpty
-                    ? const _EmptyState()
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        itemCount: rows.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: AppSpacing.sm),
-                        itemBuilder: (BuildContext context, int i) {
-                          final Expense e = rows[i];
-                          return _ExpenseRow(
-                            expense: e,
-                            store: store,
-                            onTap: () => context.go(
-                              '/m/trips/$tripId/expenses/${e.id}',
-                            ),
-                          );
-                        },
-                      ),
+              data: (Trip trip) => _PagedTripList(
+                paging: paging,
+                trip: trip,
+                store: store,
+                filter: filter,
+                scrollCtrl: _scrollCtrl,
+                onTapRow: (Expense e) => context.go(
+                  '/m/trips/${widget.tripId}/expenses/${e.id}',
+                ),
+                onRefresh: () => ref
+                    .read(pagingControllerProvider(_key).notifier)
+                    .refresh(),
               ),
             ),
           ),
         ],
       ),
       bottomNavigationBar: TripBottomNav(
-        tripId: tripId,
+        tripId: widget.tripId,
         currentLocation: GoRouterState.of(context).matchedLocation,
+      ),
+    );
+  }
+}
+
+class _PagedTripList extends StatelessWidget {
+  const _PagedTripList({
+    required this.paging,
+    required this.trip,
+    required this.store,
+    required this.filter,
+    required this.scrollCtrl,
+    required this.onTapRow,
+    required this.onRefresh,
+  });
+
+  final ExpensePagingState paging;
+  final Trip trip;
+  final DemoStore store;
+  final ExpenseFilterState filter;
+  final ScrollController scrollCtrl;
+  final ValueChanged<Expense> onTapRow;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    if (paging.loading && paging.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (paging.error != null && paging.items.isEmpty) {
+      return Center(child: Text('${l.common_error}: ${paging.error}'));
+    }
+    final List<Expense> rows =
+        filter.isEmpty ? paging.items : _applyFilter(paging.items, filter);
+    if (rows.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          children: <Widget>[
+            const SizedBox(height: 80),
+            Center(
+              child: Text(
+                l.expense_list_empty,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final int footerCount =
+        paging.loadingMore || (!paging.hasMore && paging.items.isNotEmpty)
+            ? 1
+            : 0;
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.separated(
+        controller: scrollCtrl,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        itemCount: rows.length + footerCount,
+        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (BuildContext context, int i) {
+          if (i >= rows.length) return _PagingFooter(paging: paging);
+          final Expense e = rows[i];
+          return _ExpenseRow(
+            expense: e,
+            store: store,
+            onTap: () => onTapRow(e),
+          );
+        },
+      ),
+    );
+  }
+
+  List<Expense> _applyFilter(
+    List<Expense> items,
+    ExpenseFilterState filter,
+  ) {
+    return items.where((Expense e) {
+      if (filter.categoryCodes.isNotEmpty &&
+          !filter.categoryCodes.contains(e.categoryCode)) {
+        return false;
+      }
+      if (filter.sourceIds.isNotEmpty &&
+          !filter.sourceIds.contains(e.sourceId)) {
+        return false;
+      }
+      if (filter.memberIds.isNotEmpty &&
+          !filter.memberIds.contains(e.userId)) {
+        return false;
+      }
+      if (filter.from != null && e.occurredAt.isBefore(filter.from!)) {
+        return false;
+      }
+      if (filter.to != null && e.occurredAt.isAfter(filter.to!)) {
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
+  }
+}
+
+class _PagingFooter extends StatelessWidget {
+  const _PagingFooter({required this.paging});
+  final ExpensePagingState paging;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    if (paging.loadingMore) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              l.expense_list_loadingMore,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Center(
+        child: Text(
+          l.expense_list_endOfList,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppColors.textSecondary,
+                letterSpacing: 1.4,
+              ),
+        ),
       ),
     );
   }
@@ -350,25 +524,6 @@ class _AmountCircle extends StatelessWidget {
               color: AppColors.brandBrown,
               fontWeight: FontWeight.w700,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Text(
-          'No expenses match the current filter.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
           ),
         ),
       ),

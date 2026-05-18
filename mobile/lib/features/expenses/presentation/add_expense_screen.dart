@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/fake/fake_config.dart';
 import '../../../core/money/money.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/ocr_disclaimer_banner.dart';
@@ -18,6 +19,7 @@ import '../../funds/domain/funding.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import '../application/expenses_providers.dart';
+import '../application/pending_receipt_uploads.dart';
 import '../data/receipt_scan_repository.dart';
 import '../domain/expense.dart';
 import '../domain/receipt_scan_result.dart';
@@ -302,13 +304,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             amount: amount,
             details: _detailsCtrl.text.trim(),
             occurredAt: _occurredAt,
-            // The XFile.path on web is a blob: URL — directly viewable via
-            // Image.network in the detail screen. On a real backend this
-            // becomes an S3 object key after the receipt upload step.
-            receiptObjectKey: _receiptFile?.path,
+            // We do NOT set receiptObjectKey here — slice 3C does it via
+            // [uploadReceiptBytes] below so the key reflects the real S3
+            // object the server allocates. For the offline path the receipt
+            // bytes are queued via [pendingReceiptUploadsProvider] and the
+            // SyncCoordinator drains them after expense sync.
+            receiptObjectKey: null,
             vendor: vendor.isEmpty ? null : vendor,
             idempotencyKey: _uuid.v4(),
           );
+
+      if (_receiptFile != null) {
+        await _attachReceipt(e, _receiptFile!);
+      }
+
       // Refresh dependent providers.
       ref.invalidate(myExpensesProvider(trip.id));
       ref.invalidate(
@@ -320,6 +329,53 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _toast('${l.common_error}: $err');
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// Attaches the picked receipt to the freshly-created expense. Three paths:
+  ///   1. Offline — queue the bytes for the SyncCoordinator to drain later.
+  ///   2. Online success — uploadReceiptBytes patches the expense in place.
+  ///   3. Online failure — show a snackbar with a RETRY action that
+  ///      re-attempts the same bytes. We deliberately do NOT fail the
+  ///      whole submission: the expense itself is already saved.
+  Future<void> _attachReceipt(Expense expense, XFile file) async {
+    final Uint8List bytes = await file.readAsBytes();
+    final FakeConfig cfg = ref.read(fakeConfigProvider);
+    if (cfg.offlineMode) {
+      ref.read(pendingReceiptUploadsProvider).enqueue(
+            PendingReceiptUpload(
+              expenseId: expense.id,
+              bytes: bytes,
+              filename: file.name,
+            ),
+          );
+      return;
+    }
+    await _doReceiptUpload(expense.id, bytes, file.name);
+  }
+
+  Future<void> _doReceiptUpload(
+    String expenseId,
+    Uint8List bytes,
+    String filename,
+  ) async {
+    final AppLocalizations l = AppLocalizations.of(context);
+    try {
+      await ref
+          .read(expenseRepositoryProvider)
+          .uploadReceiptBytes(expenseId, bytes, filename);
+    } catch (_) {
+      if (!mounted) return;
+      // The expense is safe — only the receipt failed. Offer a retry.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l.receipt_uploadFailed),
+          action: SnackBarAction(
+            label: l.receipt_uploadRetry,
+            onPressed: () => _doReceiptUpload(expenseId, bytes, filename),
+          ),
+        ),
+      );
     }
   }
 

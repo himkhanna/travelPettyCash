@@ -131,6 +131,25 @@
   "@expense_list_saveCount": {
     "placeholders": { "count": { "type": "int" } }
   },
+  "expense_list_loadingMore": "جاري تحميل المزيد…",
+  "expense_list_endOfList": "— نهاية القائمة —",
+
+  "receipt_uploadFailed": "تعذّر رفع الإيصال",
+  "receipt_uploadRetry": "إعادة المحاولة",
+  "receipt_uploadPending": "الإيصال في انتظار الرفع",
+  "receipt_loadingViewer": "جاري تحميل الإيصال…",
+
+  "report_user": "تقرير المستخدم",
+  "report_trip": "تقرير الرحلة",
+  "report_finance": "خطاب الشؤون المالية",
+  "report_dg": "تقرير المدير العام",
+  "report_format_xlsx": "XLSX",
+  "report_format_pdf": "PDF",
+  "report_generate": "إنشاء",
+  "report_download": "تنزيل",
+  "report_generating": "جاري الإنشاء…",
+  "report_signing_deferred": "التوقيع مؤجَّل — راجع ADR-003.",
+  "report_copiedLink": "تم نسخ رابط التنزيل إلى الحافظة.",
 
   "receipt_viewer_title": "الإيصال",
   "receipt_viewer_unavailable": "صورة الإيصال غير متاحة.",
