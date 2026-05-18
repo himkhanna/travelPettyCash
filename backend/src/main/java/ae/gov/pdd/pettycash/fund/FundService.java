@@ -4,11 +4,19 @@ import ae.gov.pdd.pettycash.audit.AuditService;
 import ae.gov.pdd.pettycash.auth.CurrentUser;
 import ae.gov.pdd.pettycash.common.ApiException;
 import ae.gov.pdd.pettycash.common.Money;
+import ae.gov.pdd.pettycash.notification.Notification;
+import ae.gov.pdd.pettycash.notification.NotificationController;
+import ae.gov.pdd.pettycash.notification.NotificationPublisher;
+import ae.gov.pdd.pettycash.notification.NotificationRepository;
+import ae.gov.pdd.pettycash.notification.NotificationState;
+import ae.gov.pdd.pettycash.notification.NotificationType;
 import ae.gov.pdd.pettycash.trip.Trip;
 import ae.gov.pdd.pettycash.trip.TripRepository;
 import ae.gov.pdd.pettycash.user.Role;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -25,16 +33,22 @@ public class FundService {
     private final SourceRepository sources;
     private final AuditService audit;
     private final CurrentUser current;
+    private final NotificationRepository notifications;
+    private final NotificationPublisher notificationPublisher;
 
     public FundService(AllocationRepository allocations, TransferRepository transfers,
                        TripRepository trips, SourceRepository sources,
-                       AuditService audit, CurrentUser current) {
+                       AuditService audit, CurrentUser current,
+                       NotificationRepository notifications,
+                       NotificationPublisher notificationPublisher) {
         this.allocations = allocations;
         this.transfers = transfers;
         this.trips = trips;
         this.sources = sources;
         this.audit = audit;
         this.current = current;
+        this.notifications = notifications;
+        this.notificationPublisher = notificationPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -83,6 +97,15 @@ public class FundService {
                     "amount", saved.getAmount().amount(),
                     "currency", saved.getAmount().currency()
                 ));
+            // Notify recipient. See CLAUDE.md §5 — ALLOCATION_RECEIVED.
+            publishNotification(saved.getToUserId(), NotificationType.ALLOCATION_RECEIVED, true, Map.of(
+                "allocationId", saved.getId().toString(),
+                "tripId", tripId.toString(),
+                "fromUserId", saved.getFromUserId() == null ? "" : saved.getFromUserId().toString(),
+                "sourceId", saved.getSourceId().toString(),
+                "amount", saved.getAmount().amount(),
+                "currency", saved.getAmount().currency()
+            ));
             created.add(saved);
         }
         return created;
@@ -105,7 +128,20 @@ public class FundService {
         };
         a.setStatus(next);
         a.setRespondedAt(OffsetDateTime.now());
-        return allocations.save(a);
+        Allocation saved = allocations.save(a);
+        // Notify the original sender (admin pool allocations have null fromUserId — skip then).
+        if (saved.getFromUserId() != null) {
+            NotificationType notifType = next == AllocationStatus.ACCEPTED
+                ? NotificationType.TRANSFER_ACCEPTED
+                : NotificationType.ALLOCATION_RECEIVED;
+            publishNotification(saved.getFromUserId(), notifType, false, Map.of(
+                "allocationId", saved.getId().toString(),
+                "tripId", saved.getTripId().toString(),
+                "respondedBy", current.id().toString(),
+                "status", next.name()
+            ));
+        }
+        return saved;
     }
 
     @Transactional
@@ -131,6 +167,47 @@ public class FundService {
         t.setStatus(AllocationStatus.PENDING);
         t.setNote(req.note());
         t.setCreatedAt(OffsetDateTime.now());
-        return transfers.save(t);
+        Transfer saved = transfers.save(t);
+        publishNotification(saved.getToUserId(), NotificationType.TRANSFER_RECEIVED, true, Map.of(
+            "transferId", saved.getId().toString(),
+            "tripId", tripId.toString(),
+            "fromUserId", saved.getFromUserId().toString(),
+            "sourceId", saved.getSourceId().toString(),
+            "amount", saved.getAmount().amount(),
+            "currency", saved.getAmount().currency()
+        ));
+        return saved;
+    }
+
+    /**
+     * Persist a Notification row and fan out to any long-poll subscriber for
+     * {@code toUserId}. Publishing happens on TX commit so we don't notify on
+     * a row that was rolled back.
+     */
+    private void publishNotification(UUID toUserId, NotificationType type, boolean actionable,
+                                     Map<String, Object> payload) {
+        Notification n = new Notification();
+        n.setId(UUID.randomUUID());
+        n.setUserId(toUserId);
+        n.setType(type);
+        n.setPayload(payload);
+        n.setActionable(actionable);
+        n.setState(NotificationState.UNREAD);
+        n.setCreatedAt(OffsetDateTime.now());
+        Notification saved = notifications.save(n);
+        NotificationController.NotificationView view = NotificationController.NotificationView.from(saved);
+
+        // Publish AFTER commit so a rolled-back TX doesn't leak a notification to a
+        // long-poll subscriber. If no TX is active, publish immediately.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    notificationPublisher.publish(toUserId, view);
+                }
+            });
+        } else {
+            notificationPublisher.publish(toUserId, view);
+        }
     }
 }

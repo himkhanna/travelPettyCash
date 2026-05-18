@@ -2,9 +2,13 @@ package ae.gov.pdd.pettycash.notification;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
     List<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId);
+
+    /** Used by long-poll: notifications strictly newer than {@code since} for the given user. */
+    List<Notification> findByUserIdAndCreatedAtAfterOrderByCreatedAtAsc(UUID userId, OffsetDateTime since);
 }

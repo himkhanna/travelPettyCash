@@ -49,6 +49,11 @@ dependencies {
     implementation(platform("software.amazon.awssdk:bom:${property("awsSdkVersion")}"))
     implementation("software.amazon.awssdk:s3")
 
+    // Reports — see CLAUDE.md §10. OpenPDF over iText 7 for LGPL licence clarity
+    // in the gov-on-prem context (recorded in ADR-003 amendment).
+    implementation("org.apache.poi:poi-ooxml:5.3.0")
+    implementation("com.github.librepdf:openpdf:2.0.3")
+
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")

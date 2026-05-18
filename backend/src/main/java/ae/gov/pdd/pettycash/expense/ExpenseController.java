@@ -25,10 +25,9 @@ public class ExpenseController {
             @RequestParam(required = false, defaultValue = "all") String scope,
             @RequestParam(required = false) String cursor,
             @RequestParam(required = false, defaultValue = "20") int limit) {
-        // Phase-3 stub: simple list, no real cursor pagination yet.
-        var items = service.listForTrip(tripId, scope).stream()
-            .map(ExpenseDtos.ExpenseView::from).toList();
-        return new ExpenseDtos.ExpensePage(items, null);
+        // Cursor pagination per CLAUDE.md §9. Sort: (occurredAt DESC, id DESC).
+        // Default limit 20, max 100. Cursor is opaque base64; do not parse client-side.
+        return service.listPage(tripId, scope, cursor, limit);
     }
 
     @PostMapping("/trips/{tripId}/expenses")

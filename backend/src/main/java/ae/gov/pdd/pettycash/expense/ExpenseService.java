@@ -83,6 +83,48 @@ public class ExpenseService {
         return expenses.findByTripId(tripId);
     }
 
+    /**
+     * Cursor-paginated expense list. See CLAUDE.md §9 — cursor pagination is the
+     * canonical shape for the expense feed.
+     *
+     * <p>Page contains at most {@code limit} items, sorted by (occurredAt DESC, id DESC).
+     * When more rows exist, {@link ExpenseDtos.ExpensePage#nextCursor()} encodes the
+     * (occurredAt, id) of the last returned row; pass it back as {@code cursor} to
+     * fetch the next page. {@code nextCursor} is null on the final page.
+     *
+     * @param scope "mine" filters to current user; anything else returns all trip rows.
+     */
+    @Transactional(readOnly = true)
+    public ExpenseDtos.ExpensePage listPage(UUID tripId, String scope, String cursor, int limit) {
+        int capped = Math.max(1, Math.min(limit, 100));
+        // Fetch one extra row to detect whether another page exists without a second query.
+        org.springframework.data.domain.Pageable pageable =
+            org.springframework.data.domain.PageRequest.of(0, capped + 1);
+
+        boolean mine = "mine".equalsIgnoreCase(scope);
+        List<Expense> rows;
+        if (cursor == null || cursor.isBlank()) {
+            rows = mine
+                ? expenses.findFirstPageByTripIdAndUserId(tripId, current.id(), pageable)
+                : expenses.findFirstPageByTripId(tripId, pageable);
+        } else {
+            CursorCodec.Cursor c = CursorCodec.decode(cursor);
+            rows = mine
+                ? expenses.findPageByTripIdAndUserId(tripId, current.id(), c.occurredAt(), c.id(), pageable)
+                : expenses.findPageByTripId(tripId, c.occurredAt(), c.id(), pageable);
+        }
+
+        boolean hasMore = rows.size() > capped;
+        List<Expense> page = hasMore ? rows.subList(0, capped) : rows;
+        String next = null;
+        if (hasMore) {
+            Expense last = page.get(page.size() - 1);
+            next = CursorCodec.encode(last.getOccurredAt(), last.getId());
+        }
+        List<ExpenseDtos.ExpenseView> views = page.stream().map(ExpenseDtos.ExpenseView::from).toList();
+        return new ExpenseDtos.ExpensePage(views, next);
+    }
+
     @Transactional
     public Expense create(UUID tripId, ExpenseDtos.CreateExpenseRequest req) {
         Trip trip = trips.findById(tripId).orElseThrow(

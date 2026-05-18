@@ -162,6 +162,15 @@ paths:
   /trips/{tripId}/expenses:
     get:
       tags: [expenses]
+      summary: List expenses for a trip, cursor-paginated
+      description: |
+        Cursor pagination per CLAUDE.md §9. Rows ordered by
+        `(occurredAt DESC, id DESC)`. To fetch subsequent pages, echo the
+        `nextCursor` from the previous response back as the `cursor` query
+        param. Cursor is opaque base64 — clients must not parse it.
+        Returns `400 INVALID_CURSOR` on a malformed cursor.
+
+        `limit` is clamped to [1, 100]; default 20.
       parameters:
         - { $ref: '#/components/parameters/TripIdPath' }
         - in: query
@@ -169,13 +178,14 @@ paths:
           schema: { type: string }
         - in: query
           name: scope
-          schema: { type: string, enum: [mine, all] }
+          schema: { type: string, enum: [mine, all], default: all }
         - in: query
           name: cursor
+          description: Opaque cursor from a previous page's `nextCursor`. Omit on first page.
           schema: { type: string }
         - in: query
           name: limit
-          schema: { type: integer, default: 20, maximum: 100 }
+          schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
         - in: query
           name: categoryCode
           schema: { type: string }
@@ -593,6 +603,47 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ChatMessage' }
 
+  /chat/threads/{threadId}/poll:
+    get:
+      tags: [chat]
+      summary: Long-poll for new messages in a chat thread
+      description: |
+        Returns immediately if any messages exist with `sentAt > since` for
+        this thread. Otherwise hangs for up to `timeoutSeconds` (default 25,
+        max 30) and resolves when a peer posts, or with an empty `items`
+        array on timeout. Thread membership is enforced — non-participants
+        get `403 FORBIDDEN`.
+
+        Same single-instance caveat as `/notifications/poll`.
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: timeoutSeconds
+          schema: { type: integer, default: 25, minimum: 1, maximum: 30 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, serverNow]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatMessage' }
+                  serverNow:
+                    type: string
+                    format: date-time
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
   /notifications:
     get:
       tags: [notifications]
@@ -611,6 +662,46 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Notification' }
+
+  /notifications/poll:
+    get:
+      tags: [notifications]
+      summary: Long-poll for new notifications
+      description: |
+        Returns immediately if any notifications exist with
+        `createdAt > since` for the current user. Otherwise the request hangs
+        as an async `DeferredResult` for up to `timeoutSeconds` (default 25,
+        max 30) and resolves when a new notification is published, or with an
+        empty `items` array on timeout.
+
+        Send the response's `serverNow` back as the next call's `since` to
+        avoid client clock skew bouncing the window.
+
+        Single-instance fan-out only — horizontal scale will require Redis
+        Pub/Sub or Postgres LISTEN/NOTIFY (out of scope for v1).
+      parameters:
+        - in: query
+          name: since
+          description: ISO-8601 timestamp; only notifications strictly after this are returned. Defaults to now − 30s.
+          schema: { type: string, format: date-time }
+        - in: query
+          name: timeoutSeconds
+          schema: { type: integer, default: 25, minimum: 1, maximum: 30 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, serverNow]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notification' }
+                  serverNow:
+                    type: string
+                    format: date-time
 
   /notifications/{notificationId}/read:
     patch:
@@ -654,16 +745,35 @@ paths:
   /reports/trip/{tripId}:
     get:
       tags: [reports]
+      summary: Generate a report and return a 5-minute presigned download URL
+      description: |
+        Renders the report server-side, uploads bytes to MinIO under
+        `reports/{tripId}/{type}-{timestamp}.{ext}`, writes an `AuditLog`
+        row with the file's SHA-256, and returns a presigned GET URL.
+
+        Format gating per CLAUDE.md §10:
+        - `USER` — XLSX or PDF
+        - `TRIP` — XLSX only
+        - `FINANCE` — PDF only; watermarked "DRAFT — unsigned" pending ADR-003
+        - `DG` — PDF only
+
+        Permissions (§7): USER → own (LEADER may fetch any team member),
+        TRIP → LEADER (own trip) or ADMIN, FINANCE → ADMIN only,
+        DG → SUPER_ADMIN only. Enforced at both controller and service.
       parameters:
         - { $ref: '#/components/parameters/TripIdPath' }
         - in: query
+          name: type
+          required: true
+          schema: { type: string, enum: [USER, TRIP, FINANCE, DG] }
+        - in: query
           name: format
           required: true
-          schema: { type: string, enum: [xlsx, pdf] }
+          schema: { type: string, enum: [XLSX, PDF] }
         - in: query
-          name: scope
-          required: true
-          schema: { type: string, enum: [user, team, finance, dg] }
+          name: userId
+          description: Optional. Restricts USER/DG reports to a single user.
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: OK
@@ -671,22 +781,44 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [reportId, url, expiresAt, sha256]
                 properties:
-                  reportId: { type: string }
-                  signedUrl: { type: string }
-                  sha256: { type: string }
+                  reportId: { type: string, format: uuid }
+                  url:
+                    type: string
+                    description: Presigned GET URL valid for 5 minutes.
+                  expiresAt: { type: string, format: date-time }
+                  sha256: { type: string, description: SHA-256 hex of the bytes uploaded to MinIO. }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
 
   /reports/{reportId}/sign:
     post:
       tags: [reports]
+      summary: Digitally sign a generated report (deferred — see ADR-003)
+      description: |
+        Signing is still deferred pending the PDD HSM key-custody decision.
+        Endpoint returns `501 Not Implemented` with stable code
+        `SIGNING_DEFERRED`. The contract is fixed so mobile can be wired
+        against the final shape today.
       parameters:
         - in: path
           name: reportId
           required: true
-          schema: { type: string }
+          schema: { type: string, format: uuid }
       responses:
-        '200':
-          description: OK
+        '501':
+          description: Signing deferred
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                signingDeferred:
+                  summary: SIGNING_DEFERRED (501)
+                  value:
+                    code: SIGNING_DEFERRED
+                    detail: "Signing key custody pending — see ADR-003."
 
 components:
   securitySchemes:
