@@ -69,6 +69,7 @@ class SyncCoordinator extends ChangeNotifier {
           occurredAt: pending.occurredAt,
           createdAt: pending.createdAt,
           receiptObjectKey: pending.receiptObjectKey,
+          vendor: pending.vendor,
         );
         _store.expenses.add(accepted);
         _store.pendingExpenses.removeAt(0);

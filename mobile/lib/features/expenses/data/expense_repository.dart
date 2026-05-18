@@ -25,6 +25,7 @@ abstract class ExpenseRepository {
     required DateTime occurredAt,
     int quantity = 1,
     String? receiptObjectKey,
+    String? vendor,
     required String idempotencyKey,
   });
 

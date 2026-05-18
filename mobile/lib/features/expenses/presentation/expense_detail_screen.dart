@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../trips/application/trips_providers.dart';
@@ -24,6 +25,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l = AppLocalizations.of(context);
     final ExpenseRepository repo = ref.watch(expenseRepositoryProvider);
     final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
     final User? me = ref.watch(currentUserProvider).valueOrNull;
@@ -35,7 +37,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.close),
           onPressed: () => context.go('/m/trips/$tripId/expenses/mine'),
         ),
-        title: const Text('EXPENSE'),
+        title: Text(l.expense_detail_title),
       ),
       body: FutureBuilder<Expense>(
         future: repo.byId(expenseId),
@@ -43,7 +45,9 @@ class ExpenseDetailScreen extends ConsumerWidget {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
+          if (snap.hasError) {
+            return Center(child: Text('${l.common_error}: ${snap.error}'));
+          }
           final Expense e = snap.data!;
           final bool canEdit =
               me?.id == e.userId &&
@@ -108,24 +112,35 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                if (e.vendor != null && e.vendor!.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    e.vendor!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.xl),
                 _DetailRow(
                   icon: _iconForCategory(e.categoryCode),
-                  label: 'CATEGORY',
+                  label: l.expense_detail_category,
                   value: categoryName,
                   color: AppColors.forCategory(e.categoryCode),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _DetailRow(
                   icon: Icons.account_balance_wallet_outlined,
-                  label: 'SOURCE',
+                  label: l.expense_detail_source,
                   value: sourceName,
                   color: AppColors.brandBrown,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _DetailRow(
                   icon: Icons.notes_outlined,
-                  label: 'DETAILS',
+                  label: l.expense_detail_details,
                   value: e.details.isEmpty ? '—' : e.details,
                   color: AppColors.brandBrown,
                 ),
@@ -138,7 +153,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                       '/m/trips/$tripId/expenses/$expenseId/receipt',
                     ),
                     icon: const Icon(Icons.fullscreen),
-                    label: const Text('VIEW RECEIPT'),
+                    label: Text(l.expense_detail_viewReceipt),
                   ),
                 ],
                 if (e.pendingSync) ...<Widget>[
@@ -155,7 +170,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Text(
-                            'This expense is queued and will sync when you return online.',
+                            l.expense_detail_pendingBanner,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: AppColors.warning),
                           ),
@@ -234,11 +249,12 @@ class _ReceiptViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'RECEIPT',
+          l.expense_detail_receipt,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
             color: AppColors.textSecondary,
             letterSpacing: 1.2,
@@ -272,15 +288,19 @@ class _ReceiptViewer extends StatelessWidget {
       borderRadius: const BorderRadius.all(AppRadii.card),
       border: Border.all(color: AppColors.divider),
     ),
-    child: const Center(
+    child: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(Icons.image_outlined, size: 32, color: AppColors.textSecondary),
-          SizedBox(height: 6),
+          const Icon(
+            Icons.image_outlined,
+            size: 32,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(height: 6),
           Text(
-            'Receipt on file',
-            style: TextStyle(color: AppColors.textSecondary),
+            AppLocalizations.of(context).expense_detail_onFile,
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
         ],
       ),

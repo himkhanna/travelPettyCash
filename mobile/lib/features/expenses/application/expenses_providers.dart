@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
@@ -9,6 +10,8 @@ import '../data/category_repository.dart';
 import '../data/expense_repository.dart';
 import '../data/fake_category_repository.dart';
 import '../data/fake_expense_repository.dart';
+import '../data/fake_receipt_scan_repository.dart';
+import '../data/receipt_scan_repository.dart';
 import '../domain/expense.dart';
 import '../presentation/widgets/expense_filter_sheet.dart';
 
@@ -27,6 +30,30 @@ final Provider<CategoryRepository> categoryRepositoryProvider =
         ref.watch(fakeConfigProvider),
       ),
     );
+
+/// Backed by [FakeReceiptScanRepository] in the demo. Override this
+/// provider in widget tests to inject a stub scanner.
+final Provider<ReceiptScanRepository> receiptScanRepositoryProvider =
+    Provider<ReceiptScanRepository>(
+      (Ref ref) => FakeReceiptScanRepository(ref.watch(fakeConfigProvider)),
+    );
+
+/// Seam for testing the Add Expense OCR flow without a real camera.
+///
+/// Production code resolves to `ImagePicker().pickImage(source: ...)`;
+/// widget tests override this provider with a stub that returns a fake
+/// XFile (or null). Keeping it here means the screen does not import
+/// `image_picker_platform_interface`, and we avoid taking a dev-dep on
+/// the mock implementation just to drive widget tests.
+typedef ImagePickFn = Future<XFile?> Function(ImageSource source);
+
+final Provider<ImagePickFn> imagePickerProvider = Provider<ImagePickFn>(
+  (Ref ref) => (ImageSource source) => ImagePicker().pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1600,
+      ),
+);
 
 final FutureProvider<List<ExpenseCategory>> categoriesProvider =
     FutureProvider<List<ExpenseCategory>>(

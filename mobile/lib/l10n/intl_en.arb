@@ -77,6 +77,11 @@
   "expense_add_occurredAt": "OCCURRED AT",
   "expense_add_receipt": "RECEIPT",
   "expense_add_receiptButton": "ADD RECEIPT",
+  "expense_add_scanReceipt": "SCAN RECEIPT",
+  "expense_add_uploadGallery": "UPLOAD FROM GALLERY",
+  "expense_add_orFillManually": "or fill manually",
+  "expense_add_vendor": "VENDOR",
+  "expense_add_vendorHint": "Merchant or supplier (optional)",
   "expense_add_submit": "ADD EXPENSE",
   "expense_add_addMore": "ADD MORE",
   "expense_add_validation_amount": "Amount must be greater than 0",
@@ -90,6 +95,11 @@
   "@expense_add_pickFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
+
+  "ocr_disclaimer_title": "Please verify",
+  "ocr_disclaimer_body": "OCR result — verify all fields before submitting.",
+  "ocr_scanning": "Scanning receipt…",
+  "ocr_failed": "Couldn't read receipt — fill manually.",
 
   "expense_detail_title": "EXPENSE",
   "expense_detail_category": "CATEGORY",

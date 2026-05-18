@@ -76,6 +76,11 @@
   "expense_add_occurredAt": "تاريخ الصرف",
   "expense_add_receipt": "الإيصال",
   "expense_add_receiptButton": "إرفاق إيصال",
+  "expense_add_scanReceipt": "مسح الإيصال",
+  "expense_add_uploadGallery": "رفع من المعرض",
+  "expense_add_orFillManually": "أو املأ يدوياً",
+  "expense_add_vendor": "المورّد",
+  "expense_add_vendorHint": "اسم المتجر أو المورّد (اختياري)",
   "expense_add_submit": "إضافة الصرفية",
   "expense_add_addMore": "إضافة المزيد",
   "expense_add_validation_amount": "يجب أن يكون المبلغ أكبر من صفر",
@@ -89,6 +94,11 @@
   "@expense_add_pickFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
+
+  "ocr_disclaimer_title": "يرجى التحقق",
+  "ocr_disclaimer_body": "نتيجة المسح الضوئي — تأكّد من جميع الحقول قبل الإرسال.",
+  "ocr_scanning": "جاري مسح الإيصال…",
+  "ocr_failed": "تعذّر قراءة الإيصال — يرجى التعبئة يدوياً.",
 
   "expense_detail_title": "الصرفية",
   "expense_detail_category": "التصنيف",

@@ -15,6 +15,7 @@ class Expense {
     required this.occurredAt,
     required this.createdAt,
     this.receiptObjectKey,
+    this.vendor,
     this.updatedAt,
     this.deletedAt,
     this.pendingSync = false,
@@ -31,12 +32,54 @@ class Expense {
   final DateTime occurredAt;
   final DateTime createdAt;
   final String? receiptObjectKey;
+
+  /// Merchant / vendor name as scanned from the receipt or entered manually.
+  /// Optional — older expenses won't have one. Surfaced as a small caption
+  /// under the amount on the expense detail screen.
+  final String? vendor;
+
   final DateTime? updatedAt;
   final DateTime? deletedAt;
 
   /// Client-side flag: this expense lives in the local Drift queue and has not
   /// yet been accepted by the server. Drives the "Pending sync" chip in UI.
   final bool pendingSync;
+
+  Expense copyWith({
+    String? id,
+    String? tripId,
+    String? userId,
+    String? sourceId,
+    String? categoryCode,
+    Money? amount,
+    int? quantity,
+    String? details,
+    DateTime? occurredAt,
+    DateTime? createdAt,
+    String? receiptObjectKey,
+    String? vendor,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+    bool? pendingSync,
+  }) {
+    return Expense(
+      id: id ?? this.id,
+      tripId: tripId ?? this.tripId,
+      userId: userId ?? this.userId,
+      sourceId: sourceId ?? this.sourceId,
+      categoryCode: categoryCode ?? this.categoryCode,
+      amount: amount ?? this.amount,
+      quantity: quantity ?? this.quantity,
+      details: details ?? this.details,
+      occurredAt: occurredAt ?? this.occurredAt,
+      createdAt: createdAt ?? this.createdAt,
+      receiptObjectKey: receiptObjectKey ?? this.receiptObjectKey,
+      vendor: vendor ?? this.vendor,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      pendingSync: pendingSync ?? this.pendingSync,
+    );
+  }
 }
 
 class ExpenseCategory {

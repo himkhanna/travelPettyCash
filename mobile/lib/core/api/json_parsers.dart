@@ -89,7 +89,27 @@ Expense parseExpense(Map<String, Object?> json, {required String currency}) =>
       occurredAt: DateTime.parse(json['occurredAt']! as String),
       createdAt: DateTime.parse(json['createdAt']! as String),
       receiptObjectKey: json['receiptObjectKey'] as String?,
+      vendor: json['vendor'] as String?,
     );
+
+/// Inverse of [parseExpense]. Used when the (future) real API client needs to
+/// serialize an Expense (e.g. PATCH or bulk update). The fake repos mutate
+/// the in-memory store directly, but having this here keeps the contract
+/// symmetric and unblocks the real Dio layer.
+Map<String, Object?> serializeExpense(Expense e) => <String, Object?>{
+  'id': e.id,
+  'tripId': e.tripId,
+  'userId': e.userId,
+  'sourceId': e.sourceId,
+  'categoryCode': e.categoryCode,
+  'amountMinor': e.amount.amountMinor,
+  'quantity': e.quantity,
+  'details': e.details,
+  'occurredAt': e.occurredAt.toIso8601String(),
+  'createdAt': e.createdAt.toIso8601String(),
+  if (e.receiptObjectKey != null) 'receiptObjectKey': e.receiptObjectKey,
+  if (e.vendor != null) 'vendor': e.vendor,
+};
 
 ChatThread parseChatThread(Map<String, Object?> json) => ChatThread(
   id: json['id']! as String,

@@ -77,6 +77,7 @@ class FakeExpenseRepository implements ExpenseRepository {
     required DateTime occurredAt,
     int quantity = 1,
     String? receiptObjectKey,
+    String? vendor,
     required String idempotencyKey,
   }) async {
     await _store.ensureLoaded();
@@ -107,6 +108,7 @@ class FakeExpenseRepository implements ExpenseRepository {
         occurredAt: occurredAt,
         createdAt: _cfg.now(),
         receiptObjectKey: receiptObjectKey,
+        vendor: vendor,
         pendingSync: true,
       );
       _store.pendingExpenses.add(pending);
@@ -129,6 +131,7 @@ class FakeExpenseRepository implements ExpenseRepository {
       occurredAt: occurredAt,
       createdAt: _cfg.now(),
       receiptObjectKey: receiptObjectKey,
+      vendor: vendor,
     );
     _store.expenses.add(e);
     _store.emit(DemoStoreEvent.expensesChanged);
@@ -155,6 +158,7 @@ class FakeExpenseRepository implements ExpenseRepository {
       occurredAt: patch.occurredAt ?? old.occurredAt,
       createdAt: old.createdAt,
       receiptObjectKey: old.receiptObjectKey,
+      vendor: old.vendor,
       updatedAt: _cfg.now(),
     );
     _store.expenses[i] = updated;
@@ -197,6 +201,7 @@ class FakeExpenseRepository implements ExpenseRepository {
         occurredAt: old.occurredAt,
         createdAt: old.createdAt,
         receiptObjectKey: objectKey,
+        vendor: old.vendor,
         updatedAt: _cfg.now(),
       );
       _store.emit(DemoStoreEvent.expensesChanged);

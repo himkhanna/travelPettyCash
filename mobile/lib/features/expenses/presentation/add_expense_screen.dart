@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/money/money.dart';
+import '../../../l10n/generated/app_localizations.dart';
+import '../../../shared/widgets/ocr_disclaimer_banner.dart';
 import '../../../shared/widgets/sync_status_banner.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../funds/application/funds_providers.dart';
@@ -14,14 +18,22 @@ import '../../funds/domain/funding.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import '../application/expenses_providers.dart';
+import '../data/receipt_scan_repository.dart';
 import '../domain/expense.dart';
+import '../domain/receipt_scan_result.dart';
 
 /// Screen-inventory #5 / #6 — Add Expense form + success modal.
 ///
-/// Hero demo flow: toggle Demo Controls → Offline mode → fill form → submit.
-/// Expense lands in pending_expenses, success modal shows, user can add more
-/// or close. Toggle Offline mode off → SyncCoordinator drains queue → expense
-/// appears with no "Pending sync" chip.
+/// OCR-first layout: scan / upload buttons sit at the top, above all
+/// fields. After a scan the form is pre-filled and a yellow disclaimer
+/// banner sits between the scan block and the fields so the user is
+/// reminded the values came from OCR (CLAUDE.md §15 — OCR is an opt-in
+/// enhancement; the disclaimer is the visible guardrail).
+///
+/// Hero demo flow: tap SCAN RECEIPT → camera → 1.5s spinner →
+/// vendor/amount/category/date populated → banner appears → user
+/// adjusts source → submit. The offline-queue path still works exactly
+/// the same way it did before this rework.
 class AddExpenseScreen extends ConsumerStatefulWidget {
   const AddExpenseScreen({super.key, required this.tripId});
   final String tripId;
@@ -33,6 +45,7 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final TextEditingController _amountCtrl = TextEditingController();
   final TextEditingController _detailsCtrl = TextEditingController();
+  final TextEditingController _vendorCtrl = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   static const Uuid _uuid = Uuid();
 
@@ -42,15 +55,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   bool _submitting = false;
   XFile? _receiptFile;
 
+  // OCR state.
+  bool _scanning = false;
+  bool _showDisclaimer = false;
+  String? _disclaimerBody;
+  String? _scanError;
+
   @override
   void dispose() {
     _amountCtrl.dispose();
     _detailsCtrl.dispose();
+    _vendorCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
     final AsyncValue<Trip> tripAsync = ref.watch(
       tripDetailProvider(widget.tripId),
     );
@@ -65,7 +86,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           icon: const Icon(Icons.close),
           onPressed: () => context.go('/m/trips/${widget.tripId}/dashboard'),
         ),
-        title: const Text('ADD EXPENSE'),
+        title: Text(l.expense_add_title),
       ),
       body: Column(
         children: <Widget>[
@@ -75,21 +96,47 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: tripAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (Object e, _) => Text('Error: $e'),
+                error: (Object e, _) => Text('${l.common_error}: $e'),
                 data: (Trip trip) => Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
+                      _OcrSection(
+                        scanning: _scanning,
+                        onScan: () => _runScan(trip, ImageSource.camera),
+                        onUpload: () => _runScan(trip, ImageSource.gallery),
+                        error: _scanError,
+                        onDismissError: () =>
+                            setState(() => _scanError = null),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      if (_showDisclaimer) ...<Widget>[
+                        OcrDisclaimerBanner(
+                          body: _disclaimerBody ?? l.ocr_disclaimer_body,
+                          onDismiss: () =>
+                              setState(() => _showDisclaimer = false),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
                       _AmountField(
                         controller: _amountCtrl,
                         currency: trip.currency,
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      _Label(text: 'SOURCE'),
+                      _Label(text: l.expense_add_vendor),
+                      TextFormField(
+                        controller: _vendorCtrl,
+                        decoration: InputDecoration(
+                          hintText: l.expense_add_vendorHint,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _Label(text: l.expense_add_source),
                       sourcesAsync.when(
                         loading: () => const LinearProgressIndicator(),
-                        error: (Object e, _) => Text('Error: $e'),
+                        error: (Object e, _) => Text('${l.common_error}: $e'),
                         data: (List<Source> sources) => _SourcePicker(
                           sources: sources,
                           selected: _sourceId,
@@ -97,10 +144,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      _Label(text: 'CATEGORY'),
+                      _Label(text: l.expense_add_category),
                       categoriesAsync.when(
                         loading: () => const LinearProgressIndicator(),
-                        error: (Object e, _) => Text('Error: $e'),
+                        error: (Object e, _) => Text('${l.common_error}: $e'),
                         data: (List<ExpenseCategory> cats) => _CategoryPicker(
                           categories: cats,
                           selected: _categoryCode,
@@ -109,29 +156,32 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      _Label(text: 'DETAILS'),
+                      _Label(text: l.expense_add_details),
                       TextFormField(
                         controller: _detailsCtrl,
                         maxLines: 3,
-                        decoration: const InputDecoration(
-                          hintText: 'Describe the expense (optional)',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          hintText: l.expense_add_detailsHint,
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      _Label(text: 'OCCURRED AT'),
+                      _Label(text: l.expense_add_occurredAt),
                       _DatePickerTile(
                         value: _occurredAt,
                         onChanged: (DateTime d) =>
                             setState(() => _occurredAt = d),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
-                      _Label(text: 'RECEIPT'),
-                      _ReceiptPicker(
-                        file: _receiptFile,
-                        onPick: _pickReceipt,
-                        onClear: () => setState(() => _receiptFile = null),
-                      ),
+                      if (_receiptFile != null) ...<Widget>[
+                        const SizedBox(height: AppSpacing.lg),
+                        _Label(text: l.expense_add_receipt),
+                        _AttachedReceiptTile(
+                          file: _receiptFile!,
+                          onRemove: () =>
+                              setState(() => _receiptFile = null),
+                          replaceLabel: l.expense_add_replace,
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                       FilledButton(
                         onPressed: _submitting ? null : () => _submit(trip),
@@ -144,7 +194,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                   color: AppColors.cream,
                                 ),
                               )
-                            : const Text('ADD EXPENSE'),
+                            : Text(l.expense_add_submit),
                       ),
                     ],
                   ),
@@ -157,26 +207,90 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
   }
 
+  Future<void> _runScan(Trip trip, ImageSource source) async {
+    if (_scanning) return;
+    final AppLocalizations l = AppLocalizations.of(context);
+    try {
+      final ImagePickFn pick = ref.read(imagePickerProvider);
+      final XFile? picked = await pick(source);
+      if (picked == null) return;
+      setState(() {
+        _receiptFile = picked;
+        _scanning = true;
+        _scanError = null;
+      });
+      final Uint8List bytes = await picked.readAsBytes();
+      final ReceiptScanRepository repo = ref.read(
+        receiptScanRepositoryProvider,
+      );
+      final ReceiptScanResult result = await repo.scan(
+        tripId: trip.id,
+        bytes: bytes,
+        fileName: picked.name,
+      );
+      if (!mounted) return;
+      _applyScanResult(result, trip.currency);
+    } catch (e) {
+      if (!mounted) return;
+      // On failure leave the form empty but keep the image attached so
+      // the receipt still rides along with the manual submission.
+      setState(() {
+        _scanError = l.ocr_failed;
+      });
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  void _applyScanResult(ReceiptScanResult r, String currency) {
+    setState(() {
+      if (r.vendor != null) _vendorCtrl.text = r.vendor!;
+      if (r.amount != null) {
+        // Backend echoes the trip currency; if for any reason it
+        // diverges we still format the amount in the trip's units.
+        final Money amount = r.amount!.currencyCode == currency
+            ? r.amount!
+            : Money(r.amount!.amountMinor, currency);
+        _amountCtrl.text = _formatMajor(amount);
+      }
+      if (r.categoryHint != null) _categoryCode = r.categoryHint;
+      if (r.occurredAt != null) _occurredAt = r.occurredAt!;
+      _disclaimerBody = r.warning;
+      _showDisclaimer = true;
+    });
+  }
+
+  String _formatMajor(Money amount) {
+    // Use the Money decimals to pick a plain string without thousands
+    // separators (the field is editable and we want a parseable value).
+    final int decimals = amount.decimals;
+    if (decimals == 0) return amount.amountMinor.toString();
+    final double v = amount.majorValue;
+    return v.toStringAsFixed(decimals);
+  }
+
   Future<void> _submit(Trip trip) async {
+    final AppLocalizations l = AppLocalizations.of(context);
     final FormState? form = _formKey.currentState;
     if (form == null || !form.validate()) return;
     if (_sourceId == null) {
-      _toast('Please select a source');
+      _toast(l.expense_add_validation_source);
       return;
     }
     if (_categoryCode == null) {
-      _toast('Please select a category');
+      _toast(l.expense_add_validation_category);
       return;
     }
     final Money amount = _parseAmount(trip.currency);
     if (amount.isZero) {
-      _toast('Amount must be greater than 0');
+      _toast(l.expense_add_validation_amount);
       return;
     }
 
     setState(() => _submitting = true);
     try {
       final String userId = ref.read(currentUserProvider).valueOrNull?.id ?? '';
+      final String vendor = _vendorCtrl.text.trim();
       final Expense e = await ref
           .read(expenseRepositoryProvider)
           .create(
@@ -192,6 +306,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             // Image.network in the detail screen. On a real backend this
             // becomes an S3 object key after the receipt upload step.
             receiptObjectKey: _receiptFile?.path,
+            vendor: vendor.isEmpty ? null : vendor,
             idempotencyKey: _uuid.v4(),
           );
       // Refresh dependent providers.
@@ -202,52 +317,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       if (!mounted) return;
       await _showSuccessModal(trip, e);
     } catch (err) {
-      _toast('Submission failed: $err');
+      _toast('${l.common_error}: $err');
     } finally {
       if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  Future<void> _pickReceipt() async {
-    // Bottom sheet lets the user choose camera or gallery. Camera is the
-    // primary path for protocol officers in the field (CLAUDE.md §11); the
-    // gallery fallback exists for web demos where camera is unavailable.
-    final ImageSource? src = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (BuildContext ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Camera'),
-              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (src == null) return;
-    try {
-      // Compression: imageQuality 80 + maxWidth 1600 keeps payloads under
-      // the 1 MB target (CLAUDE.md §11). image_cropper is intentionally
-      // out-of-scope for this milestone — it would land alongside the
-      // signed-URL receipt upload pipeline in Phase 3.
-      final XFile? picked = await ImagePicker().pickImage(
-        source: src,
-        imageQuality: 80,
-        maxWidth: 1600,
-      );
-      if (picked != null) {
-        setState(() => _receiptFile = picked);
-      }
-    } catch (e) {
-      _toast('Receipt pick failed: $e');
     }
   }
 
@@ -262,6 +334,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _showSuccessModal(Trip trip, Expense e) {
+    final AppLocalizations l = AppLocalizations.of(context);
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -276,12 +349,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             size: 48,
           ),
           title: Text(
-            e.pendingSync ? 'QUEUED OFFLINE' : 'EXPENSE ADDED',
+            e.pendingSync
+                ? l.expense_add_success_queued
+                : l.expense_add_success_title,
             textAlign: TextAlign.center,
           ),
           content: Text(
             e.pendingSync
-                ? 'The expense will sync when you go back online.'
+                ? l.expense_add_success_queuedBody
                 : '${e.amount.format()} recorded.',
             textAlign: TextAlign.center,
           ),
@@ -291,14 +366,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 Navigator.of(ctx).pop();
                 _resetForm();
               },
-              child: const Text('ADD MORE'),
+              child: Text(l.expense_add_addMore),
             ),
             FilledButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
                 context.go('/m/trips/${trip.id}/dashboard');
               },
-              child: const Text('CLOSE'),
+              child: Text(l.common_close),
             ),
           ],
         );
@@ -310,11 +385,249 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _formKey.currentState?.reset();
     _amountCtrl.clear();
     _detailsCtrl.clear();
+    _vendorCtrl.clear();
     setState(() {
       _sourceId = null;
       _categoryCode = null;
       _occurredAt = DateTime.now();
+      _receiptFile = null;
+      _showDisclaimer = false;
+      _disclaimerBody = null;
+      _scanError = null;
     });
+  }
+}
+
+/// The OCR-first top block: SCAN RECEIPT, UPLOAD FROM GALLERY, divider,
+/// optional scanning spinner, optional error tile. Replaces the old
+/// bottom-anchored "ADD RECEIPT" affordance.
+class _OcrSection extends StatelessWidget {
+  const _OcrSection({
+    required this.scanning,
+    required this.onScan,
+    required this.onUpload,
+    required this.error,
+    required this.onDismissError,
+  });
+
+  final bool scanning;
+  final VoidCallback onScan;
+  final VoidCallback onUpload;
+  final String? error;
+  final VoidCallback onDismissError;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        FilledButton.icon(
+          onPressed: scanning ? null : onScan,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.goldOlive,
+            foregroundColor: AppColors.textOnBrand,
+            minimumSize: const Size(double.infinity, 56),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(AppRadii.button),
+            ),
+          ),
+          icon: const Icon(Icons.photo_camera_outlined),
+          label: Text(l.expense_add_scanReceipt),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          onPressed: scanning ? null : onUpload,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.brandBrown,
+            backgroundColor: AppColors.cream,
+            side: const BorderSide(color: AppColors.brandBrown),
+            minimumSize: const Size(double.infinity, 52),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(AppRadii.button),
+            ),
+          ),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: Text(l.expense_add_uploadGallery),
+        ),
+        if (scanning) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          _ScanningCard(label: l.ocr_scanning),
+        ],
+        if (error != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          _ScanErrorCard(message: error!, onDismiss: onDismissError),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: <Widget>[
+            const Expanded(child: Divider(color: AppColors.divider)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: Text(
+                l.expense_add_orFillManually,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      letterSpacing: 1.2,
+                    ),
+              ),
+            ),
+            const Expanded(child: Divider(color: AppColors.divider)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ScanningCard extends StatelessWidget {
+  const _ScanningCard({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: const BorderRadius.all(AppRadii.card),
+        border: Border.all(color: AppColors.goldOlive),
+      ),
+      child: Row(
+        children: <Widget>[
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: AppColors.goldOlive,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: AppColors.brandBrownDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScanErrorCard extends StatelessWidget {
+  const _ScanErrorCard({required this.message, required this.onDismiss});
+  final String message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.sm,
+        AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.outflow.withValues(alpha: 0.10),
+        borderRadius: const BorderRadius.all(AppRadii.card),
+        border: Border.all(color: AppColors.outflow),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.error_outline, color: AppColors.outflow),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.outflow,
+                  ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            onPressed: onDismiss,
+            tooltip: AppLocalizations.of(context).common_close,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachedReceiptTile extends StatelessWidget {
+  const _AttachedReceiptTile({
+    required this.file,
+    required this.onRemove,
+    required this.replaceLabel,
+  });
+
+  final XFile file;
+  final VoidCallback onRemove;
+  final String replaceLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: const BorderRadius.all(AppRadii.chip),
+        border: Border.all(color: AppColors.goldOlive),
+      ),
+      child: Row(
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: const BorderRadius.all(AppRadii.chip),
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: Image.network(
+                file.path,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const ColoredBox(
+                  color: AppColors.divider,
+                  child: Icon(Icons.image_outlined),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  file.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                Text(
+                  replaceLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: AppLocalizations.of(context).common_close,
+            onPressed: onRemove,
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -328,10 +641,10 @@ class _Label extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: AppColors.textSecondary,
-          letterSpacing: 1.4,
-          fontWeight: FontWeight.w700,
-        ),
+              color: AppColors.textSecondary,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }
@@ -351,15 +664,16 @@ class _AmountField extends StatelessWidget {
         FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
       ],
       style: Theme.of(context).textTheme.displaySmall?.copyWith(
-        color: AppColors.brandBrown,
-        fontWeight: FontWeight.w700,
-      ),
+            color: AppColors.brandBrown,
+            fontWeight: FontWeight.w700,
+          ),
       textAlign: TextAlign.center,
       decoration: InputDecoration(
         prefixText: '$currency  ',
-        prefixStyle: Theme.of(
-          context,
-        ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
+        prefixStyle: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(color: AppColors.textSecondary),
         hintText: '0',
         border: InputBorder.none,
         enabledBorder: const UnderlineInputBorder(
@@ -497,111 +811,6 @@ class _DatePickerTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ReceiptPicker extends StatelessWidget {
-  const _ReceiptPicker({
-    required this.file,
-    required this.onPick,
-    required this.onClear,
-  });
-
-  final XFile? file;
-  final VoidCallback onPick;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    if (file == null) {
-      return InkWell(
-        onTap: onPick,
-        borderRadius: const BorderRadius.all(AppRadii.chip),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.all(AppRadii.chip),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: Row(
-            children: <Widget>[
-              const Icon(
-                Icons.add_a_photo_outlined,
-                color: AppColors.brandBrown,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                'ADD RECEIPT',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AppColors.brandBrown,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: const BorderRadius.all(AppRadii.chip),
-        border: Border.all(color: AppColors.goldOlive),
-      ),
-      child: Row(
-        children: <Widget>[
-          ClipRRect(
-            borderRadius: const BorderRadius.all(AppRadii.chip),
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: Image.network(
-                file!.path,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const ColoredBox(
-                  color: AppColors.divider,
-                  child: Icon(Icons.image_outlined),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  file!.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'Tap to replace',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Pick another file',
-            onPressed: onPick,
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: 'Remove receipt',
-            onPressed: onClear,
-          ),
-        ],
       ),
     );
   }
