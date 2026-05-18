@@ -36,6 +36,7 @@ class ExpenseEditScreen extends ConsumerStatefulWidget {
 class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   final TextEditingController _amountCtrl = TextEditingController();
   final TextEditingController _detailsCtrl = TextEditingController();
+  final TextEditingController _vendorCtrl = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   Expense? _original;
@@ -56,6 +57,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   void dispose() {
     _amountCtrl.dispose();
     _detailsCtrl.dispose();
+    _vendorCtrl.dispose();
     super.dispose();
   }
 
@@ -139,6 +141,16 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
+                      _Label(text: l.expense_add_vendor),
+                      TextFormField(
+                        controller: _vendorCtrl,
+                        enabled: !locked,
+                        decoration: InputDecoration(
+                          hintText: l.expense_add_vendorHint,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
                       _Label(text: l.expense_detail_details),
                       TextFormField(
                         controller: _detailsCtrl,
@@ -188,6 +200,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     _original = e;
     _amountCtrl.text = e.amount.majorValue.toString();
     _detailsCtrl.text = e.details;
+    _vendorCtrl.text = e.vendor ?? '';
     _sourceId = e.sourceId;
     _categoryCode = e.categoryCode;
     _occurredAt = e.occurredAt;
@@ -213,6 +226,9 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
               categoryCode: _categoryCode,
               amount: amount,
               details: _detailsCtrl.text.trim(),
+              vendor: _vendorCtrl.text.trim().isEmpty
+                  ? null
+                  : _vendorCtrl.text.trim(),
               occurredAt: _occurredAt,
             ),
           );

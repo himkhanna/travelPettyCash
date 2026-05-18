@@ -53,6 +53,7 @@ class ExpensePatch {
     this.categoryCode,
     this.amount,
     this.details,
+    this.vendor,
     this.occurredAt,
   });
 
@@ -60,6 +61,7 @@ class ExpensePatch {
   final String? categoryCode;
   final Money? amount;
   final String? details;
+  final String? vendor;
   final DateTime? occurredAt;
 }
 

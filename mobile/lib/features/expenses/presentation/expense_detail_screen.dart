@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
@@ -26,6 +27,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l = AppLocalizations.of(context);
+    final String locale = Localizations.localeOf(context).toLanguageTag();
     final ExpenseRepository repo = ref.watch(expenseRepositoryProvider);
     final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
     final User? me = ref.watch(currentUserProvider).valueOrNull;
@@ -77,13 +79,13 @@ class ExpenseDetailScreen extends ConsumerWidget {
                       : const SizedBox.shrink(),
                 ),
                 Text(
-                  '${_pad(e.occurredAt.hour)}:${_pad(e.occurredAt.minute)}',
+                  DateFormat.Hm(locale).format(e.occurredAt),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
                 Text(
-                  _longDate(e.occurredAt),
+                  DateFormat.yMMMEd(locale).format(e.occurredAt).toUpperCase(),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: AppColors.textSecondary,
                   ),
@@ -185,34 +187,6 @@ class ExpenseDetailScreen extends ConsumerWidget {
         },
       ),
     );
-  }
-
-  String _pad(int n) => n.toString().padLeft(2, '0');
-  String _longDate(DateTime d) {
-    const List<String> days = <String>[
-      'MON',
-      'TUE',
-      'WED',
-      'THU',
-      'FRI',
-      'SAT',
-      'SUN',
-    ];
-    const List<String> months = <String>[
-      'JAN',
-      'FEB',
-      'MAR',
-      'APR',
-      'MAY',
-      'JUN',
-      'JUL',
-      'AUG',
-      'SEP',
-      'OCT',
-      'NOV',
-      'DEC',
-    ];
-    return '${days[d.weekday - 1]} ${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
   IconData _iconForCategory(String code) {

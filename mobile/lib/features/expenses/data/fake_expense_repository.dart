@@ -158,7 +158,7 @@ class FakeExpenseRepository implements ExpenseRepository {
       occurredAt: patch.occurredAt ?? old.occurredAt,
       createdAt: old.createdAt,
       receiptObjectKey: old.receiptObjectKey,
-      vendor: old.vendor,
+      vendor: patch.vendor ?? old.vendor,
       updatedAt: _cfg.now(),
     );
     _store.expenses[i] = updated;
