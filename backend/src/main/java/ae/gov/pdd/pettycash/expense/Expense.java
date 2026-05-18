@@ -56,6 +56,9 @@ public class Expense {
     @Column(name = "details", length = 1024)
     private String details;
 
+    @Column(name = "vendor", length = 200)
+    private String vendor;
+
     @Column(name = "occurred_at", nullable = false)
     private OffsetDateTime occurredAt;
 
@@ -93,6 +96,8 @@ public class Expense {
     public void setUnitCostAmount(Long unitCostAmount) { this.unitCostAmount = unitCostAmount; }
     public String getDetails() { return details; }
     public void setDetails(String details) { this.details = details; }
+    public String getVendor() { return vendor; }
+    public void setVendor(String vendor) { this.vendor = vendor; }
     public OffsetDateTime getOccurredAt() { return occurredAt; }
     public void setOccurredAt(OffsetDateTime occurredAt) { this.occurredAt = occurredAt; }
     public String getReceiptObjectKey() { return receiptObjectKey; }

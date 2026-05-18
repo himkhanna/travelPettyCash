@@ -20,6 +20,7 @@ tags:
   - name: chat
   - name: notifications
   - name: reports
+  - name: receipts
   - name: categories
   - name: sources
   - name: users
@@ -32,7 +33,11 @@ paths:
     post:
       tags: [auth]
       security: []
-      summary: Exchange username + password for tokens
+      summary: Exchange an OIDC authorization code for tokens (mock providers)
+      description: |
+        Two providers are accepted: `UAE_PASS` and `PDD_SSO`. The `code` field
+        is currently ignored — both providers resolve to seeded test users.
+        See CLAUDE.md §16 — replace with real UAE Pass / PDD SSO once credentials land.
       requestBody:
         required: true
         content:
@@ -45,6 +50,8 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AuthSession' }
         '401':
+          $ref: '#/components/responses/Problem'
+        '404':
           $ref: '#/components/responses/Problem'
 
   /auth/refresh:
@@ -279,17 +286,27 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Expense' }
 
-  /expenses/{expenseId}/receipt:
+  /expenses/{id}/receipt:
     post:
       tags: [expenses]
-      summary: Upload receipt photo
-      parameters: [{ $ref: '#/components/parameters/ExpenseIdPath' }]
+      summary: Upload a receipt photo to MinIO and link it to the expense
+      description: |
+        Multipart upload, single field `file`. Validates `image/jpeg` or
+        `image/png`, max 8 MB. Stores at S3 key
+        `receipts/{tripId}/{expenseId}/{uuid}.{ext}` and persists
+        `expense.receiptObjectKey`. See CLAUDE.md §3, §7.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
+              required: [file]
               properties:
                 file:
                   type: string
@@ -301,13 +318,20 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [receiptObjectKey]
                 properties:
-                  objectKey: { type: string }
-                  signedUrl: { type: string }
+                  receiptObjectKey: { type: string }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
     get:
       tags: [expenses]
-      summary: Get signed URL for the receipt
-      parameters: [{ $ref: '#/components/parameters/ExpenseIdPath' }]
+      summary: Get a 5-minute presigned URL to download the receipt
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: OK
@@ -315,8 +339,49 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [url, expiresAt]
                 properties:
-                  signedUrl: { type: string }
+                  url: { type: string, format: uri }
+                  expiresAt: { type: string, format: date-time }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /receipts/scan:
+    post:
+      tags: [receipts]
+      summary: OCR a receipt image and return a structured suggestion
+      description: |
+        Mocked in v1 — see CLAUDE.md §15 and `docs/architecture/ADR-005-ocr.md`.
+        The response shape is contract-stable: real Tesseract impl will return
+        the same fields. Mobile shows the result as a pre-fill with a yellow
+        "please verify" disclaimer that never goes away.
+
+        Image validation is identical to the receipt-upload endpoint:
+        `image/jpeg` or `image/png`, max 8 MB.
+
+        Pass `?tripId=...` to make the extracted amount currency match the trip.
+      parameters:
+        - in: query
+          name: tripId
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReceiptScanResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
 
   /expenses/bulk:
     patch:
@@ -649,10 +714,38 @@ components:
 
   responses:
     Problem:
-      description: RFC 7807 problem details
+      description: RFC 7807 problem details with a stable `code` field per CLAUDE.md §9.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            idempotencyKeyRequired:
+              summary: IDEMPOTENCY_KEY_REQUIRED (400)
+              value:
+                type: https://api.pettycash.pdd.gov.ae/problems/idempotency_key_required
+                title: Bad Request
+                status: 400
+                detail: "Header 'Idempotency-Key' is required on this endpoint"
+                instance: /api/v1/trips/abc/expenses
+                code: IDEMPOTENCY_KEY_REQUIRED
+            idempotencyKeyConflict:
+              summary: IDEMPOTENCY_KEY_CONFLICT (409)
+              value:
+                type: https://api.pettycash.pdd.gov.ae/problems/idempotency_key_conflict
+                title: Conflict
+                status: 409
+                detail: "Idempotency-Key reused with a different request body"
+                instance: /api/v1/trips/abc/expenses
+                code: IDEMPOTENCY_KEY_CONFLICT
+            reportDeferred:
+              summary: REPORT_DEFERRED (501)
+              value:
+                type: https://api.pettycash.pdd.gov.ae/problems/report_deferred
+                title: Not Implemented
+                status: 501
+                detail: "Server-side report generation pending — see CLAUDE.md §10."
+                instance: /api/v1/reports/trip/abc
+                code: REPORT_DEFERRED
 
   schemas:
     Money:
@@ -677,19 +770,34 @@ components:
         instance: { type: string }
         code: { type: string }
 
+    AuthProvider:
+      type: string
+      enum: [UAE_PASS, PDD_SSO]
+      description: |
+        Identity provider. In v1 both are mock — see CLAUDE.md §16, ADR-002.
+
     LoginRequest:
       type: object
-      required: [username, password]
+      required: [provider, code]
       properties:
-        username: { type: string }
-        password: { type: string, format: password }
+        provider: { $ref: '#/components/schemas/AuthProvider' }
+        code:
+          type: string
+          description: OIDC authorization code returned by the provider redirect.
 
     AuthSession:
       type: object
       required: [accessToken, refreshToken, user]
       properties:
-        accessToken: { type: string }
-        refreshToken: { type: string }
+        accessToken:
+          type: string
+          description: Short-lived JWT access token (15 min TTL per CLAUDE.md §3).
+        refreshToken:
+          type: string
+          description: Opaque refresh token (14d TTL); rotated on every refresh.
+        expiresIn:
+          type: integer
+          description: Access-token TTL in seconds.
         user: { $ref: '#/components/schemas/User' }
 
     UserRole:
@@ -802,6 +910,10 @@ components:
         amount: { $ref: '#/components/schemas/Money' }
         quantity: { type: integer, default: 1 }
         details: { type: string }
+        vendor:
+          type: string
+          maxLength: 200
+          description: Optional vendor / merchant name (free-text, ≤200 chars).
         occurredAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -827,6 +939,9 @@ components:
         amount: { $ref: '#/components/schemas/Money' }
         quantity: { type: integer, default: 1 }
         details: { type: string }
+        vendor:
+          type: string
+          maxLength: 200
         occurredAt: { type: string, format: date-time }
         receiptObjectKey: { type: string }
 
@@ -837,7 +952,30 @@ components:
         categoryCode: { type: string }
         amount: { $ref: '#/components/schemas/Money' }
         details: { type: string }
+        vendor:
+          type: string
+          maxLength: 200
         occurredAt: { type: string, format: date-time }
+
+    ReceiptScanResult:
+      type: object
+      required: [vendor, amount, quantity, categoryHint, occurredAt, confidence, warning]
+      properties:
+        vendor: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        quantity: { type: integer }
+        categoryHint:
+          type: string
+          description: Hint matching an ExpenseCategory.code (FOOD, TRANSPORT, …).
+        occurredAt: { type: string, format: date-time }
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        warning:
+          type: string
+          description: Always populated. Mobile must show this verbatim.
 
     ExpenseSummaryRow:
       type: object

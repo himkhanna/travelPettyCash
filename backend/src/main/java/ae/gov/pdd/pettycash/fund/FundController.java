@@ -1,5 +1,6 @@
 package ae.gov.pdd.pettycash.fund;
 
+import ae.gov.pdd.pettycash.idempotency.Idempotent;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,9 +34,10 @@ public class FundController {
 
     @PostMapping("/trips/{tripId}/allocations")
     @PreAuthorize("hasAnyRole('ADMIN','LEADER')")
+    @Idempotent
     public ResponseEntity<List<FundDtos.AllocationView>> createAllocations(
             @PathVariable UUID tripId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = "Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody FundDtos.CreateAllocationsRequest req) {
         var created = service.createAllocations(tripId, req).stream()
             .map(FundDtos.AllocationView::from).toList();
@@ -51,9 +53,10 @@ public class FundController {
 
     @PostMapping("/trips/{tripId}/transfers")
     @PreAuthorize("hasAnyRole('MEMBER','LEADER')")
+    @Idempotent
     public ResponseEntity<FundDtos.TransferView> createTransfer(
             @PathVariable UUID tripId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = "Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody FundDtos.CreateTransferRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(FundDtos.TransferView.from(service.createTransfer(tripId, req)));

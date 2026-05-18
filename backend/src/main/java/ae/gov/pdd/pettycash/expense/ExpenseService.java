@@ -38,6 +38,44 @@ public class ExpenseService {
     }
 
     @Transactional(readOnly = true)
+    public Expense getById(UUID id) {
+        return expenses.findById(id).orElseThrow(
+            () -> ApiException.notFound("EXPENSE_NOT_FOUND", "Expense " + id));
+    }
+
+    @Transactional
+    public Expense setReceiptObjectKey(UUID id, String objectKey) {
+        Expense e = getById(id);
+        e.setReceiptObjectKey(objectKey);
+        e.setUpdatedAt(OffsetDateTime.now());
+        return expenses.save(e);
+    }
+
+    /**
+     * Authorize the caller to read/write the receipt of an expense.
+     * Owner of the expense, the trip leader, or an ADMIN may proceed.
+     */
+    @Transactional(readOnly = true)
+    public Expense authorizeReceiptAccess(UUID expenseId) {
+        Expense e = getById(expenseId);
+        Role role = current.role();
+        if (role == Role.ADMIN || role == Role.SUPER_ADMIN) {
+            return e;
+        }
+        if (e.getUserId().equals(current.id())) {
+            return e;
+        }
+        if (role == Role.LEADER) {
+            Trip trip = trips.findById(e.getTripId()).orElseThrow(
+                () -> ApiException.notFound("TRIP_NOT_FOUND", "Trip " + e.getTripId()));
+            if (trip.getLeaderId().equals(current.id())) {
+                return e;
+            }
+        }
+        throw ApiException.forbidden("FORBIDDEN", "Not authorized for this expense's receipt");
+    }
+
+    @Transactional(readOnly = true)
     public List<Expense> listForTrip(UUID tripId, String scope) {
         if ("mine".equalsIgnoreCase(scope)) {
             return expenses.findByTripIdAndUserId(tripId, current.id());
@@ -80,6 +118,7 @@ public class ExpenseService {
         e.setQuantity(qty);
         e.setUnitCostAmount(amount.amount() / qty);
         e.setDetails(req.details());
+        e.setVendor(req.vendor());
         e.setOccurredAt(req.occurredAt() == null ? OffsetDateTime.now() : req.occurredAt());
         e.setReceiptObjectKey(req.receiptObjectKey());
         e.setCreatedAt(OffsetDateTime.now());
@@ -117,6 +156,7 @@ public class ExpenseService {
             e.setAmount(Money.of(p.amount().amount(), p.amount().currency()));
         }
         if (p.details() != null) e.setDetails(p.details());
+        if (p.vendor() != null) e.setVendor(p.vendor());
         if (p.occurredAt() != null) e.setOccurredAt(p.occurredAt());
         e.setUpdatedAt(OffsetDateTime.now());
         return expenses.save(e);

@@ -71,11 +71,43 @@ Tests use:
 - **Pure JUnit** for `Money` (unit, no Spring)
 - **Testcontainers Postgres** for `@SpringBootTest` (Flyway uses `pgcrypto` + JSONB, so H2 is unsuitable). Docker must be available on the host.
 
+## Receipts (Phase 3 slice 2)
+
+Receipts live in MinIO (S3-compatible). Bucket name defaults to
+`pettycash-receipts`; override with `MINIO_BUCKET`. The bucket is created
+on application startup if missing.
+
+Endpoints (all require `Authorization: Bearer <jwt>`):
+
+- `POST /api/v1/expenses/{id}/receipt` — multipart upload, single field
+  `file`. Validates `image/jpeg` or `image/png`, max 8 MB. Stores at key
+  `receipts/{tripId}/{expenseId}/{uuid}.{ext}` and sets
+  `expense.receiptObjectKey`. Owner of the expense, the trip leader, or
+  any ADMIN may upload.
+- `GET /api/v1/expenses/{id}/receipt` — returns `{ "url", "expiresAt" }`
+  with a 5-minute presigned GET URL. Same auth rules as upload.
+- `POST /api/v1/receipts/scan` — multipart OCR endpoint. Mocked in v1
+  via `MockReceiptScanner` (deterministic 4-bucket response keyed by
+  `sha256(image) mod 4`). See `docs/architecture/ADR-005-ocr.md`. Disable
+  by setting `pettycash.ocr.enabled=false`.
+
+## Idempotency
+
+`Idempotency-Key` header is **required** on:
+
+- `POST /api/v1/trips/{id}/expenses`
+- `POST /api/v1/trips/{id}/allocations`
+- `POST /api/v1/trips/{id}/transfers`
+
+Records are stored in `idempotency_record` and replayed for 24h. Reusing
+a key with a different request body yields `409 IDEMPOTENCY_KEY_CONFLICT`;
+omitting the header yields `400 IDEMPOTENCY_KEY_REQUIRED`.
+
 ## Explicit deferrals — DO NOT add without scope sign-off
 
 - **Reports** (CLAUDE.md §10): the `GET /api/v1/reports/trip/{id}` endpoint returns `501 Not Implemented` with `{ "code": "REPORT_DEFERRED" }`. Apache POI / OpenPDF / PAdES signing pipeline is not scaffolded.
 - **Real OIDC** (CLAUDE.md §16): no live UAE Pass, PDD SSO, or UAE Pass JWKS yet. Mock JWT (HS256) only.
-- **Receipt upload** (multipart + signed URLs): controller stub planned; `AwsSdk` is on the classpath but a `StorageService` is not yet wired.
+- **Real OCR** (CLAUDE.md §15, ADR-005): `POST /receipts/scan` returns canned data. Tesseract integration scheduled post-demo.
 - **Push notifications** (CLAUDE.md §15): out of scope. In-app notifications via polling only.
 - **Real-time chat presence**: out of scope.
 
@@ -90,8 +122,11 @@ ae.gov.pdd.pettycash
 ├── config        SecurityConfig, OpenApiConfig, JwtProperties, StorageProperties
 ├── expense       Expense, ExpenseCategory, controller + service
 ├── fund          Source, Allocation, Transfer, controller + service
+├── idempotency  IdempotencyRecord, interceptor, caching filter
 ├── notification  Notification + controller
+├── receipt       ReceiptScanController + (mock) ReceiptScanner
 ├── report        ReportController (501 stub)
+├── storage       StorageService + MinioStorageService (AWS SDK v2)
 ├── trip          Trip, controller + service
 └── user          User, MeController, Role
 ```

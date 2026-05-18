@@ -10,14 +10,15 @@ public final class ExpenseDtos {
 
     public record ExpenseView(
         UUID id, UUID tripId, UUID userId, UUID sourceId, String categoryCode,
-        MoneyDto amount, int quantity, String details,
+        MoneyDto amount, int quantity, String details, String vendor,
         OffsetDateTime occurredAt, OffsetDateTime createdAt, OffsetDateTime updatedAt,
         String receiptObjectKey
     ) {
         public static ExpenseView from(Expense e) {
             return new ExpenseView(e.getId(), e.getTripId(), e.getUserId(), e.getSourceId(),
                 e.getCategoryCode(), MoneyDto.from(e.getAmount()), e.getQuantity(), e.getDetails(),
-                e.getOccurredAt(), e.getCreatedAt(), e.getUpdatedAt(), e.getReceiptObjectKey());
+                e.getVendor(), e.getOccurredAt(), e.getCreatedAt(), e.getUpdatedAt(),
+                e.getReceiptObjectKey());
         }
     }
 
@@ -28,6 +29,7 @@ public final class ExpenseDtos {
         MoneyDto amount,
         Integer quantity,
         String details,
+        String vendor,
         OffsetDateTime occurredAt,
         String receiptObjectKey
     ) {}
@@ -37,6 +39,7 @@ public final class ExpenseDtos {
         String categoryCode,
         MoneyDto amount,
         String details,
+        String vendor,
         OffsetDateTime occurredAt
     ) {}
 
@@ -51,6 +54,10 @@ public final class ExpenseDtos {
     public record CreateCategoryRequest(String code, String nameEn, String nameAr, String iconKey) {}
 
     public record ExpensePage(List<ExpenseView> items, String nextCursor) {}
+
+    public record ReceiptUploadResponse(String receiptObjectKey) {}
+
+    public record ReceiptSignedUrlResponse(String url, OffsetDateTime expiresAt) {}
 
     private ExpenseDtos() {}
 }

@@ -1,5 +1,6 @@
 package ae.gov.pdd.pettycash.expense;
 
+import ae.gov.pdd.pettycash.idempotency.Idempotent;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,13 +33,14 @@ public class ExpenseController {
 
     @PostMapping("/trips/{tripId}/expenses")
     @PreAuthorize("hasAnyRole('MEMBER','LEADER')")
+    @Idempotent
     public ResponseEntity<ExpenseDtos.ExpenseView> create(
             @PathVariable UUID tripId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = "Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody ExpenseDtos.CreateExpenseRequest req) {
-        // Idempotency-Key currently relies on the client-supplied id in the body (UUID),
+        // Idempotency-Key is persisted for 24h by IdempotencyInterceptor.
+        // The client-supplied expense id (UUID) gives a second layer of dedup
         // matching CLAUDE.md §11 (server accepts client UUID as canonical).
-        // TODO: persist Idempotency-Key for the full 24h window.
         ExpenseDtos.ExpenseView view = ExpenseDtos.ExpenseView.from(service.create(tripId, req));
         return ResponseEntity.status(HttpStatus.CREATED).body(view);
     }
