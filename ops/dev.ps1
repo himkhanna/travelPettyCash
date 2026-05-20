@@ -24,7 +24,7 @@ $ComposeFile  = Join-Path $RepoRoot 'ops\docker-compose.yml'
 $BackendDir   = Join-Path $RepoRoot 'backend'
 $LogFile      = if ($env:PETTYCASH_LOG) { $env:PETTYCASH_LOG } else { Join-Path $env:TEMP 'pettycash-backend.log' }
 $Port         = if ($env:PETTYCASH_PORT) { [int]$env:PETTYCASH_PORT } else { 8080 }
-$Profile      = if ($env:PETTYCASH_PROFILE) { $env:PETTYCASH_PROFILE } else { 'local' }
+$SpringProfile = if ($env:PETTYCASH_PROFILE) { $env:PETTYCASH_PROFILE } else { 'local' }
 $BootTimeout  = if ($env:PETTYCASH_BOOT_TIMEOUT) { [int]$env:PETTYCASH_BOOT_TIMEOUT } else { 180 }
 $DbTimeout    = if ($env:PETTYCASH_DB_TIMEOUT)   { [int]$env:PETTYCASH_DB_TIMEOUT }   else { 60 }
 
@@ -131,11 +131,11 @@ function Start-Backend {
         Warn "Backend already running (pid $((Get-BackendProcess).ProcessId))"
         return
     }
-    Log "Starting backend (profile=$Profile, log=$LogFile)"
+    Log "Starting backend (profile=$SpringProfile, log=$LogFile)"
     # Truncate log so the readiness scan below isn't fooled by an old run.
     Set-Content -Path $LogFile -Value '' -Encoding UTF8
     Start-Process -FilePath (Join-Path $BackendDir 'gradlew.bat') `
-                  -ArgumentList @('--console=plain', '-q', 'bootRun', "--args=--spring.profiles.active=$Profile") `
+                  -ArgumentList @('--console=plain', '-q', 'bootRun', "--args=--spring.profiles.active=$SpringProfile") `
                   -WorkingDirectory $BackendDir `
                   -RedirectStandardOutput $LogFile `
                   -RedirectStandardError  $LogFile `

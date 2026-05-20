@@ -107,12 +107,12 @@ function Invoke-Up {
         Log "Running against fake repositories (no backend needed)"
         Log "Set PETTYCASH_API_BASE=http://localhost:8080 once the real-API switch lands"
     }
-    $args = @('run', '-d', $Device)
-    if ($WebPort) { $args += "--web-port=$WebPort" }
-    $args += Get-DartDefines
+    $runArgs = @('run', '-d', $Device)
+    if ($WebPort) { $runArgs += "--web-port=$WebPort" }
+    $runArgs += Get-DartDefines
     Push-Location $MobileDir
     try {
-        & flutter @args
+        & flutter @runArgs
         # flutter run is interactive; exit code propagates back to PowerShell.
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     } finally { Pop-Location }
