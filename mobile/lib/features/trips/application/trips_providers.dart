@@ -1,20 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/sync/sync_coordinator.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../data/fake_trip_repository.dart';
+import '../data/http_trip_repository.dart';
 import '../data/trip_repository.dart';
 import '../domain/trip.dart';
 
 final Provider<TripRepository> tripRepositoryProvider = Provider<TripRepository>(
-  (Ref ref) => FakeTripRepository(
-    ref.watch(demoStoreProvider),
-    ref.watch(fakeConfigProvider),
-    currentUserId: () => ref.read(currentUserProvider).valueOrNull?.id ?? '',
-  ),
+  (Ref ref) {
+    final FakeConfig cfg = ref.watch(fakeConfigProvider);
+    String currentUserId() =>
+        ref.read(currentUserProvider).valueOrNull?.id ?? '';
+    if (cfg.backendMode == BackendMode.http) {
+      return HttpTripRepository(
+        ref.watch(apiClientProvider),
+        currentUserId: currentUserId,
+      );
+    }
+    return FakeTripRepository(
+      ref.watch(demoStoreProvider),
+      cfg,
+      currentUserId: currentUserId,
+    );
+  },
 );
 
 /// `await ref.watch(currentUserProvider.future)` does two things: it subscribes

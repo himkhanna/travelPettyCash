@@ -9,15 +9,15 @@ INSERT INTO users (id, username, display_name, display_name_ar, email, role) VAL
   ('u-noura',  'noura.falasi',   'Noura Al Falasi',   'نورة الفلاسي',   'noura.falasi@pdd.gov.ae',   'SUPER_ADMIN');
 
 INSERT INTO sources (id, name, name_ar) VALUES
-  ('src-zabeel',   'Zabeel Office',       'مكتب زعبيل'),
+  ('src-zabeel',   'Zabeel Office',       'قصر زعبيل'),
   ('src-protocol', 'Protocol Department', 'دائرة التشريفات');
 
 INSERT INTO expense_categories (id, code, name_en, name_ar, icon_key) VALUES
-  ('cat-food',          'FOOD',          'Food',          'الطعام',     'cutlery'),
-  ('cat-transport',     'TRANSPORT',     'Transport',     'النقل',      'car'),
-  ('cat-hotel',         'HOTEL',         'Hotel',         'الفندق',     'bed'),
-  ('cat-phone',         'PHONE',         'Phone',         'الاتصالات',  'phone'),
-  ('cat-entertainment', 'ENTERTAINMENT', 'Entertainment', 'الترفيه',    'entertainment'),
-  ('cat-tips',          'TIPS',          'Tips',          'البقشيش',    'tips'),
-  ('cat-travel',        'TRAVEL',        'Travel',        'السفر',      'travel'),
-  ('cat-others',        'OTHERS',        'Others',        'أخرى',       'others');
+  ('cat-food',          'FOOD',          'Food',          'طعام',       'cutlery'),
+  ('cat-transport',     'TRANSPORT',     'Transport',     'نقل',        'car'),
+  ('cat-hotel',         'HOTEL',         'Hotel',         'فندق',       'bed'),
+  ('cat-phone',         'PHONE',         'Phone',         'هاتف',       'phone'),
+  ('cat-entertainment', 'ENTERTAINMENT', 'Entertainment', 'ترفيه',      'ticket'),
+  ('cat-tips',          'TIPS',          'Tips',          'إكراميات',   'coin'),
+  ('cat-travel',        'TRAVEL',        'Travel',        'سفر',        'plane'),
+  ('cat-others',        'OTHERS',        'Others',        'أخرى',       'dots');

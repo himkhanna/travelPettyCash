@@ -1,17 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../data/auth_repository.dart';
 import '../data/fake_auth_repository.dart';
+import '../data/http_auth_repository.dart';
 import '../domain/user.dart';
 
 final Provider<AuthRepository> authRepositoryProvider =
     Provider<AuthRepository>(
-      (Ref ref) => FakeAuthRepository(
-        ref.watch(demoStoreProvider),
-        ref.watch(fakeConfigProvider),
-      ),
+      (Ref ref) {
+        final FakeConfig cfg = ref.watch(fakeConfigProvider);
+        if (cfg.backendMode == BackendMode.http) {
+          return HttpAuthRepository(ref.watch(apiClientProvider), cfg);
+        }
+        return FakeAuthRepository(ref.watch(demoStoreProvider), cfg);
+      },
     );
 
 /// Hydrates from FakeConfig.role so the landing-page choice becomes the

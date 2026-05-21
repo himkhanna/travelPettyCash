@@ -8,6 +8,7 @@ import '../../../core/money/money.dart';
 import '../../expenses/domain/expense.dart';
 import '../../funds/domain/funding.dart';
 import '../../trips/domain/trip.dart';
+import 'report_downloader.dart';
 
 /// Per CLAUDE.md §10 the four production report types are server-rendered
 /// (Apache POI / iText) and downloaded via signed URL. For the demo we show
@@ -312,13 +313,36 @@ class _ReportPreviewDialog extends ConsumerWidget {
                   ),
                   const Spacer(),
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.print, size: 18),
-                    label: const Text('PRINT / SAVE AS PDF'),
+                    icon: const Icon(Icons.download, size: 18),
+                    label: const Text('XLSX'),
+                    onPressed: () => ReportDownloader(ref).download(
+                      context: context,
+                      tripId: trip.id,
+                      format: 'xlsx',
+                      scope: _scopeFor(kind),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.picture_as_pdf, size: 18),
+                    label: const Text('PDF'),
+                    onPressed: () => ReportDownloader(ref).download(
+                      context: context,
+                      tripId: trip.id,
+                      format: 'pdf',
+                      scope: _scopeFor(kind),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  IconButton(
+                    icon: const Icon(Icons.print),
+                    tooltip: 'Print preview via browser',
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Open browser print (Ctrl/⌘+P) to save this preview as PDF.',
+                            'Use the browser print dialog (Ctrl/⌘+P) to save '
+                            'this preview as PDF.',
                           ),
                         ),
                       );
@@ -354,6 +378,19 @@ class _ReportPreviewDialog extends ConsumerWidget {
         return 'Finance Department Letter';
       case ReportKind.directorGeneral:
         return 'DG Report';
+    }
+  }
+
+  String _scopeFor(ReportKind k) {
+    switch (k) {
+      case ReportKind.user:
+        return 'user';
+      case ReportKind.tripFull:
+        return 'team';
+      case ReportKind.financeLetter:
+        return 'finance';
+      case ReportKind.directorGeneral:
+        return 'dg';
     }
   }
 }

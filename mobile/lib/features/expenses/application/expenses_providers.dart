@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/fake/fake_config.dart';
 import '../../../core/sync/sync_coordinator.dart';
@@ -9,15 +10,27 @@ import '../data/category_repository.dart';
 import '../data/expense_repository.dart';
 import '../data/fake_category_repository.dart';
 import '../data/fake_expense_repository.dart';
+import '../data/http_expense_repository.dart';
 import '../domain/expense.dart';
 import '../presentation/widgets/expense_filter_sheet.dart';
 
 final Provider<ExpenseRepository> expenseRepositoryProvider =
     Provider<ExpenseRepository>(
-      (Ref ref) => FakeExpenseRepository(
-        ref.watch(demoStoreProvider),
-        ref.watch(fakeConfigProvider),
-      ),
+      (Ref ref) {
+        final FakeConfig cfg = ref.watch(fakeConfigProvider);
+        final FakeExpenseRepository fake = FakeExpenseRepository(
+          ref.watch(demoStoreProvider),
+          cfg,
+        );
+        if (cfg.backendMode == BackendMode.http) {
+          return HttpExpenseRepository(
+            ref.watch(apiClientProvider),
+            ref.watch(demoStoreProvider),
+            fake,
+          );
+        }
+        return fake;
+      },
     );
 
 final Provider<CategoryRepository> categoryRepositoryProvider =

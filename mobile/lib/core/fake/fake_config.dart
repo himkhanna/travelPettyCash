@@ -32,6 +32,19 @@ class FakeConfig extends ChangeNotifier {
   /// Optional clock override for fast-forwarding demos. null means real time.
   DateTime? clockOverride;
 
+  /// Where reads and writes go. `fake` keeps everything on DemoStore (default);
+  /// `http` swaps Auth/Trip/Expense/Reports to the Spring backend on
+  /// [backendBaseUrl]. Each repo falls back to fake for things the backend
+  /// does not yet cover (e.g. chat, notifications).
+  BackendMode backendMode = BackendMode.fake;
+
+  /// Base URL of the Spring backend, with no trailing slash.
+  String backendBaseUrl = 'http://localhost:8080';
+
+  /// Cached JWT from the most recent /auth/login. Null until the user signs in
+  /// via the landing screen.
+  String? authToken;
+
   DateTime now() => clockOverride ?? DateTime.now();
 
   Future<void> waitLatency() => Future<void>.delayed(latency);
@@ -70,8 +83,28 @@ class FakeConfig extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setBackendMode(BackendMode value) {
+    backendMode = value;
+    if (value == BackendMode.fake) authToken = null;
+    notifyListeners();
+  }
+
+  void setBackendBaseUrl(String value) {
+    backendBaseUrl = value.endsWith('/')
+        ? value.substring(0, value.length - 1)
+        : value;
+    notifyListeners();
+  }
+
+  void setAuthToken(String? token) {
+    authToken = token;
+    notifyListeners();
+  }
+
   static final Random _rng = Random();
 }
+
+enum BackendMode { fake, http }
 
 class FakeFailure implements Exception {
   FakeFailure(this.op);
