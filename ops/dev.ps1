@@ -56,6 +56,22 @@ function Test-ComposeHealthy {
     } catch { return $false }
 }
 
+# Container says healthy != host port is bound. On Windows Docker Desktop the
+# port-publishing layer can lag the container's own healthcheck, so we also
+# probe the host-side TCP listener before declaring victory.
+function Test-HostPortReady {
+    param([int]$TcpPort)
+    try {
+        $c = New-Object System.Net.Sockets.TcpClient
+        $iar = $c.BeginConnect('127.0.0.1', $TcpPort, $null, $null)
+        $ok = $iar.AsyncWaitHandle.WaitOne(500)
+        if (-not $ok) { $c.Close(); return $false }
+        $c.EndConnect($iar)
+        $c.Close()
+        return $true
+    } catch { return $false }
+}
+
 function Test-BackendResponding {
     try {
         $null = Invoke-RestMethod -Uri "http://localhost:$Port/health" -TimeoutSec 2 -ErrorAction Stop
@@ -82,6 +98,15 @@ function Ensure-Compose {
             exit 1
         }
         Start-Sleep -Seconds 2
+    }
+    Log "Waiting for host TCP ports (5432, 9000)"
+    while ($true) {
+        if ((Test-HostPortReady -TcpPort 5432) -and (Test-HostPortReady -TcpPort 9000)) { break }
+        if ((Get-Date) -ge $deadline) {
+            Err "Host ports 5432/9000 not reachable in ${DbTimeout}s"
+            exit 1
+        }
+        Start-Sleep -Seconds 1
     }
     Ok "Postgres + MinIO healthy"
 }
