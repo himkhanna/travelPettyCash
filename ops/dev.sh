@@ -44,8 +44,8 @@ port_listener_pids() {
 
 compose_up_and_healthy() {
   local pg_status minio_status
-  pg_status=$(docker inspect -f '{{.State.Health.Status}}' pettycash-postgres 2>/dev/null || echo missing)
-  minio_status=$(docker inspect -f '{{.State.Health.Status}}' pettycash-minio 2>/dev/null || echo missing)
+  pg_status=$(docker inspect -f '{{.State.Health.Status}}' travelpettycash-postgres 2>/dev/null || echo missing)
+  minio_status=$(docker inspect -f '{{.State.Health.Status}}' travelpettycash-minio 2>/dev/null || echo missing)
   [ "$pg_status" = "healthy" ] && [ "$minio_status" = "healthy" ]
 }
 
@@ -68,7 +68,7 @@ ensure_compose() {
   until compose_up_and_healthy; do
     if [ $SECONDS -ge $deadline ]; then
       err "Postgres / MinIO did not become healthy in ${DB_HEALTH_TIMEOUT_SECONDS}s"
-      docker ps --format 'table {{.Names}}\t{{.Status}}' | grep pettycash || true
+      docker ps --format 'table {{.Names}}\t{{.Status}}' | grep travelpettycash || true
       exit 1
     fi
     sleep 2
@@ -183,7 +183,7 @@ smoke() {
 
 status() {
   log "Compose"
-  docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'pettycash|NAMES' || true
+  docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E "travelpettycash|NAMES" || true
   echo
   log "Backend process"
   local pid

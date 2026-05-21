@@ -50,8 +50,8 @@ function Get-PortListenerPids {
 
 function Test-ComposeHealthy {
     try {
-        $pg    = (docker inspect -f '{{.State.Health.Status}}' pettycash-postgres 2>$null)
-        $minio = (docker inspect -f '{{.State.Health.Status}}' pettycash-minio    2>$null)
+        $pg    = (docker inspect -f '{{.State.Health.Status}}' travelpettycash-postgres 2>$null)
+        $minio = (docker inspect -f '{{.State.Health.Status}}' travelpettycash-minio    2>$null)
         return ($pg -eq 'healthy' -and $minio -eq 'healthy')
     } catch { return $false }
 }
@@ -94,16 +94,16 @@ function Ensure-Compose {
     while (-not (Test-ComposeHealthy)) {
         if ((Get-Date) -ge $deadline) {
             Err "Postgres / MinIO did not become healthy in ${DbTimeout}s"
-            docker ps --format 'table {{.Names}}\t{{.Status}}' | Select-String pettycash
+            docker ps --format 'table {{.Names}}\t{{.Status}}' | Select-String travelpettycash
             exit 1
         }
         Start-Sleep -Seconds 2
     }
-    Log "Waiting for host TCP ports (5432, 9000)"
+    Log "Waiting for host TCP ports (5432, 9100)"
     while ($true) {
-        if ((Test-HostPortReady -TcpPort 5432) -and (Test-HostPortReady -TcpPort 9000)) { break }
+        if ((Test-HostPortReady -TcpPort 5432) -and (Test-HostPortReady -TcpPort 9100)) { break }
         if ((Get-Date) -ge $deadline) {
-            Err "Host ports 5432/9000 not reachable in ${DbTimeout}s"
+            Err "Host ports 5432/9100 not reachable in ${DbTimeout}s"
             exit 1
         }
         Start-Sleep -Seconds 1
@@ -255,7 +255,7 @@ function Invoke-Smoke {
 function Show-Status {
     Log "Compose"
     docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' |
-        Select-String -Pattern 'pettycash|NAMES'
+        Select-String -Pattern 'travelpettycash|NAMES'
     Write-Host ''
     Log "Backend process"
     $proc = Get-BackendProcess

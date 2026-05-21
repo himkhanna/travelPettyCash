@@ -13,7 +13,7 @@ docker compose -f ops/docker-compose.yml up -d
 
 This runs:
 - Postgres 15 on `localhost:5432` (`pettycash` / `pettycash` / db `pettycash`)
-- MinIO on `localhost:9000` (S3 API) and `localhost:9001` (console), root creds `minio_admin` / `minio_admin12`
+- MinIO on `localhost:9100` (S3 API) and `localhost:9101` (console), root creds `minio_admin` / `minio_admin12`. Host ports were moved off 9000/9001 to avoid colliding with other dev stacks; container-internal MinIO still listens on 9000/9001.
 
 ### 2. Run the backend
 

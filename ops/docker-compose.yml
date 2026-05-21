@@ -1,10 +1,14 @@
-# Local dev stack — Postgres + MinIO. Run from repo root: docker compose -f ops/docker-compose.yml up
+# Local dev stack - Postgres + MinIO. Run from repo root: docker compose -f ops/docker-compose.yml up
 # Or use the wrapper: ops/dev.sh up
+#
+# Container names are prefixed `travelpettycash-` (not `pettycash-`) so this
+# stack peacefully coexists with any other project running its own
+# `pettycash-*` containers on the same Docker host.
 
 services:
   postgres:
     image: postgres:15
-    container_name: pettycash-postgres
+    container_name: travelpettycash-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: pettycash
@@ -13,7 +17,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pettycash_pg_data:/var/lib/postgresql/data
+      - travelpettycash_pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pettycash -d pettycash"]
       interval: 5s
@@ -22,17 +26,20 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: pettycash-minio
+    container_name: travelpettycash-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minio_admin
       MINIO_ROOT_PASSWORD: minio_admin12
+    # Host ports 9100/9101 (not 9000/9001) to avoid clashing with any other
+    # MinIO already on the dev box. The container still listens on 9000/9001
+    # internally.
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # console
+      - "9100:9000"   # S3 API
+      - "9101:9001"   # console
     volumes:
-      - pettycash_minio_data:/data
+      - travelpettycash_minio_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
@@ -40,5 +47,5 @@ services:
       retries: 10
 
 volumes:
-  pettycash_pg_data:
-  pettycash_minio_data:
+  travelpettycash_pg_data:
+  travelpettycash_minio_data:

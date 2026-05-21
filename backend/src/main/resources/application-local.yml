@@ -1,6 +1,8 @@
+# `127.0.0.1` (not `localhost`) on both endpoints so the JVM never
+# resolves to ::1 — Docker Desktop on Windows binds IPv4 only.
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/pettycash
+    url: jdbc:postgresql://127.0.0.1:5432/pettycash
     username: pettycash
     password: pettycash
   jpa:
@@ -8,7 +10,9 @@ spring:
 
 pettycash:
   storage:
-    endpoint: http://localhost:9000
+    # MinIO host port is 9100 in our compose (avoids 9000 collisions with
+    # other dev stacks on the same machine). Container-internal is still 9000.
+    endpoint: http://127.0.0.1:9100
     access-key: minio_admin
     secret-key: minio_admin12
     bucket: pettycash-receipts
