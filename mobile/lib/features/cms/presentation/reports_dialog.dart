@@ -17,20 +17,46 @@ enum ReportKind { user, tripFull, financeLetter, directorGeneral }
 
 Future<void> showReportsCatalog(
   BuildContext context, {
-  required Trip trip,
+  Trip? trip,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (BuildContext _) => _ReportsCatalog(trip: trip),
+    builder: (BuildContext _) => _ReportsCatalog(initialTrip: trip),
   );
 }
 
-class _ReportsCatalog extends ConsumerWidget {
-  const _ReportsCatalog({required this.trip});
-  final Trip trip;
+class _ReportsCatalog extends ConsumerStatefulWidget {
+  const _ReportsCatalog({this.initialTrip});
+  final Trip? initialTrip;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ReportsCatalog> createState() => _ReportsCatalogState();
+}
+
+class _ReportsCatalogState extends ConsumerState<_ReportsCatalog> {
+  Trip? _trip;
+
+  @override
+  void initState() {
+    super.initState();
+    _trip = widget.initialTrip;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final DemoStore store = ref.watch(demoStoreProvider);
+    final List<Trip> allTrips = <Trip>[...store.trips]
+      ..sort((Trip a, Trip b) {
+        final int s = a.status.index.compareTo(b.status.index);
+        if (s != 0) return s;
+        return a.name.compareTo(b.name);
+      });
+    // If still null and we have trips, default to the first active one.
+    _trip ??= allTrips
+        .where((Trip t) => t.status == TripStatus.active)
+        .firstOrNull ??
+        allTrips.firstOrNull;
+
     return Dialog(
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(AppRadii.card),
@@ -48,7 +74,7 @@ class _ReportsCatalog extends ConsumerWidget {
                   const Icon(Icons.description_outlined),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
-                    'Reports — ${trip.name}',
+                    'Reports',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const Spacer(),
@@ -68,41 +94,55 @@ class _ReportsCatalog extends ConsumerWidget {
                   color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Wrap(
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.md,
-                children: <Widget>[
-                  _ReportCard(
-                    title: 'USER REPORT',
-                    subtitle: 'Single user expenses for finance.\nXLSX + PDF.',
-                    icon: Icons.person_outline,
-                    onTap: () => _showPreview(context, ReportKind.user),
-                  ),
-                  _ReportCard(
-                    title: 'TRIP FULL',
-                    subtitle: 'Every expense by every member with receipts.\nXLSX.',
-                    icon: Icons.flight,
-                    onTap: () => _showPreview(context, ReportKind.tripFull),
-                  ),
-                  _ReportCard(
-                    title: 'FINANCE LETTER',
-                    subtitle: 'Letterhead summary of sources used + balance returned.\nSigned PDF.',
-                    icon: Icons.draw_outlined,
-                    onTap: () =>
-                        _showPreview(context, ReportKind.financeLetter),
-                  ),
-                  _ReportCard(
-                    title: 'DG REPORT',
-                    subtitle: 'Per-user / per-category roll-up.\nRead-only PDF.',
-                    icon: Icons.shield_outlined,
-                    onTap: () => _showPreview(
-                      context,
-                      ReportKind.directorGeneral,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: AppSpacing.md),
+              _TripPicker(
+                trips: allTrips,
+                selected: _trip,
+                onChanged: (Trip t) => setState(() => _trip = t),
               ),
+              const SizedBox(height: AppSpacing.lg),
+              if (_trip == null)
+                _EmptyTrips()
+              else
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.md,
+                  children: <Widget>[
+                    _ReportCard(
+                      title: 'USER REPORT',
+                      subtitle:
+                          'Single user expenses for finance.\nXLSX + PDF.',
+                      icon: Icons.person_outline,
+                      onTap: () => _showPreview(context, ReportKind.user),
+                    ),
+                    _ReportCard(
+                      title: 'TRIP FULL',
+                      subtitle:
+                          'Every expense by every member with receipts.\nXLSX.',
+                      icon: Icons.flight,
+                      onTap: () =>
+                          _showPreview(context, ReportKind.tripFull),
+                    ),
+                    _ReportCard(
+                      title: 'FINANCE LETTER',
+                      subtitle:
+                          'Letterhead summary of sources used + balance returned.\nSigned PDF.',
+                      icon: Icons.draw_outlined,
+                      onTap: () =>
+                          _showPreview(context, ReportKind.financeLetter),
+                    ),
+                    _ReportCard(
+                      title: 'DG REPORT',
+                      subtitle:
+                          'Per-user / per-category roll-up.\nRead-only PDF.',
+                      icon: Icons.shield_outlined,
+                      onTap: () => _showPreview(
+                        context,
+                        ReportKind.directorGeneral,
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -111,9 +151,63 @@ class _ReportsCatalog extends ConsumerWidget {
   }
 
   void _showPreview(BuildContext context, ReportKind kind) {
+    final Trip? t = _trip;
+    if (t == null) return;
     showDialog<void>(
       context: context,
-      builder: (BuildContext _) => _ReportPreviewDialog(kind: kind, trip: trip),
+      builder: (BuildContext _) => _ReportPreviewDialog(kind: kind, trip: t),
+    );
+  }
+}
+
+class _TripPicker extends StatelessWidget {
+  const _TripPicker({
+    required this.trips,
+    required this.selected,
+    required this.onChanged,
+  });
+  final List<Trip> trips;
+  final Trip? selected;
+  final ValueChanged<Trip> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (trips.isEmpty) return const SizedBox.shrink();
+    return DropdownButtonFormField<String>(
+      initialValue: selected?.id,
+      decoration: const InputDecoration(
+        labelText: 'Trip',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      items: <DropdownMenuItem<String>>[
+        for (final Trip t in trips)
+          DropdownMenuItem<String>(
+            value: t.id,
+            child: Text(
+              '${t.name} · ${t.countryName} · ${t.status.name.toUpperCase()}',
+            ),
+          ),
+      ],
+      onChanged: (String? id) {
+        if (id == null) return;
+        onChanged(trips.firstWhere((Trip t) => t.id == id));
+      },
+    );
+  }
+}
+
+class _EmptyTrips extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      child: Text(
+        'No trips yet — create one before generating reports.',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
     );
   }
 }

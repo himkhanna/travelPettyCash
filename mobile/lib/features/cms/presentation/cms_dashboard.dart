@@ -94,17 +94,16 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            if (_selectedTripId != null)
-              OutlinedButton.icon(
-                icon: const Icon(Icons.description_outlined, size: 18),
-                label: const Text('REPORTS'),
-                onPressed: () {
-                  final Trip? t = tripsAsync.valueOrNull
-                      ?.where((Trip t) => t.id == _selectedTripId)
-                      .firstOrNull;
-                  if (t != null) showReportsCatalog(context, trip: t);
-                },
-              ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.description_outlined, size: 18),
+              label: const Text('REPORTS'),
+              onPressed: () {
+                final Trip? selected = tripsAsync.valueOrNull
+                    ?.where((Trip t) => t.id == _selectedTripId)
+                    .firstOrNull;
+                showReportsCatalog(context, trip: selected);
+              },
+            ),
             const SizedBox(width: AppSpacing.sm),
             FilledButton.icon(
               icon: const Icon(Icons.add, size: 18),
