@@ -33,6 +33,17 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
     final User? me = ref.watch(currentUserProvider).valueOrNull;
     final AsyncValue<List<Trip>> tripsAsync = ref.watch(_allTripsProvider);
 
+    return Theme(
+      data: buildCmsTheme(context),
+      child: _buildScaffold(context, me, tripsAsync),
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context,
+    User? me,
+    AsyncValue<List<Trip>> tripsAsync,
+  ) {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(

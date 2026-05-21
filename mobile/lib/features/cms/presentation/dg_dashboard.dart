@@ -79,7 +79,9 @@ class DgDashboard extends ConsumerWidget {
       );
     }
 
-    return Scaffold(
+    return Theme(
+      data: buildCmsTheme(context),
+      child: Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -136,6 +138,7 @@ class DgDashboard extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

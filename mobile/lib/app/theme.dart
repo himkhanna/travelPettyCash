@@ -121,3 +121,34 @@ ThemeData buildPddTheme() {
     dividerTheme: const DividerThemeData(color: AppColors.divider, space: 1),
   );
 }
+
+/// CMS (Flutter Web) overrides the global button themes so action buttons
+/// shrink to content. The global theme uses Size(double.infinity, 52) for
+/// the mobile full-width buttons in forms — applied verbatim inside an
+/// AppBar or a Wrap row, that forces infinite width and pushes the title
+/// and actions off-screen.
+ThemeData buildCmsTheme(BuildContext context) {
+  final ThemeData base = Theme.of(context);
+  final ButtonStyle compactFilled = FilledButton.styleFrom(
+    backgroundColor: AppColors.brandBrown,
+    foregroundColor: AppColors.textOnBrand,
+    minimumSize: const Size(0, 40),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(AppRadii.button),
+    ),
+  );
+  final ButtonStyle compactOutlined = OutlinedButton.styleFrom(
+    foregroundColor: AppColors.brandBrown,
+    side: const BorderSide(color: AppColors.brandBrown),
+    minimumSize: const Size(0, 40),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(AppRadii.button),
+    ),
+  );
+  return base.copyWith(
+    filledButtonTheme: FilledButtonThemeData(style: compactFilled),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: compactOutlined),
+  );
+}
