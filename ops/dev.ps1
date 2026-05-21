@@ -132,34 +132,46 @@ function Start-Backend {
         return
     }
     Log "Starting backend (profile=$SpringProfile, log=$LogFile)"
-    # Truncate log so the readiness scan below isn't fooled by an old run.
-    Set-Content -Path $LogFile -Value '' -Encoding UTF8
+    # Start-Process on Windows PowerShell 5.1 refuses the same file for both
+    # streams, so stderr goes to a sibling file and the wait loop greps both.
+    $LogFileErr = "$LogFile.err"
+    # Truncate so the readiness scan below isn't fooled by an old run.
+    Set-Content -Path $LogFile    -Value '' -Encoding UTF8
+    Set-Content -Path $LogFileErr -Value '' -Encoding UTF8
     Start-Process -FilePath (Join-Path $BackendDir 'gradlew.bat') `
                   -ArgumentList @('--console=plain', '-q', 'bootRun', "--args=--spring.profiles.active=$SpringProfile") `
                   -WorkingDirectory $BackendDir `
                   -RedirectStandardOutput $LogFile `
-                  -RedirectStandardError  $LogFile `
+                  -RedirectStandardError  $LogFileErr `
                   -WindowStyle Hidden | Out-Null
     Log "Waiting up to ${BootTimeout}s for 'Started PettyCashApplication'"
     $deadline = (Get-Date).AddSeconds($BootTimeout)
     $pattern  = 'Started PettyCashApplication|APPLICATION FAILED|BUILD FAILED|Application run failed|Web server failed to start'
     while ($true) {
-        if (Test-Path $LogFile) {
-            $hit = Select-String -Path $LogFile -Pattern $pattern -Quiet -ErrorAction SilentlyContinue
-            if ($hit) { break }
+        $hit = $false
+        foreach ($f in @($LogFile, $LogFileErr)) {
+            if (Test-Path $f) {
+                if (Select-String -Path $f -Pattern $pattern -Quiet -ErrorAction SilentlyContinue) {
+                    $hit = $true; break
+                }
+            }
         }
+        if ($hit) { break }
         if ((Get-Date) -ge $deadline) {
             Err "Backend did not signal readiness in ${BootTimeout}s"
-            if (Test-Path $LogFile) { Get-Content $LogFile -Tail 30 | Write-Host }
+            if (Test-Path $LogFile)    { Get-Content $LogFile    -Tail 20 | Write-Host }
+            if (Test-Path $LogFileErr) { Get-Content $LogFileErr -Tail 20 | Write-Host }
             exit 1
         }
         Start-Sleep -Seconds 2
     }
     $bad = 'APPLICATION FAILED|BUILD FAILED|Application run failed|Web server failed to start'
-    if (Select-String -Path $LogFile -Pattern $bad -Quiet -ErrorAction SilentlyContinue) {
-        Err "Backend failed to start. Last 30 log lines:"
-        Get-Content $LogFile -Tail 30 | Write-Host
-        exit 1
+    foreach ($f in @($LogFile, $LogFileErr)) {
+        if ((Test-Path $f) -and (Select-String -Path $f -Pattern $bad -Quiet -ErrorAction SilentlyContinue)) {
+            Err "Backend failed to start. Last 30 lines from $f"
+            Get-Content $f -Tail 30 | Write-Host
+            exit 1
+        }
     }
     Ok "Backend up on http://localhost:$Port"
 }
