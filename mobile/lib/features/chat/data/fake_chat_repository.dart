@@ -86,6 +86,35 @@ class FakeChatRepository implements ChatRepository {
   }
 
   @override
+  Future<ChatThread> getOrCreateExpenseThread({
+    required String expenseId,
+    required String tripId,
+    required String adminUserId,
+    required String ownerUserId,
+    required String expenseLabel,
+    required String expenseLabelAr,
+  }) async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    final ChatThread? existing = _store.chatThreads
+        .where((ChatThread t) => t.expenseId == expenseId)
+        .firstOrNull;
+    if (existing != null) return existing;
+    final ChatThread fresh = ChatThread(
+      id: 'thread-exp-$expenseId',
+      tripId: tripId,
+      title: 'Q: $expenseLabel',
+      titleAr: 'استفسار: $expenseLabelAr',
+      participantIds: <String>[adminUserId, ownerUserId],
+      unreadCount: 0,
+      expenseId: expenseId,
+    );
+    _store.chatThreads.add(fresh);
+    _store.emit(DemoStoreEvent.chatChanged);
+    return fresh;
+  }
+
+  @override
   Future<void> markRead({
     required String threadId,
     required String userId,
@@ -106,6 +135,7 @@ class FakeChatRepository implements ChatRepository {
       unreadCount: 0,
       lastMessagePreview: old.lastMessagePreview,
       lastMessageAt: old.lastMessageAt,
+      expenseId: old.expenseId,
     );
     _store.emit(DemoStoreEvent.chatChanged);
   }

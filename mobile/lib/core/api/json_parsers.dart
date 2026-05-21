@@ -101,6 +101,7 @@ ChatThread parseChatThread(Map<String, Object?> json) => ChatThread(
   lastMessageAt: json['lastMessageAt'] == null
       ? null
       : DateTime.parse(json['lastMessageAt']! as String),
+  expenseId: json['expenseId'] as String?,
 );
 
 ChatMessage parseChatMessage(Map<String, Object?> json) => ChatMessage(

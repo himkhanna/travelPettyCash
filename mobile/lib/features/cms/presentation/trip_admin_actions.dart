@@ -12,6 +12,7 @@ import '../../funds/application/funds_providers.dart';
 import '../../funds/domain/funding.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
+import 'edit_trip_dialog.dart';
 
 /// Action bar on the CMS trip-detail pane. Visible to Admin only;
 /// Super Admin sees the trip read-only.
@@ -33,6 +34,11 @@ class TripAdminActions extends ConsumerWidget {
         runSpacing: AppSpacing.sm,
         children: <Widget>[
           OutlinedButton.icon(
+            icon: const Icon(Icons.edit, size: 18),
+            label: const Text('EDIT TRIP'),
+            onPressed: () => _openEditTrip(context),
+          ),
+          OutlinedButton.icon(
             icon: const Icon(Icons.add_card_outlined, size: 18),
             label: const Text('ASSIGN ADDITIONAL FUNDS'),
             onPressed: () => _openAssignFunds(context, ref),
@@ -48,6 +54,13 @@ class TripAdminActions extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _openEditTrip(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext _) => EditTripDialog(tripId: trip.id),
     );
   }
 

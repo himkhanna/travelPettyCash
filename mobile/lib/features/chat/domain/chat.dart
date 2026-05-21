@@ -8,6 +8,7 @@ class ChatThread {
     required this.unreadCount,
     this.lastMessagePreview,
     this.lastMessageAt,
+    this.expenseId,
   });
 
   final String id;
@@ -19,7 +20,12 @@ class ChatThread {
   final String? lastMessagePreview;
   final DateTime? lastMessageAt;
 
+  /// Non-null when this thread is an admin → owner question scoped to a
+  /// specific expense (per CLAUDE.md §5, EXPENSE_QUERY notification).
+  final String? expenseId;
+
   bool get isGroup => participantIds.length > 2;
+  bool get isExpenseQuery => expenseId != null;
 }
 
 class ChatMessage {

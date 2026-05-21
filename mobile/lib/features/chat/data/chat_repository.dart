@@ -9,4 +9,15 @@ abstract class ChatRepository {
     required String body,
   });
   Future<void> markRead({required String threadId, required String userId});
+
+  /// Find an existing admin↔owner thread for [expenseId], or create a fresh
+  /// one. Idempotent.
+  Future<ChatThread> getOrCreateExpenseThread({
+    required String expenseId,
+    required String tripId,
+    required String adminUserId,
+    required String ownerUserId,
+    required String expenseLabel,
+    required String expenseLabelAr,
+  });
 }

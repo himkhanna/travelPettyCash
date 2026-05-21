@@ -198,6 +198,7 @@ enum DemoStoreEvent {
   notificationsChanged,
   chatChanged,
   tripsChanged,
+  usersChanged,
 }
 
 final Provider<DemoStore> demoStoreProvider = Provider<DemoStore>(

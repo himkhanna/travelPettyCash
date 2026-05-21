@@ -13,8 +13,10 @@ import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import 'add_category_dialog.dart';
 import 'create_trip_dialog.dart';
+import 'expense_chat_dialog.dart';
 import 'reports_dialog.dart';
 import 'trip_admin_actions.dart';
+import 'users_admin_dialog.dart';
 
 /// Admin / Super Admin console. Trip list on the left, selected-trip
 /// expenses + balances on the right.
@@ -75,6 +77,14 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
             const SizedBox(width: AppSpacing.sm),
           ],
           if (me?.role == UserRole.admin) ...<Widget>[
+            IconButton(
+              icon: const Icon(Icons.group_outlined),
+              tooltip: 'Manage users',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (BuildContext _) => const UsersAdminDialog(),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.category_outlined),
               tooltip: 'Add expense category',
@@ -683,6 +693,7 @@ class _ExpensesTable extends StatelessWidget {
                   flex: 2,
                   child: _Th(label: 'AMOUNT', align: TextAlign.right),
                 ),
+                SizedBox(width: 48),
               ],
             ),
           ),
@@ -752,6 +763,21 @@ class _ExpensesTable extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
+                  SizedBox(
+                    width: 48,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.question_answer_outlined,
+                        size: 18,
+                      ),
+                      tooltip: 'Ask a question about this expense',
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (BuildContext _) =>
+                            ExpenseChatDialog(expense: e),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -784,6 +810,7 @@ class _ExpensesTable extends StatelessWidget {
                     color: AppColors.brandBrown,
                   ),
                 ),
+                const SizedBox(width: 48),
               ],
             ),
           ),
