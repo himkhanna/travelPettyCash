@@ -1,4 +1,4 @@
-# Dev loop helper for the PDD Petty Cash backend (PowerShell / Windows).
+﻿# Dev loop helper for the PDD Petty Cash backend (PowerShell / Windows).
 # Mirror of ops/dev.sh. Subcommands: up | down | nuke | restart | build | status | logs | smoke | help
 # Default with no args = restart.
 #
@@ -97,7 +97,7 @@ function Stop-Backend {
             Start-Sleep -Seconds 1
         }
         if (Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue) {
-            Warn "Backend did not exit in 10s — forcing"
+            Warn "Backend did not exit in 10s - forcing"
             Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
         }
     } else {
@@ -179,20 +179,20 @@ function Invoke-Smoke {
         $token = $login.accessToken
     } catch { Err "Login failed: $($_.Exception.Message)"; return $false }
     if (-not $token) { Err "Login did not return an accessToken"; return $false }
-    Ok "Login OK (PDD_SSO → JWT issued)"
+    Ok "Login OK (PDD_SSO -> JWT issued)"
 
     $h = @{ Authorization = "Bearer $token" }
     try {
         $me = Invoke-RestMethod -Uri "http://localhost:$Port/api/v1/me" -Headers $h -ErrorAction Stop
-        Ok "/me → $($me.username) role=$($me.role)"
+        Ok "/me -> $($me.username) role=$($me.role)"
     } catch { Err "/me failed"; return $false }
 
     try {
         $trips = Invoke-RestMethod -Uri "http://localhost:$Port/api/v1/trips?status=ACTIVE" -Headers $h -ErrorAction Stop
-        Ok "/trips → $($trips.Count) active trip(s)"
+        Ok "/trips -> $($trips.Count) active trip(s)"
     } catch { Err "/trips failed"; return $false }
 
-    # OCR scan smoke — synth a tiny "image" payload (the mock OCR keys on sha256 mod 4).
+    # OCR scan smoke - synth a tiny "image" payload (the mock OCR keys on sha256 mod 4).
     $tmpImg = Join-Path $env:TEMP 'pettycash-smoke.jpg'
     'smoke' | Set-Content -Path $tmpImg -Encoding ASCII
     try {
@@ -208,7 +208,7 @@ function Invoke-Smoke {
             if ($LASTEXITCODE -ne 0) { throw "curl returned $LASTEXITCODE" }
             $scan = $raw | ConvertFrom-Json
         }
-        Ok "/receipts/scan → $($scan.vendor) / conf=$($scan.confidence)"
+        Ok "/receipts/scan -> $($scan.vendor) / conf=$($scan.confidence)"
     } catch { Err "/receipts/scan failed: $($_.Exception.Message)"; return $false }
 
     Ok "All smoke checks passed"

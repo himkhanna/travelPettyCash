@@ -1,4 +1,4 @@
-# Dev loop helper for the PDD Petty Cash Flutter app (PowerShell / Windows).
+﻿# Dev loop helper for the PDD Petty Cash Flutter app (PowerShell / Windows).
 # Mirror of ops/dev-mobile.sh. Subcommands: up | pub | analyze | test | check | build | clean | help
 # Default with no args = up.
 
