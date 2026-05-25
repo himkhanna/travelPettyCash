@@ -396,63 +396,99 @@ Field staff in foreign countries with patchy connectivity is the norm.
 
 ---
 
-## 17. Demo-prep status (2026-05-18 build)
+## 17. Demo-prep status (2026-05-25 build)
 
-### Shipped this sprint
+> Builds on the 2026-05-18 baseline. Items shipped between 05-18 and
+> 05-25 are tagged **NEW** so reviewers can scan the delta. Everything
+> from the prior baseline is rolled forward and re-listed only where it
+> materially changed.
 
-**Backend** (Spring Boot 3.4, Java 21, Postgres 15 + Flyway through `V008__expense_comments.sql`):
+### Backend (Spring Boot 3.4, Java 21, Postgres 15 + Flyway through `V009__report_schedules.sql`)
 
-- Auth + roles (admin / leader / member / super-admin), JWT access + refresh.
-- Trips: list / create / patch / close / **delete (no-expense guard, cascades through allocations + transfers)**.
-- Funds: sources, allocations (admin → trip, leader → member), transfers (peer-to-peer), idempotency-key on every POST.
-- Expenses: full CRUD + source reassignment + receipt upload (MinIO presigned URLs) + summary by category/source/member.
-- **Mission aggregate** (`V007`) — every trip lives under a mission, missions can nest via `parent_mission_id`. `Mission` + `MissionRepository` + `MissionController`.
-- **Expense comments + @mentions** (`V008`) — `ExpenseComment` + `expense_comment_mentions` join, `ExpenseCommentService` fans out an `EXPENSE_QUERY` notification per mention (payload carries snippet + expenseId + tripId + author + amount). Mentions are clipped to trip participants and never self-notify.
-- **Audit module** — `/api/v1/audit` feed synthesized from existing aggregates (allocations, transfers, expenses, expense source-reassignments, trip lifecycle). Read-only, admin/super-admin.
-- Reports — server-rendered PDF (OpenPDF) + XLSX (Apache POI): user, trip-full, finance letter, DG. Signature stub in place.
-- Notifications inbox with fan-out, mark-read, RFC-7807 error envelope on every endpoint.
-- Seeders: users, sources, missions, categories, current-quarter trip + activity, **plus `DemoHistoricalActivitySeeder` — 3 closed trips, 6 allocations, 15 backdated expenses for credible history**.
+- Auth + roles, JWT access + refresh, RFC-7807 errors on every endpoint, idempotency keys on every write.
+- Trips: list / create / patch / close / delete (no-expense guard).
+- Funds: sources, allocations, transfers.
+- Expenses: full CRUD + source reassignment + receipt upload (MinIO).
+- Missions: `V007` aggregate, parent/child nesting.
+- Expense comments + @mentions (`V008`) → `EXPENSE_QUERY` notifications.
+- Audit feed at `/api/v1/audit` (synthesized; not yet a hash-chained table).
+- Reports: PDF (OpenPDF) + XLSX (Apache POI). Signature stub.
+- Notifications: fan-out + inbox + mark-read.
+- Seeders: users, sources, missions, categories, current-quarter trips + `DemoHistoricalActivitySeeder`.
 
-**Mobile** (Flutter Web, Riverpod 2, go_router, Inter via google_fonts):
+**NEW since 05-18:**
 
-- Pixel-perfect rebuild of all 14 mobile screens against the forest-green design handoff (cream surfaces, gold accents, donut breakdowns, sticky bottom save bars).
-- Portal split: `/app` (member/leader), `/portal` (admin/super-admin), wrong-portal guard with a friendly redirect.
-- Trips home: hero balance cards replaced with compact rows under **Active / Upcoming / Archived** section labels; slim available-balance line + spent bar per active row. Five+ trips now fit on one viewport.
-- **HomeBottomNav** (Home / Inbox / Trips / Profile) for the landing; trip-scoped nav stays inside a trip.
-- Trip dashboard: leader-only "Allocate funds" + "Manage funds" action row added inside the trip (was misplaced on the landing).
-- Expense detail: comments thread + reply composer (bubble UI, initials avatars), wired to the new backend.
-- Notifications: `EXPENSE_QUERY` is now tappable → deep-links to the expense; body uses the real `snippet` + `authorId` + `tripName` payload.
-- CMS surfaces: cms_dashboard, edit_trip_dialog (Save + Delete with no-expense guard), create_trip_dialog (5-step mission-aware wizard), admin expense comment dialog with chip-picker @mentions, audit screen, users screen, dg dashboard, reports dialog with signing modal.
-- Recurring **"button clipped by global theme" bug** fixed wherever a `FilledButton` / `OutlinedButton` sat inside a `Row` without an explicit `minimumSize` override (allocate footer, edit-trip footer, create-trip footer, add-additional-fund, transfer continue, notifications accept/decline, manage-funds Allocate-New, add-category dialog, reports-dialog Sign/Resign).
+- **Chat fan-out** — `ChatService.send` fans out a `CHAT_MESSAGE` notification to every thread participant other than the sender. Payload: `{threadId, tripId, tripName, senderId, snippet}` (snippet clipped to 140 chars). `NotificationType.CHAT_MESSAGE` + `NotificationRefType.CHAT_THREAD` added.
+- **REPORT_READY scheduled deliveries** (`V009__report_schedules.sql`) — `ReportSchedule` entity + repo + admin controller (create/list/delete) + `ReportScheduleRunner` (Spring `@Scheduled` 5-min poll) that bumps `next_run_at` and fans out `REPORT_READY` to admins. Generation stays on-demand — the notification payload carries `{scope, scopeId, kind, date, scopeName, reason}` so the existing report endpoints render fresh bytes on click.
+- **On trip close**, `TripService.close` also fans out `REPORT_READY` (reason `trip-closed`, kind `finance-letter`) so the admin sees the cue to generate + sign the finance letter without polling.
+- **Reports aggregate controller** — backs the CMS pie-chart dashboard. Groups expenses by `category / source / mission / trip / top-user`, scoped to range + currency.
+- **Global search endpoint** — `/api/v1/search?q=` returns typed hits (`trip`, `mission`, `user`) with a `link` per hit (`/cms/trips/:id`, `/cms/missions`, `/cms/users?focus=:id`). Backs the CMS top-bar ⌘K search.
+- **OCR module** — `ae.gov.pdd.pettycash.ocr` wraps Tesseract via tess4j/JNA. Endpoint accepts a receipt image and returns `{vendor, total, currency, lines}` suggestions for the Add Expense form. Deterministic; no LLM in the loop (§3.6).
 
-**Smoke-test results (2026-05-18)**: 23/23 backend endpoints return 2xx with the test fixture; all 4 report types generate real PDF/XLSX bytes; mobile button audit checked ~50 button instances across 20 files and fixed the 3 remaining clip bugs.
+### Mobile (Flutter Web + Riverpod 2 + go_router)
+
+- 14 mobile screens against the forest-green design handoff.
+- Portal split: `/app` (member/leader) vs `/portal` (admin/super-admin) with wrong-portal guard.
+- Trips home: compact rows under Active / Upcoming / Archived sections.
+- HomeBottomNav (Home / Inbox / Trips / Profile); trip-scoped nav inside a trip.
+- Trip dashboard: leader-only Allocate / Manage funds action row inside the trip.
+- Expense detail (mobile) with comments thread + reply composer.
+
+**NEW since 05-18:**
+
+- **Add Expense rebuild** — invoice photo is now **mandatory** (red-tinted dropzone + REQUIRED badge; submit disabled until both an invoice is attached and at least one line item has a positive total). **Multi-line invoice items** — each row has description / qty / per-unit / live line total, with "+ Add line item" and per-row delete; OCR auto-fills the first line. Grand total card sums every line in the trip currency.
+- **Trips ↔ Home split** — the bottom-nav Trips entry now points at a dedicated `/m/all-trips` (Active/Upcoming/Archived only, no greeting/KPIs/activity) so Trips and Home don't render the same view.
+- **Global chat** — chat surfaces moved off the trip into the Profile menu (`/m/chat`). Messages fired by `ChatService` flow into both the **Inbox** screen and the **Home** activity feed as `CHAT_MESSAGE` rows.
+- **Notification routing** — `EXPENSE_QUERY` deep-links into `/m/trips/:tripId/expenses/:expenseId`; `CHAT_MESSAGE` deep-links into `/m/trips/:tripId/chat/:threadId`; `REPORT_READY` opens the relevant trip/mission dashboard. Mobile inbox + home both honour the same routing rules.
+- **Signout** — `confirmAndSignOut` now takes a `redirect` argument; the admin lands on `/portal`, mobile lands on `/app`. Cached `currentUserProvider` is invalidated so downstream watchers re-fetch.
+
+### CMS portal (Flutter Web at `/portal`)
+
+**NEW since 05-18 (entire portal redesign):**
+
+- **Theme** — `CmsColors` adopts the Protocol Department palette (near-black brand, warm off-white surface, gold accent, accent-green inflow).
+- **Sidebar** reshuffled — Home + Trips + Missions + Expenses + Reports + DG (super-admin) + Settings hub for Users/Audit/etc. Approvals/Spend stubbed `enabled: false`.
+- **Top bar** — global search (⌘K) with debounced typed-hit dropdown, notification bell with unread badge + popover + per-type routing (REPORT_READY → mission/trip, EXPENSE_QUERY → expense detail, CHAT/allocation/transfer/trip rows → trip), account chip with signout.
+- **Dashboard** — KPI strip (Active trips / Expenses logged / Receipts missing / Pending fund transfers), "Needs your attention" alerts (with a Triage link to the missing-receipt filter view), active-trips table with budget progress, right rail.
+- **Trips** (`/cms/trips`) — filterable list with status pill, budget progress, mission link. Row tap → `/cms/trips/:id`.
+- **Missions** — list at `/cms/missions`, **detail at `/cms/missions/:id`** with description, parent/child links, trips card, tied schedules, top-right Download rollup.
+- **Expenses** (`/cms/expenses`) — every expense across every trip, with filters (search / trip / user / category / source / date range / **missing-receipt chip**). Row tap → **`/cms/expenses/:id`** (new expense detail page). `?missingReceipt=1` query param pre-applies the filter (used by the dashboard alert + the legacy `/cms/receipts` redirect).
+- **Expense detail** (`/cms/expenses/:id`) — two-column layout: invoice viewer (4:3, click-to-fullscreen) + conversation thread on the left; header card (category, amount, RECEIPT-ATTACHED / NO-RECEIPT pill), breakdown, trip link, optional note on the right. Reply composer + @-mention button that re-uses the existing `AdminExpenseCommentDialog`.
+- **Reports module** (`/cms/reports`) — **pie-chart dashboard** with dimension chips (Category / Source / Mission / Trip / Top user), range chips, currency dropdown, legend with values + percentages; **scheduled deliveries** tab with create-schedule dialog (scope chip pair + inline radio target picker + UTC hour slider); **Export Excel (CSV) + Export PDF (window.print())** buttons.
+- **Audit, Users, DG, Settings** screens carried forward; Audit grew action-type / actor / trip / date / search filters.
+- **Receipt triage** standalone screen deleted — its data lives in `/cms/expenses` behind the Missing-receipt chip.
+
+### Identifier note
+
+Internal IDs remain opaque: Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash`. Rename is tracked separately (see "Still pending" → Identifier migration).
 
 ### Still pending
 
 | Area | Item | Why outstanding |
 |---|---|---|
-| **Signing** | Real PAdES via PKCS#11 / HSM | Stub only (commit `709bfa5`); blocks finance-letter going to legal. Tracked under Milestone E. |
-| **Audit** | True append-only `audit_log` table with `hashPrev` / `hashSelf` SHA-256 chain | §5 requirement; current `/audit` feed is synthesized from existing rows and is *not* tamper-evident. |
-| **Tests** | Slice + integration tests for `mission`, `audit`, expense comments, trip delete | Code in, tests TBD. Backend invariant from §13 unmet for these modules. |
-| **Identifier migration** | Rename Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash` to a Delegation-Expenses scheme | Deferred to its own PR per §14.5 — name change is admin-only and shouldn't bundle with feature work. |
+| **Signing** | Real PAdES via PKCS#11 / HSM | Stub only; blocks finance-letter going to legal. |
+| **Audit** | True append-only `audit_log` table with `hashPrev` / `hashSelf` SHA-256 chain | §5 requirement; current `/audit` feed is synthesized and *not* tamper-evident. |
+| **Tests** | Slice + integration tests for the newer modules (mission, audit, expense comments, trip delete, chat fan-out, REPORT_READY runner, OCR, search) | Code in, tests TBD. Backend invariant from §13 unmet for these. |
+| **Dashboard export** | Dashboard "Export trips + spend" endpoint (CSV/XLSX) + wire to the dashboard's Export button | Button placeholder in place; endpoint pending. |
+| **Identifier migration** | Rename Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash` to a Delegation-Expenses scheme | Deferred to its own PR per §14.5. |
 | **Push** | FCM / HMS / APNs wiring | Sovereignty review pending (§15). In-app polling is the v1 channel. |
-| **OCR** | Receipt-photo OCR | Deferred enhancement (§15). |
 | **Open product questions** | Items still unchecked in §16 | Owners outside Eng. |
 
 ### Demo-day cold-start checklist
 
-1. `gradle bootRun` in `backend/` (Flyway runs `V001..V008`; seeders auto-populate).
-2. Hard-refresh both browser tabs after pulling the latest bundle — Flutter Web caches aggressively.
+1. `.\scripts\dev-up.ps1` (Postgres + MinIO + `gradle bootRun` + Flutter dev server). Flyway runs `V001..V009`; seeders populate users, sources, missions, categories, current-quarter trips + historical activity.
+2. Hard-refresh both browser tabs (`Ctrl+Shift+R`) after pulling the latest bundle — Flutter Web caches aggressively. If that's not enough, restart the dev server via `.\scripts\dev-down.ps1; .\scripts\dev-up.ps1`.
 3. Demo path:
    - Admin (`khalid`) creates a trip under an existing mission → assigns funds from a source.
    - Leader (`fatima`) accepts → allocates to member.
-   - Member (`layla` / `ahmed`) accepts → adds an expense with a receipt.
-   - Admin opens expense from CMS → 💬 → @-mentions the member → posts comment.
-   - Member opens Inbox → taps notification → lands on expense detail → replies in the thread.
-   - Admin downloads any of the 4 reports from the trip's Reports dialog.
+   - Member (`layla` / `ahmed`) accepts → opens **Add Expense**, attaches an invoice photo (required), adds one or more line items, optionally lets OCR auto-fill the first line.
+   - Admin opens the expense from **`/cms/expenses/:id`** → 💬 → @-mentions the member → posts comment. (Also: the top-bar bell shows the unread for chat / report / query events; clicking deep-links.)
+   - Member opens **Inbox** → taps the EXPENSE_QUERY notification → lands on the mobile expense detail → replies in the thread.
+   - Admin opens **`/cms/reports`** → picks a dimension and scope → reads the pie chart → exports Excel or PDF, or **schedules a daily delivery**.
+   - On trip close, every admin gets a `REPORT_READY` notification cueing the finance letter.
 
 All four roles use `demo1234` as the password.
 
 ---
 
-*Last updated: 2026-05-18. Update this file in the same PR as any architectural change.*
+*Last updated: 2026-05-25. Update this file in the same PR as any architectural change.*

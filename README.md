@@ -5,95 +5,158 @@
 Mobile-first, multi-currency travel funds allocation and expense submission for
 the Protocol Department, Government of Dubai.
 
-> **Phase 0 scaffold.** The mobile app boots, the role-switcher lands you in
-> a phone-frame on web (or full-screen on a device), and the Demo Controls
-> menu lets you simulate offline mode, latency, and failure injection. The
-> real screens land in **Milestone A**.
->
-> Build order is **UI-first with mocked APIs** for the customer demo —
-> backend (Spring Boot, Postgres, MinIO) is deferred. See `CLAUDE.md` for the
-> full project contract.
+> **Demo-week build (2026-05-25).** End-to-end stack is live: Spring Boot
+> backend on Postgres + MinIO, Flutter mobile app (`/app`), Flutter Web
+> admin portal (`/portal`), and a wired chat / notifications / reports
+> pipeline. See `CLAUDE.md` for the full project contract and §17 for the
+> current sprint status.
+
+## What's running
+
+- **Mobile (`/app`)** — Member + Leader flows: trips list with Active /
+  Upcoming / Archived sections, trip dashboard, expense list, **Add
+  Expense** with required invoice photo and multi-line items + Tesseract
+  OCR auto-fill, peer transfers, allocation accept/decline, **inbox** (in
+  trip + global), **chat** (global from Profile menu), notifications that
+  deep-link into the right surface.
+- **Admin portal (`/portal`)** — Dashboard with KPI strip and
+  "Needs-attention" alerts, **Trips** screen with filters, **Missions**
+  list + detail at `/cms/missions/:id`, **Expenses** screen with
+  missing-receipt filter chip, **Expense detail** at
+  `/cms/expenses/:id` (invoice viewer, breakdown, conversation thread,
+  @-mention), **Reports** module (pie-chart dashboard +
+  scheduled deliveries + Excel/PDF export), **Audit** feed, **Users**,
+  **Settings**, top-bar global search (⌘K) and notification bell with
+  per-type routing (REPORT_READY, EXPENSE_QUERY, CHAT_MESSAGE, …).
+- **Backend** — REST under `/api/v1`, JWT (15-min access + 30-day
+  refresh), RFC-7807 problem details on every error, idempotency keys on
+  every write, MinIO presigned URLs for receipts, server-rendered PDF
+  (OpenPDF) + XLSX (Apache POI) reports, scheduled report cron
+  (`@Scheduled` 5-min poll), Tesseract OCR module (tess4j).
 
 ## Repository layout
 
 ```
 .
-├── CLAUDE.md                       # Authoritative project contract
-├── screen-inventory.md             # Per-screen wiring (31 mockup screens)
+├── CLAUDE.md                       # Authoritative project contract (read first)
 ├── README.md                       # You are here
-├── mobile/                         # Flutter app (mobile + Flutter Web CMS)
+├── docs/
+│   ├── api/openapi.yaml            # API contract
+│   ├── architecture/
+│   ├── scope/                      # Scope.docx
+│   └── design/                     # Mockups + User-Tasks PDFs
+├── backend/                        # Spring Boot 3.4 / Java 21
+│   ├── build.gradle.kts
+│   └── src/main/java/ae/gov/pdd/pettycash/
+│       ├── PettyCashApplication.java
+│       ├── auth/                   # JWT, login, refresh
+│       ├── trip/                   # Trips + mission link
+│       ├── mission/                # Missions (nestable via parent_mission_id)
+│       ├── fund/                   # Sources, allocations, transfers
+│       ├── expense/                # Expenses, comments, source reassignment
+│       ├── chat/                   # Threads + messages (CHAT_MESSAGE fan-out)
+│       ├── notification/           # Inbox + fan-out (REPORT_READY etc.)
+│       ├── report/                 # PDF/XLSX gen + schedule/                 # Cron runner + delivery scheduler
+│       ├── ocr/                    # Tesseract module (receipt auto-fill)
+│       ├── search/                 # Global search endpoint
+│       ├── audit/                  # /api/v1/audit feed
+│       └── common/                 # Money, error envelope, …
+│   └── src/main/resources/db/migration/   # Flyway V001..V009
+├── mobile/                         # Flutter (mobile + Flutter Web CMS)
 │   ├── pubspec.yaml
-│   ├── analysis_options.yaml
-│   ├── l10n.yaml
 │   ├── lib/
 │   │   ├── main.dart
-│   │   ├── app/                    # MaterialApp shell, theme, router
+│   │   ├── app/                    # Theme, router, MaterialApp shell
 │   │   ├── core/
 │   │   │   ├── money/              # Money value type (CLAUDE.md §6)
-│   │   │   ├── fake/               # FakeConfig + dev menu
-│   │   │   ├── api/                # Generated OpenAPI types (Milestone A)
-│   │   │   ├── storage/            # Drift offline queue (Milestone A)
-│   │   │   └── error/
+│   │   │   ├── api/                # dio client, error mapping, parsers
+│   │   │   ├── fake/               # DemoStore + FakeConfig dev menu
+│   │   │   └── sync/               # Offline queue + sync coordinator
 │   │   ├── l10n/                   # intl_en.arb, intl_ar.arb
 │   │   ├── features/
-│   │   │   ├── auth/
-│   │   │   ├── trips/
-│   │   │   ├── expenses/
-│   │   │   ├── funds/
-│   │   │   ├── chat/
-│   │   │   ├── notifications/
-│   │   │   ├── reports/
-│   │   │   ├── landing/            # Demo role-switcher (Phase 0)
-│   │   │   └── cms/                # Admin Console (Web)
-│   │   └── shared/                 # PhoneViewport, formatters, icons
+│   │   │   ├── auth/               # Login, role guard, signout
+│   │   │   ├── trips/              # List, dashboard, /m/all-trips
+│   │   │   ├── expenses/           # Add (multi-line), detail, comments
+│   │   │   ├── funds/              # Allocate, transfer, manage
+│   │   │   ├── chat/               # Global chat (Profile menu)
+│   │   │   ├── notifications/      # Inbox + bell deep-linking
+│   │   │   ├── reports/            # Per-trip report dialog
+│   │   │   ├── ocr/                # Receipt auto-fill suggestion
+│   │   │   ├── search/             # ⌘K global search hits
+│   │   │   ├── landing/            # Role-switcher (demo)
+│   │   │   └── cms/                # /portal admin screens
+│   │   └── shared/                 # Primitives, theme tokens, icons
 │   ├── assets/demo/                # Seed JSON for the fake repos
 │   ├── test/                       # Unit + widget + golden tests
 │   └── integration_test/
-├── docs/
-│   ├── api/openapi.yaml            # API contract (used by both fake & real)
-│   ├── architecture/               # ADRs
-│   ├── feedback/                   # Demo notes from PDD reviews
-│   ├── scope/                      # Scope.docx
-│   └── design/                     # Mockups + User-Tasks PDFs
-├── ops/                            # docker-compose for backend phase
+├── scripts/                        # PowerShell dev helpers
+│   ├── dev-up.ps1                  # Brings up docker-compose + backend + mobile
+│   ├── dev-down.ps1                # Tears it back down
+│   └── smoke.ps1                   # 23-endpoint backend smoke
+├── ops/docker-compose.yml          # Postgres + MinIO + (optionally) backend
 └── .github/workflows/ci.yml
 ```
 
 ## Prerequisites
 
-You need:
+- **Java 21** (Temurin or equivalent) — backend.
+- **Gradle 8+** — backend builds via `gradle bootRun` (no wrapper checked
+  in; install Gradle or use IntelliJ's bundled one).
+- **PostgreSQL 15** + **MinIO** — brought up via `ops/docker-compose.yml`.
+- **Flutter SDK 3.22+** on `stable` channel — frontend
+  ([install](https://docs.flutter.dev/get-started/install/windows)).
+- **Tesseract OCR 5.x** on `PATH` if you want receipt auto-fill (set
+  `TESSDATA_PREFIX` to your `tessdata` dir; the backend's `ocr` module
+  resolves `tesseract` via `JNA`).
 
-- **Flutter SDK** 3.22+ on the `stable` channel
-  ([install guide](https://docs.flutter.dev/get-started/install/windows)).
-- **Dart 3.4+** (bundled with Flutter).
-- **Git** 2.40+.
-- **Node 20+** (only required for the OpenAPI Redocly lint job in CI).
-
-Once Flutter is on `PATH`, sanity-check:
+Sanity-check:
 
 ```powershell
-flutter --version
+java --version       # 21+
+gradle --version     # 8+
+flutter --version    # 3.22+
 flutter doctor
 ```
 
-`flutter doctor` will tell you which target SDKs (Android, iOS, Web, Desktop)
-are missing. The Phase 0 demo only needs **Web** — Chrome is sufficient.
+## Running locally
 
-## First run
+The easiest path uses the PowerShell helpers under `scripts/`:
 
 ```powershell
-cd mobile
-flutter pub get
-flutter run -d chrome
+.\scripts\dev-up.ps1      # docker-compose up postgres + minio, gradle bootRun, flutter run
+.\scripts\smoke.ps1       # hits 23 backend endpoints against the test fixture
+.\scripts\dev-down.ps1    # tears everything down
 ```
 
-Chrome opens at `http://localhost:<port>/`. You should see the dark-brown
-landing page with role-switcher cards.
+Manual equivalents:
+
+```powershell
+# Postgres + MinIO
+docker compose -f ops/docker-compose.yml up -d postgres minio
+
+# Backend (Flyway V001..V009 runs on boot; seeders auto-populate demo data)
+cd backend
+gradle bootRun
+
+# Mobile / portal (web-server mode keeps Chrome out of the way)
+cd ../mobile
+flutter pub get
+flutter run -d web-server --web-port 5173 --web-hostname 127.0.0.1
+```
+
+- **Mobile app**: <http://127.0.0.1:5173/app>
+- **Admin portal**: <http://127.0.0.1:5173/portal>
+- **Backend API**: <http://localhost:8080/api/v1>
+- **MinIO console**: <http://localhost:9001> (creds in
+  `ops/docker-compose.yml`)
+
+All four demo accounts (`khalid` / admin, `fatima` / leader,
+`layla` + `ahmed` / members) use password `demo1234`.
 
 ### Demo controls
 
-Inside the app, tap the **tune icon** in the top app bar to open the Demo
-Controls bottom sheet. You can:
+Inside the mobile app, tap the **tune icon** in the top app bar to open
+the Demo Controls bottom sheet:
 
 - Adjust artificial network **latency** (0–2000 ms) — exercise loading states.
 - Set a **failure injection rate** for write calls — exercise error states.
@@ -101,39 +164,52 @@ Controls bottom sheet. You can:
   toggle back on.
 - Switch the demo **role** without returning to the landing page.
 
+## Demo-day cold-start
+
+1. `.\scripts\dev-up.ps1` — Postgres, MinIO, backend, mobile.
+2. Hard-refresh both browser tabs (Ctrl+Shift+R) after pulling the latest
+   bundle — Flutter Web caches aggressively.
+3. Demo path (see `CLAUDE.md` §17 for the up-to-date version):
+   - Admin (`khalid`) creates a trip under an existing mission → assigns
+     funds from a source.
+   - Leader (`fatima`) accepts → allocates to member.
+   - Member (`layla` / `ahmed`) accepts → opens **Add Expense**, attaches
+     an invoice photo (required), adds one or more line items, optionally
+     lets OCR auto-fill the first line.
+   - Admin opens the expense from `/cms/expenses/:id` → 💬 → @-mentions
+     the member → posts comment.
+   - Member opens **Inbox** → taps the EXPENSE_QUERY notification → lands
+     on expense detail → replies in the thread.
+   - Admin opens **/cms/reports**, picks a dimension + scope, downloads
+     Excel/PDF, or schedules a daily delivery.
+
 ## Running tests
 
 ```powershell
-cd mobile
-flutter test
+# Backend
+cd backend
+gradle test                    # JUnit 5, slice + integration via Testcontainers
+
+# Mobile
+cd ../mobile
+flutter test                   # unit + widget + golden
 ```
 
-Coverage report lands in `mobile/coverage/lcov.info` when run with
+Mobile coverage report lands in `mobile/coverage/lcov.info` when run with
 `flutter test --coverage`.
-
-## Phase plan at a glance
-
-| Phase | Status | Deliverable |
-|---|---|---|
-| **Phase 0** Foundations | ✅ Scaffolded | Flutter app boots, theme + l10n + Money + FakeConfig, OpenAPI spec, CI |
-| **Phase 1 — Milestone A** | ⏳ Next | Member happy path with offline-queue demo |
-| **Phase 1 — Milestone B** | ⏳ | Filter, edit, transfer, chat, notifications |
-| **Phase 1 — Milestone C** | ⏳ | Leader views — allocate, manage funds, trip charts |
-| **Phase 1 — Milestone D** | ⏳ | Admin / Super Admin CMS shell |
-| **Phase 2** Customer demo | ⏳ | Vercel preview, demo script, feedback capture |
-| **Phase 3** Backend | ⏳ | Spring Boot, Postgres, MinIO; one feature at a time |
 
 ## Conventions
 
 Read `CLAUDE.md` end-to-end before contributing. Hard rules:
 
-1. **Money is `int` minor units.** Never `double`, never `BigDecimal`. Use
-   `lib/core/money/money.dart`.
-2. **Bilingual or no string.** Every user-visible string must exist in both
-   `intl_en.arb` and `intl_ar.arb`.
-3. **Repository interfaces are the seam.** UI talks to abstract repositories.
-   Fake and real implementations live side-by-side; a single override in
-   `main.dart` chooses which one is wired in.
+1. **Money is `BIGINT` minor units.** Never `double`, never
+   `BigDecimal`. Use `ae.gov.pdd.pettycash.common.Money` on the backend
+   and `lib/core/money/money.dart` on the mobile side.
+2. **Bilingual or no string.** Every user-visible string must exist in
+   both `intl_en.arb` and `intl_ar.arb`.
+3. **Repository interfaces are the seam.** UI talks to abstract
+   repositories. `api` and `fake` implementations live side-by-side; the
+   `backendModeProvider` chooses which one is wired in.
 4. **OpenAPI is the contract.** When you change an endpoint, update
    `docs/api/openapi.yaml` in the same PR.
 5. **One responsibility per PR.** No mixing a Flyway migration with a UI
