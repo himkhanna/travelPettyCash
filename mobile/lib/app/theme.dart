@@ -3,82 +3,84 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// Design tokens for the PDD Delegation Expenses app.
 ///
-/// Aligned with the design handoff at
-/// `docs/design/design_handoff_petty_cash/README.md` — a forest-green +
-/// warm-gold direction the customer reviewed in May 2026 and approved as the
-/// canonical look for the bilingual mobile + admin surfaces.
+/// Aligned with the Protocol Department palette already in use by the
+/// admin CMS (`lib/features/cms/presentation/widgets/cms_theme.dart`) —
+/// near-black brand, warm off-white surfaces, restrained ceremonial gold
+/// for sign-off flourishes, and an action-green accent.
 ///
-/// **Adding tokens:** new colors must be added here under a semantic name —
-/// not inlined as hex anywhere in feature code.
+/// The mobile app previously used a forest-green palette ("brand
+/// 0xFF0E3A35"); this re-tokenisation re-targets every existing semantic
+/// name (`brand`, `gold`, `ink1`, …) so per-screen widgets pick up the
+/// new theme without per-screen edits.
 ///
-/// **Migration note:** the previous brown-palette aliases (`brandBrown`,
-/// `goldOlive`, etc.) point at the new values so existing widgets keep
-/// compiling while the screen-by-screen rebuild is in flight. They will be
-/// removed once every reference has been moved to the new semantic names
-/// (`brand`, `gold`, `ink1`, etc.).
+/// **Adding tokens:** new colors must be added here under a semantic name
+/// — not inlined as hex anywhere in feature code.
 abstract final class AppColors {
   // ───────── Surfaces ─────────
-  /// Page-level canvas (outermost background).
-  static const Color bgPage = Color(0xFFF2EEE5);
+  /// Page-level canvas (outermost background). Warm off-white, matches the
+  /// CMS dashboard's `surface`.
+  static const Color bgPage = Color(0xFFFAF8F4);
 
   /// In-app surface — the background under most widgets when you peel
   /// content off the page canvas.
-  static const Color bgApp = Color(0xFFFBF8F1);
+  static const Color bgApp = Color(0xFFFAF8F4);
 
   /// Card / panel surface. Solid white for elevation contrast on bgApp.
   static const Color bgCard = Color(0xFFFFFFFF);
 
-  /// Slightly-elevated band for nested sections (e.g. category strip).
-  static const Color bgElev = Color(0xFFF6F2EA);
+  /// Slightly-elevated band for nested sections (e.g. category strip,
+  /// table headers).
+  static const Color bgElev = Color(0xFFF1EFEA);
 
   /// Inset / input wells (read-only computed fields).
-  static const Color bgInset = Color(0xFFF0EBE0);
+  static const Color bgInset = Color(0xFFEBE9E4);
 
   // ───────── Ink (text) ─────────
   /// Primary text. High contrast on every surface above.
-  static const Color ink1 = Color(0xFF14211D);
+  static const Color ink1 = Color(0xFF111418);
 
-  /// Secondary text. Body copy, list subtitles.
-  static const Color ink2 = Color(0xFF4A5752);
+  /// Secondary text — body copy intensity.
+  static const Color ink2 = Color(0xFF3F4248);
 
-  /// Muted / placeholder text.
-  static const Color ink3 = Color(0xFF7E8A85);
+  /// Muted / placeholder text — list subtitles, meta lines.
+  static const Color ink3 = Color(0xFF6B6E76);
 
   /// Disabled / divider-on-text intensity.
-  static const Color ink4 = Color(0xFFB5BCB7);
+  static const Color ink4 = Color(0xFF9CA0A8);
 
-  // ───────── Brand (deep forest green) ─────────
+  // ───────── Brand (near-black ink) ─────────
   /// Brand primary — buttons, header bands, donut arcs, brand chips.
-  static const Color brand = Color(0xFF0E3A35);
+  static const Color brand = Color(0xFF111418);
 
   /// Brand pressed / deeper tone for headers + hero gradients.
-  static const Color brandDeep = Color(0xFF082522);
+  static const Color brandDeep = Color(0xFF06080A);
 
   /// Translucent brand background for active states / icon tiles.
-  static const Color brandTint = Color(0xFFDCE8E5);
+  static const Color brandTint = Color(0xFFEDEEF1);
 
   /// Softest brand background — for low-contrast informational panels.
-  static const Color brandSoft = Color(0xFFEBF1EF);
+  static const Color brandSoft = Color(0xFFF4F5F7);
 
-  // ───────── Accent (warm gold) ─────────
+  // ───────── Accent (ceremonial gold) ─────────
   /// Accent for sign-off, premium CTAs, decorative highlights.
-  static const Color gold = Color(0xFFB89248);
-  static const Color goldSoft = Color(0xFFF0E4C7);
-  static const Color goldDeep = Color(0xFF8A6A2C);
+  static const Color gold = Color(0xFFC7A465);
+  static const Color goldSoft = Color(0xFFF4EAD0);
+  static const Color goldDeep = Color(0xFF8D7331);
 
   // ───────── Semantic ─────────
-  static const Color green = Color(0xFF2D7A3A);
-  static const Color greenSoft = Color(0xFFDDF0DD);
-  static const Color red = Color(0xFFB0312A);
-  static const Color redSoft = Color(0xFFF7DCD9);
-  static const Color amber = Color(0xFFB5701B);
-  static const Color amberSoft = Color(0xFFF6E2C6);
-  static const Color blue = Color(0xFF2A5DAB);
-  static const Color blueSoft = Color(0xFFDAE5F6);
+  /// Action green — primary CTAs (e.g. "+ New trip"), inflow indicators.
+  static const Color green = Color(0xFF1E9E5C);
+  static const Color greenSoft = Color(0xFFE0F1E8);
+  static const Color red = Color(0xFFC54B3F);
+  static const Color redSoft = Color(0xFFFAE0DC);
+  static const Color amber = Color(0xFFD08A2A);
+  static const Color amberSoft = Color(0xFFFAE7C9);
+  static const Color blue = Color(0xFF2E5DA8);
+  static const Color blueSoft = Color(0xFFE0E8F4);
 
   // ───────── Lines ─────────
-  static const Color line = Color(0xFFE2DCCD);
-  static const Color lineStrong = Color(0xFFC9C0AA);
+  static const Color line = Color(0xFFE8E5DE);
+  static const Color lineStrong = Color(0xFFD0CCC3);
 
   // ───────── Legacy aliases (to be removed after screen rebuild) ─────────
   // These keep brown-palette references compiling. When you touch a widget
@@ -270,12 +272,14 @@ abstract final class AppSpacing {
   static const double xxl = 48;
 }
 
-/// Shadow recipes per handoff.
+/// Shadow recipes per handoff. The mobile theme uses a neutral dark tint
+/// (formerly forest-green) so the new near-black brand doesn't cast a
+/// muddy coloured shadow against the off-white canvas.
 abstract final class AppShadows {
   /// Elevated card — used on balance cards, action tiles.
   static const List<BoxShadow> card = <BoxShadow>[
     BoxShadow(
-      color: Color(0x8C0E3A35),
+      color: Color(0x40111418),
       blurRadius: 28,
       offset: Offset(0, 12),
       spreadRadius: -16,
@@ -285,7 +289,7 @@ abstract final class AppShadows {
   /// FAB shadow — stronger and tighter than card.
   static const List<BoxShadow> fab = <BoxShadow>[
     BoxShadow(
-      color: Color(0x990E3A35),
+      color: Color(0x60111418),
       blurRadius: 28,
       offset: Offset(0, 14),
       spreadRadius: -10,

@@ -135,51 +135,198 @@ class TripsHomeScreen extends ConsumerWidget {
                   // they don't have to drill into each one.
                   if (me != null)
                     _GlobalPendingBanner(meId: me.id, trips: active),
+                  // Quick-add expense — the single most common action on
+                  // Home. Auto-routes into Add Expense scoped to the most
+                  // recent active trip; falls back to the trip picker if
+                  // no trip is active.
+                  if (active.isNotEmpty)
+                    _QuickAddExpenseCta(activeTripId: active.first.id),
                   // Recent activity feed — top 5 notifications, rendered
                   // compactly. "View all" jumps to the full inbox.
                   if (notifs.isNotEmpty)
                     _RecentActivityCard(
                       notifs: notifs.take(5).toList(),
                     ),
+                  // Empty state — only when this user has no trips at all.
+                  // Active/Upcoming/Archived trip rows have been moved to
+                  // the dedicated Trips tab (/m/all-trips) — Home is a
+                  // dashboard, not a trip list.
                   if (active.isEmpty && upcoming.isEmpty && archived.isEmpty)
                     _NoActiveTripCard(),
-                  if (active.isNotEmpty) ...<Widget>[
-                    const PddSectionLabel(label: 'Active trips'),
-                    for (final Trip t in active)
-                      _TripRowCompact(
-                        trip: t,
-                        notifs: notifs,
-                        meId: me?.id,
-                        meRole: me?.role,
-                        showBalance: true,
-                        onTap: () =>
-                            context.go('/m/trips/${t.id}/dashboard'),
-                      ),
-                  ],
-                  if (upcoming.isNotEmpty) ...<Widget>[
-                    const PddSectionLabel(label: 'Upcoming'),
-                    for (final Trip t in upcoming)
-                      _TripRowCompact(
-                        trip: t,
-                        notifs: notifs,
-                        onTap: () =>
-                            context.go('/m/trips/${t.id}/dashboard'),
-                      ),
-                  ],
-                  if (archived.isNotEmpty) ...<Widget>[
-                    const PddSectionLabel(label: 'Archived'),
-                    for (final Trip t in archived)
-                      _TripRowCompact(
-                        trip: t,
-                        notifs: notifs,
-                        onTap: () =>
-                            context.go('/m/trips/${t.id}/dashboard'),
-                      ),
-                  ],
+                  // "See all trips" footer when there *are* trips but
+                  // we deliberately don't list them here.
+                  if (active.isNotEmpty || upcoming.isNotEmpty ||
+                      archived.isNotEmpty)
+                    _SeeAllTripsFooter(
+                      activeCount: active.length,
+                      upcomingCount: upcoming.length,
+                      archivedCount: archived.length,
+                    ),
                 ],
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Big tappable card on Home that routes straight into Add Expense for
+/// the most recent active trip. Skips the trip-picker step for the
+/// happy path — most users live in one trip at a time.
+class _QuickAddExpenseCta extends StatelessWidget {
+  const _QuickAddExpenseCta({required this.activeTripId});
+  final String activeTripId;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Material(
+        color: AppColors.brand,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => GoRouter.of(context)
+              .go('/m/trips/$activeTripId/expenses/add'),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.add,
+                    color: AppColors.gold,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        'Add an expense',
+                        style: AppTypography.geist(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.bgCard,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Attach an invoice photo and log line items.',
+                        style: AppTypography.geist(
+                          fontSize: 12,
+                          color: AppColors.bgCard.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: AppColors.bgCard.withValues(alpha: 0.8),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom-of-Home pointer that gestures at the dedicated Trips screen
+/// for users who want to browse trips. Keeps Home as a dashboard but
+/// preserves a discoverable path to the full list.
+class _SeeAllTripsFooter extends StatelessWidget {
+  const _SeeAllTripsFooter({
+    required this.activeCount,
+    required this.upcomingCount,
+    required this.archivedCount,
+  });
+  final int activeCount;
+  final int upcomingCount;
+  final int archivedCount;
+  @override
+  Widget build(BuildContext context) {
+    final String summary = <String>[
+      if (activeCount > 0) '$activeCount active',
+      if (upcomingCount > 0) '$upcomingCount upcoming',
+      if (archivedCount > 0) '$archivedCount archived',
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Material(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => GoRouter.of(context).go('/m/all-trips'),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.brandTint,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.flight_takeoff_outlined,
+                    size: 16,
+                    color: AppColors.brand,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        'All your trips',
+                        style: AppTypography.geist(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        summary,
+                        style: AppTypography.geist(
+                          fontSize: 11.5,
+                          color: AppColors.ink3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: AppColors.ink3,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -218,21 +365,9 @@ String _amountOnly(Money m) {
   return f.format(m.amountMinor / 100.0);
 }
 
-String _dateRangeLabel(Trip t) {
-  final DateFormat fmt = DateFormat('MMM d, yyyy');
-  if (t.closedAt != null) {
-    return '${fmt.format(t.createdAt)} → ${fmt.format(t.closedAt!)}';
-  }
-  return 'From ${fmt.format(t.createdAt)}';
-}
-
-String _flagFor(String code) {
-  if (code.length != 2) return '🏳️';
-  const int base = 0x1F1E6;
-  final int a = code.toUpperCase().codeUnitAt(0) - 0x41 + base;
-  final int b = code.toUpperCase().codeUnitAt(1) - 0x41 + base;
-  return String.fromCharCodes(<int>[a, b]);
-}
+// _dateRangeLabel / _flagFor previously powered the per-trip rows that
+// have been moved to /m/all-trips. The corresponding helpers there
+// (trips_list_screen.dart) own their own formatting now.
 
 /// Aggregates pending allocations + transfers across every trip on Home, so
 /// the user can see "you have N pending funds across trips" without drilling
@@ -402,317 +537,9 @@ class _NoActiveTripCard extends StatelessWidget {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────
-// Compact trip row (Upcoming + Archived sections)
-// ────────────────────────────────────────────────────────────────────
-
-class _TripRowCompact extends ConsumerWidget {
-  const _TripRowCompact({
-    required this.trip,
-    required this.notifs,
-    required this.onTap,
-    this.meId,
-    this.meRole,
-    this.showBalance = false,
-  });
-  final Trip trip;
-  final List<AppNotification> notifs;
-  final VoidCallback onTap;
-
-  /// When set, used to scope the balance lookup (leader sees trip total,
-  /// member sees their wallet). Falls back to the provider lookup below.
-  final String? meId;
-  final UserRole? meRole;
-
-  /// Show a one-line balance hint inside the row (e.g. on Active trips).
-  /// Off by default so Upcoming / Archived rows stay minimal.
-  final bool showBalance;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final int unread = notifs
-        .where((AppNotification n) =>
-            n.state == NotificationState.unread &&
-            n.payload['tripId'] == trip.id)
-        .length;
-
-    // Pending allocations + transfers to surface the "tap to accept" pill.
-    final String effectiveMeId =
-        meId ?? ref.watch(currentUserProvider).valueOrNull?.id ?? '';
-    final int pendingCount = ref
-            .watch(tripAllocationsProvider(trip.id))
-            .maybeWhen<int>(
-              data: (List<Allocation> all) => all
-                  .where((Allocation a) =>
-                      a.toUserId == effectiveMeId &&
-                      a.status == AllocationStatus.pending)
-                  .length,
-              orElse: () => 0,
-            ) +
-        ref.watch(tripTransfersProvider(trip.id)).maybeWhen<int>(
-              data: (List<Transfer> all) => all
-                  .where((Transfer t) =>
-                      t.toUserId == effectiveMeId &&
-                      t.status == AllocationStatus.pending)
-                  .length,
-              orElse: () => 0,
-            );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-      child: Material(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.line),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.bgInset,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        _flagFor(trip.countryCode),
-                        style: const TextStyle(fontSize: 22),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Flexible(
-                                child: Text(
-                                  trip.name,
-                                  style: AppTypography.geist(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (trip.status == TripStatus.closed) ...<Widget>[
-                                const SizedBox(width: 8),
-                                _Pill(
-                                  label: 'Closed',
-                                  color: AppColors.ink3,
-                                ),
-                              ],
-                              if (trip.status == TripStatus.draft) ...<Widget>[
-                                const SizedBox(width: 8),
-                                _Pill(
-                                  label: 'Upcoming',
-                                  color: AppColors.amber,
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${trip.countryName} · ${_dateRangeLabel(trip)}',
-                            style: AppTypography.geist(
-                              fontSize: 12,
-                              color: AppColors.ink3,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (unread > 0)
-                      Container(
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.red,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '$unread',
-                          style: AppTypography.geist(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.bgCard,
-                          ),
-                        ),
-                      ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: AppColors.ink3,
-                      size: 20,
-                    ),
-                  ],
-                ),
-                if (showBalance) ...<Widget>[
-                  const SizedBox(height: 8),
-                  _BalanceLine(
-                    trip: trip,
-                    scope: meRole == UserRole.leader
-                        ? BalanceScope.trip
-                        : BalanceScope.me,
-                  ),
-                ],
-                if (pendingCount > 0) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.amberSoft,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: AppColors.amber.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Icon(
-                          Icons.warning_amber_outlined,
-                          size: 13,
-                          color: AppColors.goldDeep,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$pendingCount pending '
-                          '${pendingCount == 1 ? 'fund' : 'funds'} · tap to accept',
-                          style: AppTypography.geist(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.goldDeep,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One-line balance hint for an Active trip row on Home — no large amount,
-/// no gradient card, just the available money + a slim spent bar.
-class _BalanceLine extends ConsumerWidget {
-  const _BalanceLine({required this.trip, required this.scope});
-  final Trip trip;
-  final BalanceScope scope;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<TripBalances> async = ref.watch(
-      tripBalancesProvider((tripId: trip.id, scope: scope)),
-    );
-    return async.when(
-      loading: () => const SizedBox(height: 14),
-      error: (Object _, __) => const SizedBox.shrink(),
-      data: (TripBalances b) {
-        final Money available = scope == BalanceScope.trip
-            ? (b.totalBudget - b.totalSpent)
-            : b.totalBalance;
-        final Money received = scope == BalanceScope.trip
-            ? b.totalBudget
-            : b.totalBalance + b.totalSpent;
-        final double pct = received.isZero
-            ? 0
-            : (b.totalSpent.amountMinor / received.amountMinor)
-                .clamp(0.0, 1.0)
-                .toDouble();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Text(
-                  scope == BalanceScope.trip ? 'Available' : 'Your balance',
-                  style: AppTypography.geist(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink3,
-                    letterSpacing: 0.06 * 10,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${_amountOnly(available)} ${trip.currency}',
-                  style: AppTypography.geistMono(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.brand,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: pct,
-                minHeight: 4,
-                backgroundColor: AppColors.brandTint,
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.brand),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label, required this.color});
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.geist(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: color,
-          letterSpacing: 0.04,
-        ),
-      ),
-    );
-  }
-}
+// _TripRowCompact / _BalanceLine / _Pill removed when Home was
+// converted to a dashboard. Trip rows live exclusively on /m/all-trips
+// (TripsListScreen) now — that screen renders its own row widget.
 
 // ────────────────────────────────────────────────────────────────────
 // Home dashboard — hero summary + quick stats + recent activity
