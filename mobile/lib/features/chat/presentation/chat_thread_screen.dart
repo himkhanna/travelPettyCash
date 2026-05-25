@@ -179,6 +179,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           .send(threadId: widget.threadId, senderId: me.id, body: body);
       _composerCtrl.clear();
       setState(() => _attached = null);
+    } catch (e) {
+      // Surface failures — previously the catch was implicit and the
+      // composer just sat there with the typed text and no feedback,
+      // which read to users as "send button does nothing".
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not send: $e'),
+            backgroundColor: AppColors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }

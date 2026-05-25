@@ -32,7 +32,8 @@ the Protocol Department, Government of Dubai.
   refresh), RFC-7807 problem details on every error, idempotency keys on
   every write, MinIO presigned URLs for receipts, server-rendered PDF
   (OpenPDF) + XLSX (Apache POI) reports, scheduled report cron
-  (`@Scheduled` 5-min poll), Tesseract OCR module (tess4j).
+  (`@Scheduled` 5-min poll), Tesseract OCR module (tess4j). Flyway
+  migrations through `V010__notifications_chat_and_report_types.sql`.
 
 ## Repository layout
 
@@ -168,7 +169,9 @@ the Demo Controls bottom sheet:
 
 1. `.\scripts\dev-up.ps1` — Postgres, MinIO, backend, mobile.
 2. Hard-refresh both browser tabs (Ctrl+Shift+R) after pulling the latest
-   bundle — Flutter Web caches aggressively.
+   bundle — Flutter Web caches aggressively. If the page still looks
+   stale after a hard refresh, open Chrome DevTools → Application tab →
+   Storage → **Clear site data**.
 3. Demo path (see `CLAUDE.md` §17 for the up-to-date version):
    - Admin (`khalid`) creates a trip under an existing mission → assigns
      funds from a source.

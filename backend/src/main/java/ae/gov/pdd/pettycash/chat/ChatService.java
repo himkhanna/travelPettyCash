@@ -224,6 +224,12 @@ public class ChatService {
             .findByThreadIdAndUserId(thread.getId(), caller.userId())
             .orElseGet(() -> members.save(new ChatThreadMember(thread.getId(), caller.userId())));
         mem.markRead(clock.instant());
+        // Also flip any UNREAD CHAT_MESSAGE notifications this caller has
+        // for this thread to READ so the inbox/home activity counters
+        // don't keep showing dots after the user has opened the thread.
+        notifications.markReadByUserAndRef(
+            caller.userId(), NotificationRefType.CHAT_THREAD, thread.getId()
+        );
     }
 
     // ---- helpers ------------------------------------------------------

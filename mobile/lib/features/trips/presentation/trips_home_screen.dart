@@ -140,7 +140,7 @@ class TripsHomeScreen extends ConsumerWidget {
                   // recent active trip; falls back to the trip picker if
                   // no trip is active.
                   if (active.isNotEmpty)
-                    _QuickAddExpenseCta(activeTripId: active.first.id),
+                    _QuickAddExpenseCta(activeTrips: active),
                   // Recent activity feed — top 5 notifications, rendered
                   // compactly. "View all" jumps to the full inbox.
                   if (notifs.isNotEmpty)
@@ -172,14 +172,148 @@ class TripsHomeScreen extends ConsumerWidget {
   }
 }
 
-/// Big tappable card on Home that routes straight into Add Expense for
-/// the most recent active trip. Skips the trip-picker step for the
-/// happy path — most users live in one trip at a time.
+/// Big tappable card on Home that opens Add Expense. With one active
+/// trip we route straight in; with multiple actives we surface a bottom
+/// sheet so the user picks the trip rather than guessing for them.
 class _QuickAddExpenseCta extends StatelessWidget {
-  const _QuickAddExpenseCta({required this.activeTripId});
-  final String activeTripId;
+  const _QuickAddExpenseCta({required this.activeTrips});
+  final List<Trip> activeTrips;
+
+  Future<void> _onTap(BuildContext context) async {
+    if (activeTrips.length == 1) {
+      GoRouter.of(context).go(
+        '/m/trips/${activeTrips.first.id}/expenses/new',
+      );
+      return;
+    }
+    final String? tripId = await showModalBottomSheet<String>(
+      context: context,
+      // Scroll-controlled so the sheet doesn't try to lay out as
+      // `mainAxisSize.min` against an unbounded parent — that was
+      // producing a bottom-overflow stripe when a user had 4+ active
+      // trips.
+      isScrollControlled: true,
+      backgroundColor: AppColors.bgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheet) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            // Cap at 70% viewport so the sheet always leaves room above
+            // for the user to dismiss by tapping the scrim.
+            maxHeight: MediaQuery.of(sheet).size.height * 0.7,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+              Container(
+                width: 36, height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                'Add expense to which trip?',
+                textAlign: TextAlign.center,
+                style: AppTypography.geist(
+                  fontSize: 15, fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'You have ${activeTrips.length} active trips. Pick one.',
+                textAlign: TextAlign.center,
+                style: AppTypography.geist(
+                  fontSize: 12, color: AppColors.ink3,
+                ),
+              ),
+              const SizedBox(height: 14),
+              for (final Trip t in activeTrips)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Material(
+                    color: AppColors.bgElev,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.of(sheet).pop(t.id),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                        child: Row(
+                          children: <Widget>[
+                            Container(
+                              width: 32, height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.brandTint,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.flight_takeoff_outlined,
+                                size: 16, color: AppColors.brand,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text(
+                                    t.name,
+                                    style: AppTypography.geist(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${t.countryName} · ${t.currency}',
+                                    style: AppTypography.geist(
+                                      fontSize: 11.5,
+                                      color: AppColors.ink3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              size: 18, color: AppColors.ink3,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () => Navigator.of(sheet).pop(),
+                child: const Text('CANCEL'),
+              ),
+            ],
+          ),
+          ),
+        ),
+      ),
+    );
+    if (tripId == null) return;
+    if (!context.mounted) return;
+    GoRouter.of(context).go('/m/trips/$tripId/expenses/new');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final String subtitle = activeTrips.length == 1
+        ? 'Attach an invoice photo and log line items.'
+        : 'Pick from ${activeTrips.length} active trips.';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       child: Material(
@@ -187,8 +321,7 @@ class _QuickAddExpenseCta extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => GoRouter.of(context)
-              .go('/m/trips/$activeTripId/expenses/add'),
+          onTap: () => _onTap(context),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
             child: Row(
@@ -223,7 +356,7 @@ class _QuickAddExpenseCta extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Attach an invoice photo and log line items.',
+                        subtitle,
                         style: AppTypography.geist(
                           fontSize: 12,
                           color: AppColors.bgCard.withValues(alpha: 0.7),

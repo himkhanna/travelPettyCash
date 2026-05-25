@@ -403,7 +403,7 @@ Field staff in foreign countries with patchy connectivity is the norm.
 > from the prior baseline is rolled forward and re-listed only where it
 > materially changed.
 
-### Backend (Spring Boot 3.4, Java 21, Postgres 15 + Flyway through `V009__report_schedules.sql`)
+### Backend (Spring Boot 3.4, Java 21, Postgres 15 + Flyway through `V010__notifications_chat_and_report_types.sql`)
 
 - Auth + roles, JWT access + refresh, RFC-7807 errors on every endpoint, idempotency keys on every write.
 - Trips: list / create / patch / close / delete (no-expense guard).
@@ -458,6 +458,75 @@ Field staff in foreign countries with patchy connectivity is the norm.
 - **Audit, Users, DG, Settings** screens carried forward; Audit grew action-type / actor / trip / date / search filters.
 - **Receipt triage** standalone screen deleted — its data lives in `/cms/expenses` behind the Missing-receipt chip.
 
+### Late 2026-05-25 fixes (after the original sprint write-up)
+
+The first end-to-end demo run surfaced a handful of issues that all
+landed the same day. Listing them so the next reviewer doesn't waste
+time hunting:
+
+- **`V010__notifications_chat_and_report_types.sql`** — the original
+  `ck_notifications_type` CHECK (V005) only allowed the original 6
+  enum values, so chat fan-out + REPORT_READY deliveries were 500'ing
+  silently on insert. V010 drops + recreates the constraint with
+  `REPORT_READY` and `CHAT_MESSAGE` added.
+- **Chat-read also clears notification rows** —
+  `ChatService.markRead` previously only bumped
+  `chat_thread_members.last_read_at`, so the per-thread unread count
+  cleared but the CHAT_MESSAGE rows in the inbox + home activity feed
+  stayed UNREAD. Added `NotificationService.markReadByUserAndRef` and
+  called it inside `ChatService.markRead` so one PATCH clears both.
+- **Mobile theme ported to PDD palette** — `AppColors` re-tokenised
+  to mirror `CmsColors` (near-black brand, warm off-white surface,
+  gold accent, action-green). Every screen picks it up via semantic
+  tokens; no per-screen edits required. Shadow tints flipped from
+  forest-green to neutral dark.
+- **Mobile Home is a dashboard, not a trip list** — the
+  Active/Upcoming/Archived trip-row sections that overlapped with the
+  Trips tab were removed; Home now renders hero balance + pending
+  banner + Quick-add expense CTA + recent activity + "All your trips"
+  footer pointer. ~310 lines of dead `_TripRowCompact` /
+  `_BalanceLine` / `_Pill` deleted along with `_dateRangeLabel` /
+  `_flagFor`.
+- **Bottom-nav Trips item route fixed** — was routing to `/m/trips`
+  (Home) instead of `/m/all-trips`, so Home and Trips opened the same
+  screen.
+- **Quick-add expense CTA** — auto-routed into `active.first.id` even
+  when the user had multiple active trips, and the path was
+  `/expenses/add` (which didn't exist). Now: routes to
+  `/m/trips/:id/expenses/new`; with two or more active trips, opens a
+  scrollable bottom sheet titled "Add expense to which trip?" with a
+  row per trip.
+- **Reports module v2** — three tabs (Builder / My reports /
+  Schedules). Builder gained chart-type chips (Pie / Donut / Bar /
+  Table) and trip + mission filter pickers. "Save view" persists
+  the current builder config to `shared_preferences`
+  (`saved_report_repository.dart`); "My reports" tab lists them with
+  Load / Delete. Schedules tab rebuilt with `LayoutBuilder` + min
+  table width + horizontal scroll so the row no longer collapses on
+  narrow viewports (fixed the "blank Schedules screen" symptom). Save
+  dialog switched to `AlertDialog` after the hand-rolled `Dialog`
+  rendered with the scrim visible but invisible body.
+- **CMS expense detail screen** at `/cms/expenses/:id` — invoice
+  viewer (4:3 + fullscreen), breakdown card, trip link, conversation
+  thread + composer + @-mention reuse of `AdminExpenseCommentDialog`.
+  CMS expenses row tap + EXPENSE_QUERY notification routing both
+  point here.
+- **Receipt triage folded into Expenses list** — standalone screen
+  deleted; `/cms/receipts` redirects to `/cms/expenses?missingReceipt=1`
+  which auto-applies the filter.
+- **CMS notification bell** in the top bar — unread badge driven by
+  `myUnreadCountProvider`, popover with click-outside dismissal,
+  per-type deep-link routing (REPORT_READY → mission/trip,
+  EXPENSE_QUERY → expense detail, CHAT/allocation/transfer/trip →
+  trip).
+- **Search → user click no longer greys out the page** — removed the
+  auto-open `EditUserDialog` with `barrierDismissible: false` that
+  could strand the page behind a scrim if the dialog build hiccuped.
+  The matched row still highlights via `?focus=`; the admin clicks
+  the row to open the dialog.
+- **CMS signout** routes to `/portal`, mobile signout routes to
+  `/app`. `confirmAndSignOut` takes a `redirect` argument now.
+
 ### Identifier note
 
 Internal IDs remain opaque: Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash`. Rename is tracked separately (see "Still pending" → Identifier migration).
@@ -476,8 +545,8 @@ Internal IDs remain opaque: Dart package `pdd_petty_cash`, Java root `ae.gov.pdd
 
 ### Demo-day cold-start checklist
 
-1. `.\scripts\dev-up.ps1` (Postgres + MinIO + `gradle bootRun` + Flutter dev server). Flyway runs `V001..V009`; seeders populate users, sources, missions, categories, current-quarter trips + historical activity.
-2. Hard-refresh both browser tabs (`Ctrl+Shift+R`) after pulling the latest bundle — Flutter Web caches aggressively. If that's not enough, restart the dev server via `.\scripts\dev-down.ps1; .\scripts\dev-up.ps1`.
+1. `.\scripts\dev-up.ps1` (Postgres + MinIO + `gradle bootRun` + Flutter dev server). Flyway runs `V001..V010`; seeders populate users, sources, missions, categories, current-quarter trips + historical activity.
+2. Hard-refresh both browser tabs (`Ctrl+Shift+R`) after pulling the latest bundle — Flutter Web caches aggressively. If the page still looks stale, open Chrome DevTools → Application tab → Storage → **Clear site data**; if that's still not enough, restart the dev server via `.\scripts\dev-down.ps1; .\scripts\dev-up.ps1`.
 3. Demo path:
    - Admin (`khalid`) creates a trip under an existing mission → assigns funds from a source.
    - Leader (`fatima`) accepts → allocates to member.

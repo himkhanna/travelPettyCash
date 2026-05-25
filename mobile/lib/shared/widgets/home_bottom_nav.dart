@@ -30,6 +30,7 @@ class HomeBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool onHome = currentLocation == '/m/trips';
+    final bool onAllTrips = currentLocation == '/m/all-trips';
     final bool onInbox = currentLocation.startsWith('/m/notifications');
     final bool onProfile = currentLocation.contains('/profile');
 
@@ -61,8 +62,8 @@ class HomeBottomNav extends StatelessWidget {
               _NavItem(
                 icon: Icons.flight_takeoff_outlined,
                 label: 'Trips',
-                active: onHome,
-                onTap: () => context.go('/m/trips'),
+                active: onAllTrips,
+                onTap: () => context.go('/m/all-trips'),
               ),
               _NavItem(
                 icon: Icons.account_circle_outlined,

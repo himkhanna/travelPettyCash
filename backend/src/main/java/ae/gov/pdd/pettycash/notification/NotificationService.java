@@ -88,6 +88,30 @@ public class NotificationService {
         return n;
     }
 
+    /**
+     * Flip every UNREAD notification this user has for the given
+     * (refType, refId) tuple to READ. Used by chat-thread read so the
+     * "open the chat" gesture also clears the CHAT_MESSAGE rows in the
+     * activity feed and inbox without forcing the client to mark each
+     * one individually. Returns the count flipped.
+     */
+    @Transactional
+    public int markReadByUserAndRef(
+        UUID userId, NotificationRefType refType, UUID refId
+    ) {
+        List<Notification> rows =
+            repo.findByUserIdAndRefTypeAndRefId(userId, refType, refId);
+        var now = clock.instant();
+        int n = 0;
+        for (Notification row : rows) {
+            if (row.getState() == NotificationState.UNREAD) {
+                row.markRead(now);
+                n++;
+            }
+        }
+        return n;
+    }
+
     @Transactional(readOnly = true)
     public List<NotificationDto> listForCaller(AuthenticatedUser caller) {
         return repo.findByUserIdOrderByCreatedAtDesc(caller.userId()).stream()
