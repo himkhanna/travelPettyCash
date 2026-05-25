@@ -75,5 +75,16 @@ pdd:
     secret-key: ${PDD_STORAGE_SECRET_KEY:pdd-minio-secret}
     bucket:     ${PDD_STORAGE_BUCKET:pdd-receipts}
     presigned-ttl: PT5M
+  ocr:
+    # Path to the tessdata directory containing the .traineddata files for
+    # the languages listed below. Empty value = use Tesseract's compiled
+    # default (TESSDATA_PREFIX env var or the platform install path).
+    # Windows install via UB Mannheim build: typically
+    #   C:/Program Files/Tesseract-OCR/tessdata
+    tessdata-path: ${PDD_OCR_TESSDATA_PATH:}
+    # Plus-separated language codes. eng is required; add ara to read
+    # Arabic-language receipts (download ara.traineddata into the path
+    # above and set this to "eng+ara").
+    languages:     ${PDD_OCR_LANGUAGES:eng}
   demo:
     seed: false

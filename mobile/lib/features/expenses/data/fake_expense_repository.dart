@@ -66,6 +66,18 @@ class FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
+  Future<List<Expense>> missingReceipts() async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    return _store.expenses
+        .where((Expense e) =>
+            e.receiptObjectKey == null && e.deletedAt == null)
+        .toList()
+      ..sort((Expense a, Expense b) =>
+          b.occurredAt.compareTo(a.occurredAt));
+  }
+
+  @override
   Future<Expense> create({
     required String clientUuid,
     required String tripId,

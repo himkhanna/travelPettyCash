@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
+import 'widgets/cms_theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
 import '../../auth/domain/user.dart';
@@ -136,7 +137,7 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
                       'Funds are credited to the Leader, who can sub-allocate '
                       'to Members from the Manage Funds screen.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: CmsColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -269,7 +270,7 @@ class _CreateTripDialogState extends ConsumerState<CreateTripDialog> {
     child: Text(
       label,
       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: AppColors.brandBrown,
+        color: CmsColors.brandBrown,
         letterSpacing: 1.6,
         fontWeight: FontWeight.w700,
       ),
@@ -353,7 +354,7 @@ class _Header extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.flight, color: AppColors.brandBrown),
+          const Icon(Icons.flight, color: CmsColors.brandBrown),
           const SizedBox(width: AppSpacing.sm),
           Text(
             'Create Trip',
@@ -392,13 +393,13 @@ class _Footer extends StatelessWidget {
               Text(
                 'TOTAL BUDGET',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: CmsColors.textSecondary,
                 ),
               ),
               Text(
                 totalLabel,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.brandBrown,
+                  color: CmsColors.brandBrown,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -420,8 +421,8 @@ class _Footer extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.brandBrown,
-              foregroundColor: AppColors.cream,
+              backgroundColor: CmsColors.brandBrown,
+              foregroundColor: CmsColors.cream,
               minimumSize: const Size(0, 40),
               padding: const EdgeInsets.symmetric(horizontal: 20),
               visualDensity: VisualDensity.compact,
@@ -432,7 +433,7 @@ class _Footer extends StatelessWidget {
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.cream,
+                      color: CmsColors.cream,
                     ),
                   )
                 : const Icon(Icons.check),
@@ -562,9 +563,9 @@ class _LeaderPicker extends StatelessWidget {
             label: Text(u.displayName),
             selected: selected == u.id,
             onSelected: (_) => onPick(u.id),
-            selectedColor: AppColors.brandBrown,
+            selectedColor: CmsColors.brandBrown,
             labelStyle: TextStyle(
-              color: selected == u.id ? AppColors.cream : AppColors.textPrimary,
+              color: selected == u.id ? CmsColors.cream : CmsColors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -590,7 +591,7 @@ class _MembersPicker extends StatelessWidget {
       return Text(
         'Assign a leader first; remaining users will appear here.',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: AppColors.textSecondary,
+          color: CmsColors.textSecondary,
         ),
       );
     }
@@ -603,12 +604,12 @@ class _MembersPicker extends StatelessWidget {
             label: Text(u.displayName),
             selected: selected.contains(u.id),
             onSelected: (bool v) => onToggle(u.id, v),
-            selectedColor: AppColors.goldOlive,
+            selectedColor: CmsColors.goldOlive,
             checkmarkColor: Colors.white,
             labelStyle: TextStyle(
               color: selected.contains(u.id)
                   ? Colors.white
-                  : AppColors.textPrimary,
+                  : CmsColors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -646,7 +647,7 @@ class _SourceBudgetRow extends StatelessWidget {
                 Text(
                   source.nameAr,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: CmsColors.textSecondary,
                   ),
                 ),
               ],
@@ -703,16 +704,16 @@ class _MissionPicker extends ConsumerWidget {
                 avatar: const Icon(
                   Icons.flag_outlined,
                   size: 16,
-                  color: AppColors.brandBrown,
+                  color: CmsColors.brandBrown,
                 ),
                 tooltip: m.name,
                 selected: selected == m.id,
                 onSelected: (_) => onPick(m.id),
-                selectedColor: AppColors.brandBrown,
+                selectedColor: CmsColors.brandBrown,
                 labelStyle: TextStyle(
                   color: selected == m.id
-                      ? AppColors.cream
-                      : AppColors.textPrimary,
+                      ? CmsColors.cream
+                      : CmsColors.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -720,7 +721,7 @@ class _MissionPicker extends ConsumerWidget {
               avatar: const Icon(
                 Icons.add,
                 size: 16,
-                color: AppColors.brandBrown,
+                color: CmsColors.brandBrown,
               ),
               label: const Text('New mission'),
               onPressed: () async {
@@ -801,7 +802,7 @@ class _NewMissionDialogState extends ConsumerState<_NewMissionDialog> {
             ),
             if (_error != null) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
-              Text(_error!, style: const TextStyle(color: AppColors.outflow)),
+              Text(_error!, style: const TextStyle(color: CmsColors.outflow)),
             ],
           ],
         ),
@@ -818,8 +819,8 @@ class _NewMissionDialogState extends ConsumerState<_NewMissionDialog> {
         FilledButton(
           onPressed: _saving ? null : _save,
           style: FilledButton.styleFrom(
-            backgroundColor: AppColors.brandBrown,
-            foregroundColor: AppColors.cream,
+            backgroundColor: CmsColors.brandBrown,
+            foregroundColor: CmsColors.cream,
             minimumSize: const Size(0, 40),
             padding: const EdgeInsets.symmetric(horizontal: 20),
           ),
@@ -829,7 +830,7 @@ class _NewMissionDialogState extends ConsumerState<_NewMissionDialog> {
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppColors.cream,
+                    color: CmsColors.cream,
                   ),
                 )
               : const Text('CREATE'),

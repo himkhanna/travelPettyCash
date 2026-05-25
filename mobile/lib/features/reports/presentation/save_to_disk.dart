@@ -36,3 +36,10 @@ void saveBytesToDisk({
 void openUrl(String url) {
   html.window.open(url, '_blank');
 }
+
+/// Trigger the browser's print dialog — used for the Reports dashboard
+/// "Export as PDF" action. The user picks "Save as PDF" in the print
+/// dialog; we don't render the PDF ourselves.
+void browserPrint() {
+  html.window.print();
+}

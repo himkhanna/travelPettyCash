@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import 'widgets/cms_theme.dart';
 import '../../auth/domain/user.dart';
 import '../../expenses/application/expenses_providers.dart';
 import '../../expenses/domain/expense.dart';
@@ -77,7 +78,7 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
               ),
               child: Row(
                 children: <Widget>[
-                  const Icon(Icons.edit_outlined, color: AppColors.brandBrown),
+                  const Icon(Icons.edit_outlined, color: CmsColors.brandBrown),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
                     'Edit Trip',
@@ -111,7 +112,7 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                       '${widget.trip.countryName} · ${widget.trip.currency} — '
                       'country and currency are locked after creation.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: CmsColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
@@ -131,7 +132,7 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                       'allocations and transfers on this trip. Already-accepted '
                       'rows are kept for audit.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: CmsColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -153,21 +154,21 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.sm),
                         decoration: BoxDecoration(
-                          color: AppColors.outflow.withValues(alpha: 0.1),
+                          color: CmsColors.outflow.withValues(alpha: 0.1),
                           borderRadius: const BorderRadius.all(AppRadii.chip),
                           border: Border.all(
-                            color: AppColors.outflow.withValues(alpha: 0.4),
+                            color: CmsColors.outflow.withValues(alpha: 0.4),
                           ),
                         ),
                         child: Row(
                           children: <Widget>[
                             const Icon(Icons.error_outline,
-                                color: AppColors.outflow, size: 18),
+                                color: CmsColors.outflow, size: 18),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: Text(
                                 _error!,
-                                style: const TextStyle(color: AppColors.outflow),
+                                style: const TextStyle(color: CmsColors.outflow),
                               ),
                             ),
                           ],
@@ -193,9 +194,9 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                           ? null
                           : _confirmDelete,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.outflow,
+                        foregroundColor: CmsColors.outflow,
                         side: BorderSide(
-                          color: AppColors.outflow.withValues(alpha: 0.5),
+                          color: CmsColors.outflow.withValues(alpha: 0.5),
                         ),
                         minimumSize: const Size(0, 40),
                         padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -207,7 +208,7 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                               height: 14,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: AppColors.outflow,
+                                color: CmsColors.outflow,
                               ),
                             )
                           : const Icon(
@@ -229,7 +230,7 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                     child: Text(
                       '${_memberIds.length} member(s)',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: CmsColors.textSecondary,
                       ),
                     ),
                   ),
@@ -251,8 +252,8 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandBrown,
-                      foregroundColor: AppColors.cream,
+                      backgroundColor: CmsColors.brandBrown,
+                      foregroundColor: CmsColors.cream,
                       minimumSize: const Size(0, 40),
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       visualDensity: VisualDensity.compact,
@@ -264,7 +265,7 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.cream,
+                              color: CmsColors.cream,
                             ),
                           )
                         : const Icon(Icons.check),
@@ -346,8 +347,8 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
           FilledButton.icon(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.outflow,
-              foregroundColor: AppColors.cream,
+              backgroundColor: CmsColors.outflow,
+              foregroundColor: CmsColors.cream,
               minimumSize: const Size(0, 40),
               padding: const EdgeInsets.symmetric(horizontal: 18),
               visualDensity: VisualDensity.compact,
@@ -405,7 +406,7 @@ class _EditTripDialogState extends ConsumerState<EditTripDialog> {
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.brandBrown,
+            color: CmsColors.brandBrown,
             letterSpacing: 1.6,
             fontWeight: FontWeight.w700,
           ),

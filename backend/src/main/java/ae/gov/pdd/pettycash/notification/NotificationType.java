@@ -7,5 +7,7 @@ public enum NotificationType {
     TRANSFER_ACCEPTED,
     TRIP_ASSIGNED,
     TRIP_CLOSED,
-    EXPENSE_QUERY
+    EXPENSE_QUERY,
+    REPORT_READY,
+    CHAT_MESSAGE
 }

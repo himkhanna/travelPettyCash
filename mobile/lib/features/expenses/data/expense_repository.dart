@@ -14,6 +14,10 @@ abstract class ExpenseRepository {
 
   Future<Expense> byId(String expenseId);
 
+  /// Admin-only: list every non-deleted expense without an attached
+  /// receipt. Backs the dashboard's "Receipt triage" surface.
+  Future<List<Expense>> missingReceipts();
+
   /// Client provides the id (UUID) — server accepts it as canonical
   /// (CLAUDE.md §11 offline rules).
   Future<Expense> create({

@@ -470,86 +470,136 @@ class _IncomingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isTransfer = kind == 'Transfer';
+    final Color kindColor =
+        isTransfer ? AppColors.brandBrown : AppColors.goldOlive;
+    // Two-row card layout — the previous single-Row arrangement kept
+    // overflowing every time a source name, person name, or amount got
+    // longer than the phone viewport's available width. Splitting top
+    // (icon + name + kind) from bottom (amount + decline) makes the
+    // sheet robust regardless of string length on any phone size.
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.cream,
-              borderRadius: const BorderRadius.all(AppRadii.chip),
-            ),
-            child: Icon(
-              isTransfer
-                  ? Icons.swap_horiz
-                  : Icons.account_balance_wallet_outlined,
-              color: AppColors.brandBrown,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: const BorderRadius.all(AppRadii.card),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // Top row — icon + name/from stack + kind chip on the right
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Text(
-                      source,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: (isTransfer
-                                ? AppColors.brandBrown
-                                : AppColors.goldOlive)
-                            .withValues(alpha: 0.18),
-                        borderRadius: const BorderRadius.all(AppRadii.chip),
-                      ),
-                      child: Text(
-                        kind.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 9,
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.cream,
+                    borderRadius: const BorderRadius.all(AppRadii.chip),
+                  ),
+                  child: Icon(
+                    isTransfer
+                        ? Icons.swap_horiz
+                        : Icons.account_balance_wallet_outlined,
+                    color: AppColors.brandBrown,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        source,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                          color: isTransfer
-                              ? AppColors.brandBrown
-                              : AppColors.goldOlive,
+                          fontSize: 14,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        'From $from',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  'From $from',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kindColor.withValues(alpha: 0.18),
+                    borderRadius: const BorderRadius.all(AppRadii.chip),
+                  ),
+                  child: Text(
+                    kind.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: kindColor,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          Text(
-            amount.format(),
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: AppColors.brandBrown,
+            const SizedBox(height: 10),
+            // Bottom row — amount on the left, decline on the right.
+            // Amount is in a Flexible+FittedBox so even an extreme amount
+            // string scales rather than overflowing.
+            Row(
+              children: <Widget>[
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      amount.format(),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.brandBrown,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: onDecline,
+                  icon: const Icon(Icons.close, size: 14),
+                  label: const Text('DECLINE'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.outflow,
+                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    visualDensity: VisualDensity.compact,
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          IconButton(
-            icon: const Icon(Icons.close, color: AppColors.outflow),
-            tooltip: 'Decline',
-            onPressed: onDecline,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

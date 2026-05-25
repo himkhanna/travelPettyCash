@@ -49,6 +49,13 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.3.0")
     implementation("com.github.librepdf:openpdf:2.0.3")
 
+    // --- OCR (receipt auto-fill). tess4j is a JNA bridge over the native
+    // libtesseract; the binary + tessdata (eng, ara) must be installed on
+    // the host. ReceiptOcrService degrades to engineAvailable=false if the
+    // native lib is missing, so missing-Tesseract never blocks expense
+    // submission — see backend/README.md for the install steps.
+    implementation("net.sourceforge.tess4j:tess4j:5.13.0")
+
     // --- Tests ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")

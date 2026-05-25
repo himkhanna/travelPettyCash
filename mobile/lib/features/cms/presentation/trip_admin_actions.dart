@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import 'widgets/cms_theme.dart';
 import '../../../core/money/money.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
@@ -39,13 +40,13 @@ class TripAdminActions extends ConsumerWidget {
       ),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
-      foregroundColor: AppColors.brandBrown,
-      side: const BorderSide(color: AppColors.brandBrown),
+      foregroundColor: CmsColors.brandBrown,
+      side: const BorderSide(color: CmsColors.brandBrown),
     );
     final ButtonStyle compactDanger = compact.copyWith(
-      foregroundColor: const WidgetStatePropertyAll<Color>(AppColors.outflow),
+      foregroundColor: const WidgetStatePropertyAll<Color>(CmsColors.outflow),
       side: const WidgetStatePropertyAll<BorderSide>(
-        BorderSide(color: AppColors.outflow),
+        BorderSide(color: CmsColors.outflow),
       ),
     );
 
@@ -95,7 +96,7 @@ class TripAdminActions extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.outflow),
+            style: FilledButton.styleFrom(backgroundColor: CmsColors.outflow),
             child: const Text('CLOSE TRIP'),
           ),
         ],
@@ -207,7 +208,7 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
               Text(
                 'Top up the source pool for "${widget.trip.name}". Funds are credited to $leaderName (Leader) and added to TOTAL TRIP BUDGET. Members are unaffected — Leader can sub-allocate from Manage Funds.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: CmsColors.textSecondary,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -237,7 +238,7 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
                                     style: Theme.of(context).textTheme
                                         .bodySmall
                                         ?.copyWith(
-                                          color: AppColors.textSecondary,
+                                          color: CmsColors.textSecondary,
                                         ),
                                   ),
                                 ],
@@ -281,13 +282,13 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
                       Text(
                         'NEW INFLOW',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: CmsColors.textSecondary,
                         ),
                       ),
                       Text(
                         _grandTotal(widget.trip.currency).format(),
                         style: const TextStyle(
-                          color: AppColors.brandBrown,
+                          color: CmsColors.brandBrown,
                           fontWeight: FontWeight.w700,
                           fontSize: 18,
                         ),
@@ -313,8 +314,8 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandBrown,
-                      foregroundColor: AppColors.cream,
+                      backgroundColor: CmsColors.brandBrown,
+                      foregroundColor: CmsColors.cream,
                       minimumSize: const Size(0, 40),
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       visualDensity: VisualDensity.compact,
@@ -325,7 +326,7 @@ class _AssignFundsDialogState extends ConsumerState<_AssignFundsDialog> {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.cream,
+                              color: CmsColors.cream,
                             ),
                           )
                         : const Icon(Icons.check),

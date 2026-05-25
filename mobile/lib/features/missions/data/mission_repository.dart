@@ -45,6 +45,46 @@ class MissionRepository {
     }
   }
 
+  /// Admin/Super only on the server. All editable fields are required so
+  /// the caller can't accidentally null out a name by omitting it from the
+  /// payload — the CMS edit screen passes the current values for unchanged
+  /// fields. `parentMissionId` is sent as `null` to detach from a parent.
+  Future<Mission> update({
+    required String id,
+    required String name,
+    String? nameAr,
+    String? description,
+    String? parentMissionId,
+    required MissionStatus status,
+  }) async {
+    try {
+      final Response<dynamic> resp = await _dio.put<dynamic>(
+        '/api/v1/missions/$id',
+        data: <String, dynamic>{
+          'name': name,
+          'nameAr': nameAr,
+          'description': description,
+          'parentMissionId': parentMissionId,
+          'status': status == MissionStatus.closed ? 'CLOSED' : 'ACTIVE',
+        },
+      );
+      return _fromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
+  /// Server rejects (409) when the mission still has trips attached or any
+  /// child missions. The CMS screen surfaces the detail string from the
+  /// 7807 envelope so the admin knows what to clean up first.
+  Future<void> delete(String id) async {
+    try {
+      await _dio.delete<dynamic>('/api/v1/missions/$id');
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
   Mission _fromJson(Map<String, dynamic> j) => Mission(
         id: j['id'] as String,
         name: j['name'] as String,

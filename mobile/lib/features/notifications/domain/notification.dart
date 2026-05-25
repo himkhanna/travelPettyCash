@@ -6,6 +6,13 @@ enum NotificationType {
   tripAssigned,
   tripClosed,
   expenseQuery,
+  /// Fired when a report is ready for download — emitted on trip close
+  /// (for the finance letter) and by the scheduled-delivery cron job.
+  /// Payload carries `{scope, scopeId, kind, downloadUrl, generatedAt}`.
+  reportReady,
+  /// Fired when a peer posts to a trip chat thread. Payload carries
+  /// `{threadId, tripId, tripName, senderId, snippet}`.
+  chatMessage,
 }
 
 enum NotificationState { unread, read, acted }

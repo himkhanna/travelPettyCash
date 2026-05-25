@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/pdd_primitives.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
+import '../../auth/application/auth_actions.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 
@@ -85,8 +86,7 @@ class TripProfileScreen extends ConsumerWidget {
                       _MenuItem(
                         icon: Icons.chat_bubble_outline,
                         label: 'Chat',
-                        onTap: () =>
-                            context.go('/m/trips/$tripId/chat'),
+                        onTap: () => context.go('/m/chat'),
                       ),
                       _MenuItem(
                         icon: Icons.settings_outlined,
@@ -104,7 +104,7 @@ class TripProfileScreen extends ConsumerWidget {
                         icon: Icons.logout,
                         label: 'Sign out',
                         destructive: true,
-                        onTap: () => context.go('/'),
+                        onTap: () => confirmAndSignOut(context, ref),
                       ),
                     ]),
                     const SizedBox(height: 22),

@@ -38,4 +38,16 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
          ORDER BY t.createdAt DESC
         """)
     List<Trip> findAllFiltered(@Param("status") TripStatus status);
+
+    /** Count trips attached to a mission — used by mission delete guard. */
+    long countByMissionId(UUID missionId);
+
+    /** Case-insensitive name/country search for the global search bar. */
+    @Query("""
+        SELECT t FROM Trip t
+         WHERE LOWER(t.name)        LIKE LOWER(CONCAT('%', :q, '%'))
+            OR LOWER(t.countryName) LIKE LOWER(CONCAT('%', :q, '%'))
+         ORDER BY t.createdAt DESC
+        """)
+    List<Trip> searchByText(@Param("q") String q);
 }

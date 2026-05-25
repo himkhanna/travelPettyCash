@@ -51,6 +51,20 @@ class ApiExpenseRepository implements ExpenseRepository {
   }
 
   @override
+  Future<List<Expense>> missingReceipts() async {
+    try {
+      final Response<dynamic> resp = await _dio.get<dynamic>(
+        '/api/v1/expenses/missing-receipt',
+      );
+      return (resp.data as List<dynamic>)
+          .map((dynamic e) => _expenseFromJson(e as Map<String, dynamic>))
+          .toList(growable: false);
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
+  @override
   Future<Expense> create({
     required String clientUuid,
     required String tripId,

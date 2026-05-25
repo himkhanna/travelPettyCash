@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
+import 'widgets/cms_theme.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
 import '../../expenses/application/expenses_providers.dart';
@@ -116,7 +117,7 @@ class DgDashboard extends ConsumerWidget {
               letterSpacing: 1.2,
             ),
           ),
-          backgroundColor: AppColors.cream,
+          backgroundColor: CmsColors.cream,
         ),
       ],
       child: SingleChildScrollView(
@@ -205,7 +206,7 @@ class _SummaryRow extends StatelessWidget {
           child: _Stat(
             label: 'ACTIVE TRIPS',
             value: activeTrips.length.toString(),
-            color: AppColors.success,
+            color: CmsColors.success,
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -213,7 +214,7 @@ class _SummaryRow extends StatelessWidget {
           child: _Stat(
             label: 'TOTAL TRIPS',
             value: trips.length.toString(),
-            color: AppColors.brandBrown,
+            color: CmsColors.brandBrown,
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -221,7 +222,7 @@ class _SummaryRow extends StatelessWidget {
           child: _Stat(
             label: 'TOTAL BUDGET',
             value: totalBudget.format(),
-            color: AppColors.brandBrown,
+            color: CmsColors.brandBrown,
             small: true,
           ),
         ),
@@ -230,7 +231,7 @@ class _SummaryRow extends StatelessWidget {
           child: _Stat(
             label: 'TOTAL SPENT',
             value: totalSpent.format(),
-            color: AppColors.outflow,
+            color: CmsColors.outflow,
             small: true,
           ),
         ),
@@ -239,7 +240,7 @@ class _SummaryRow extends StatelessWidget {
           child: _Stat(
             label: 'REMAINING ($dominantCurrency)',
             value: (totalBudget - totalSpent).format(),
-            color: AppColors.goldOlive,
+            color: CmsColors.goldOlive,
             small: true,
           ),
         ),
@@ -266,9 +267,9 @@ class _Stat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: CmsColors.surfaceCard,
         borderRadius: const BorderRadius.all(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: CmsColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,7 +277,7 @@ class _Stat extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+              color: CmsColors.textSecondary,
               letterSpacing: 1.4,
             ),
           ),
@@ -307,9 +308,9 @@ class _TripsTable extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: CmsColors.surfaceCard,
         borderRadius: const BorderRadius.all(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: CmsColors.divider),
       ),
       child: Column(
         children: <Widget>[
@@ -319,7 +320,7 @@ class _TripsTable extends StatelessWidget {
               vertical: AppSpacing.sm,
             ),
             decoration: const BoxDecoration(
-              color: AppColors.cream,
+              color: CmsColors.cream,
               borderRadius: BorderRadius.vertical(top: AppRadii.card),
             ),
             child: Row(
@@ -333,7 +334,7 @@ class _TripsTable extends StatelessWidget {
             ),
           ),
           for (final Trip t in trips) ...<Widget>[
-            const Divider(height: 1, color: AppColors.divider),
+            const Divider(height: 1, color: CmsColors.divider),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md,
@@ -401,11 +402,11 @@ class _TripsTable extends StatelessWidget {
   Color _statusColor(TripStatus s) {
     switch (s) {
       case TripStatus.active:
-        return AppColors.success;
+        return CmsColors.success;
       case TripStatus.draft:
-        return AppColors.warning;
+        return CmsColors.warning;
       case TripStatus.closed:
-        return AppColors.textSecondary;
+        return CmsColors.textSecondary;
     }
   }
 
@@ -426,7 +427,7 @@ class _Th extends StatelessWidget {
     return Text(
       label,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: AppColors.textSecondary,
+        color: CmsColors.textSecondary,
         letterSpacing: 1.2,
         fontWeight: FontWeight.w700,
       ),
@@ -446,9 +447,9 @@ class _CategoryDonut extends ConsumerWidget {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: AppColors.surfaceCard,
+          color: CmsColors.surfaceCard,
           borderRadius: const BorderRadius.all(AppRadii.card),
-          border: Border.all(color: AppColors.divider),
+          border: Border.all(color: CmsColors.divider),
         ),
         child: const Center(child: Text('No spend yet.')),
       );
@@ -466,9 +467,9 @@ class _CategoryDonut extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: CmsColors.surfaceCard,
         borderRadius: const BorderRadius.all(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: CmsColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,7 +477,7 @@ class _CategoryDonut extends ConsumerWidget {
           Text(
             'SPEND BY CATEGORY ($currency)',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.textSecondary,
+              color: CmsColors.textSecondary,
               letterSpacing: 1.4,
             ),
           ),
@@ -494,7 +495,7 @@ class _CategoryDonut extends ConsumerWidget {
                       for (final MapEntry<String, Money> e in rows)
                         PieChartSectionData(
                           value: e.value.amountMinor.toDouble(),
-                          color: AppColors.forCategory(e.key),
+                          color: CmsColors.forCategory(e.key),
                           radius: 28,
                           showTitle: false,
                         ),
@@ -507,14 +508,14 @@ class _CategoryDonut extends ConsumerWidget {
                     Text(
                       'TOTAL',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: CmsColors.textSecondary,
                       ),
                     ),
                     Text(
                       total.format(),
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: AppColors.brandBrown,
+                        color: CmsColors.brandBrown,
                       ),
                     ),
                   ],
@@ -532,7 +533,7 @@ class _CategoryDonut extends ConsumerWidget {
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: AppColors.forCategory(e.key),
+                      color: CmsColors.forCategory(e.key),
                       shape: BoxShape.circle,
                     ),
                   ),

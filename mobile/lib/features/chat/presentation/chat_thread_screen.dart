@@ -276,6 +276,8 @@ class _MessageBubble extends ConsumerWidget {
                 if (!mine)
                   Text(
                     senderName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.brandBrown,
                       fontWeight: FontWeight.w700,

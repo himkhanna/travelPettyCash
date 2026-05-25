@@ -10,16 +10,23 @@ import '../../auth/application/auth_providers.dart';
 import '../application/chat_providers.dart';
 import '../domain/chat.dart';
 
-/// Screen-inventory #14 — Chats list for the trip.
+/// Screen-inventory #14 — Chats list.
+///
+/// When [tripId] is non-null the screen is scoped to that trip (reached via
+/// the trip bottom-nav). When [tripId] is null the screen is global and
+/// shows every thread the user participates in across all trips — this is
+/// the entry point from the Profile menu.
 class ChatsListScreen extends ConsumerWidget {
-  const ChatsListScreen({super.key, required this.tripId});
-  final String tripId;
+  const ChatsListScreen({super.key, this.tripId});
+  final String? tripId;
+
+  bool get _isGlobal => tripId == null;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<ChatThread>> async = ref.watch(
-      tripThreadsProvider(tripId),
-    );
+    final AsyncValue<List<ChatThread>> async = _isGlobal
+        ? ref.watch(allChatsProvider)
+        : ref.watch(tripThreadsProvider(tripId!));
     final DemoStore store = ref.read(demoStoreProvider);
     final String? meId = ref.watch(currentUserProvider).valueOrNull?.id;
 
@@ -27,19 +34,23 @@ class ChatsListScreen extends ConsumerWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/m/trips/$tripId/dashboard'),
+          onPressed: () => _isGlobal
+              ? context.go('/m/trips')
+              : context.go('/m/trips/$tripId/dashboard'),
         ),
-        title: const Text('CHATS'),
+        title: Text(_isGlobal ? 'CHATS' : 'CHATS'),
       ),
-      bottomNavigationBar: TripBottomNav(
-        tripId: tripId,
-        currentLocation: '/m/trips/$tripId/chat',
-      ),
+      bottomNavigationBar: _isGlobal
+          ? null
+          : TripBottomNav(
+              tripId: tripId!,
+              currentLocation: '/m/trips/$tripId/chat',
+            ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(child: Text('Error: $e')),
         data: (List<ChatThread> threads) => threads.isEmpty
-            ? const _EmptyState()
+            ? _EmptyState(global: _isGlobal)
             : ListView.separated(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 itemCount: threads.length,
@@ -52,7 +63,7 @@ class ChatsListScreen extends ConsumerWidget {
                     store: store,
                     meId: meId,
                     onTap: () =>
-                        context.go('/m/trips/$tripId/chat/${t.id}'),
+                        context.go('/m/trips/${t.tripId}/chat/${t.id}'),
                   );
                 },
               ),
@@ -161,7 +172,8 @@ class _ThreadCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({required this.global});
+  final bool global;
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -171,7 +183,9 @@ class _EmptyState extends StatelessWidget {
           Icon(Icons.chat_outlined, size: 48, color: AppColors.goldOlive),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'No chat threads in this trip yet.',
+            global
+                ? 'No chat threads yet.'
+                : 'No chat threads in this trip yet.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textSecondary,
             ),

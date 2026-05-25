@@ -8,6 +8,8 @@ import ae.gov.pdd.pettycash.expense.ExpenseService;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseDto;
 import ae.gov.pdd.pettycash.fund.Source;
 import ae.gov.pdd.pettycash.fund.SourceRepository;
+import ae.gov.pdd.pettycash.mission.Mission;
+import ae.gov.pdd.pettycash.mission.MissionRepository;
 import ae.gov.pdd.pettycash.trip.Trip;
 import ae.gov.pdd.pettycash.trip.TripRepository;
 import ae.gov.pdd.pettycash.trip.dto.TripDto;
@@ -17,6 +19,9 @@ import ae.gov.pdd.pettycash.user.UserRole;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +44,7 @@ public class ReportService {
     private final UserRepository users;
     private final SourceRepository sources;
     private final ExpenseCategoryRepository categories;
+    private final MissionRepository missions;
     private final PdfReportRenderer pdfRenderer;
     private final XlsxReportRenderer xlsxRenderer;
 
@@ -48,6 +54,7 @@ public class ReportService {
         UserRepository users,
         SourceRepository sources,
         ExpenseCategoryRepository categories,
+        MissionRepository missions,
         PdfReportRenderer pdfRenderer,
         XlsxReportRenderer xlsxRenderer
     ) {
@@ -56,6 +63,7 @@ public class ReportService {
         this.users = users;
         this.sources = sources;
         this.categories = categories;
+        this.missions = missions;
         this.pdfRenderer = pdfRenderer;
         this.xlsxRenderer = xlsxRenderer;
     }
@@ -133,6 +141,124 @@ public class ReportService {
         );
     }
 
+    /**
+     * Same shape as {@link #tripFullReport} but restricted to expenses
+     * that occurred on the given UTC date. Backs the "Daily expense
+     * report" download — admin runs at the end of day to send a one-day
+     * snapshot to finance without re-running the lifetime report.
+     */
+    public Rendered tripDailyReport(
+        UUID tripId, LocalDate date, String format, AuthenticatedUser caller
+    ) {
+        if (caller.role() == UserRole.MEMBER) {
+            throw forbidden();
+        }
+        if (date == null) {
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST, "reports/missing-date",
+                "Missing date", "Date is required for the daily report."
+            );
+        }
+        ReportContext ctx = loadContext(tripId, caller).filterByDay(date);
+        String fname = "trip-daily-" + slug(ctx.trip.name())
+            + "-" + date.toString();
+        if ("pdf".equalsIgnoreCase(format)) {
+            return new Rendered(
+                pdfRenderer.tripFull(ctx),
+                fname + ".pdf",
+                pdfRenderer.contentType()
+            );
+        }
+        return new Rendered(
+            xlsxRenderer.tripFull(ctx),
+            fname + ".xlsx",
+            xlsxRenderer.contentType()
+        );
+    }
+
+    /**
+     * Mission rollup — concatenates the trip-full XLSX rows of every trip
+     * tagged with this mission. Filters by {@code date} when provided
+     * (today's mission-wide snapshot). Trip name is added as a prefix on
+     * each row's detail field so a single sheet stays readable.
+     */
+    public Rendered missionReport(
+        UUID missionId, LocalDate date, AuthenticatedUser caller
+    ) {
+        if (caller.role() == UserRole.MEMBER) {
+            throw forbidden();
+        }
+        Mission m = missions.findById(missionId)
+            .orElseThrow(() -> notFound("Mission", missionId));
+        // Walk every trip in this mission. Mission rollup is XLSX-only —
+        // PDF mission letters can come later.
+        List<Trip> missionTrips = new ArrayList<>();
+        for (Trip t : trips.findAll()) {
+            if (m.getId().equals(t.getMissionId())) {
+                missionTrips.add(t);
+            }
+        }
+        // Collect a flat list of expenses across all trips. Each ExpenseDto
+        // carries its tripId so the renderer's trip-name lookup still works.
+        List<ExpenseDto> allExp = new ArrayList<>();
+        Map<UUID, TripDto> tripById = new HashMap<>();
+        for (Trip t : missionTrips) {
+            TripDto td = TripDto.from(t);
+            tripById.put(t.getId(), td);
+            List<ExpenseDto> some = expenses.list(
+                t.getId(), caller,
+                new ExpenseService.Filter(null, null, null, null, null, null)
+            );
+            for (ExpenseDto e : some) {
+                if (date != null) {
+                    java.time.LocalDate occ = e.occurredAt()
+                        .atZone(ZoneOffset.UTC).toLocalDate();
+                    if (!occ.equals(date)) continue;
+                }
+                allExp.add(e);
+            }
+        }
+        // Synthesize a trip-shaped DTO that names the mission, so the
+        // existing tripFull renderer can produce a sensible header without
+        // a new code path.
+        final String fallbackCcy =
+            missionTrips.isEmpty() ? "AED" : missionTrips.get(0).getCurrency();
+        TripDto syntheticTrip = new TripDto(
+            m.getId(),
+            "Mission · " + m.getName(),
+            missionTrips.isEmpty() ? "AE" : missionTrips.get(0).getCountryCode(),
+            missionTrips.isEmpty() ? "United Arab Emirates"
+                : missionTrips.get(0).getCountryName(),
+            fallbackCcy,
+            ae.gov.pdd.pettycash.trip.TripStatus.ACTIVE,
+            caller.userId(),  // createdBy
+            caller.userId(),  // leaderId
+            m.getId(),        // missionId
+            java.util.Collections.<UUID>emptyList(),
+            new ae.gov.pdd.pettycash.common.MoneyDto(0L, fallbackCcy),
+            m.getCreatedAt(),
+            null
+        );
+        Map<UUID, User> userById = new HashMap<>();
+        for (User u : users.findAll()) userById.put(u.getId(), u);
+        Map<UUID, Source> sourceById = new HashMap<>();
+        for (Source s : sources.findAll()) sourceById.put(s.getId(), s);
+        Map<String, ExpenseCategory> catByCode = new HashMap<>();
+        for (ExpenseCategory c : categories.findAll()) {
+            catByCode.put(c.getCode(), c);
+        }
+        ReportContext ctx = new ReportContext(
+            syntheticTrip, allExp, userById, sourceById, catByCode
+        );
+        String fname = "mission-" + slug(m.getName())
+            + (date == null ? "" : "-" + date.toString());
+        return new Rendered(
+            xlsxRenderer.tripFull(ctx),
+            fname + ".xlsx",
+            xlsxRenderer.contentType()
+        );
+    }
+
     // ---- internals ---------------------------------------------------
 
     /** Loads everything a report renderer needs, in one shot. */
@@ -205,6 +331,18 @@ public class ReportService {
             Map<UUID, List<ExpenseDto>> bySource = mine.stream()
                 .collect(Collectors.groupingBy(ExpenseDto::sourceId));
             return new ReportData(mine, totalMinor, bySource);
+        }
+
+        /// Returns a new context with the expenses list restricted to those
+        /// that occurred on the given UTC date. Lookup maps are shared.
+        ReportContext filterByDay(LocalDate day) {
+            List<ExpenseDto> filtered = expenses.stream()
+                .filter(e -> e.occurredAt()
+                    .atZone(ZoneOffset.UTC).toLocalDate().equals(day))
+                .toList();
+            return new ReportContext(
+                trip, filtered, userById, sourceById, catByCode
+            );
         }
     }
 

@@ -74,6 +74,18 @@ public class ExpenseController {
         return service.get(id, caller);
     }
 
+    /**
+     * Admin-only "receipt triage" feed — non-deleted expenses with no
+     * attached receipt. Backs the dashboard's Triage CTA so the admin can
+     * fix or ping in one place rather than scanning every trip.
+     */
+    @GetMapping("/expenses/missing-receipt")
+    public List<ExpenseDto> missingReceipts(
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        return service.missingReceipts(caller);
+    }
+
     @PostMapping("/trips/{tripId}/expenses")
     public ExpenseDto create(
         @PathVariable UUID tripId,

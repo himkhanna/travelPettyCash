@@ -276,6 +276,8 @@ class _RecipientTile extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     user.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTypography.geist(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -284,6 +286,8 @@ class _RecipientTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     isLeader ? 'Trip Leader' : 'Team Member',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTypography.geist(
                       fontSize: 12,
                       color: AppColors.ink3,

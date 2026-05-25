@@ -1,6 +1,7 @@
 package ae.gov.pdd.pettycash.trip;
 
 import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
+import ae.gov.pdd.pettycash.chat.ChatService;
 import ae.gov.pdd.pettycash.common.Money;
 import ae.gov.pdd.pettycash.common.MoneyDto;
 import ae.gov.pdd.pettycash.common.error.ApiException;
@@ -45,6 +46,7 @@ public class TripService {
     private final TransferRepository transfers;
     private final ExpenseRepository expenses;
     private final NotificationService notifications;
+    private final ChatService chat;
     private final Clock clock;
 
     @Autowired
@@ -55,9 +57,10 @@ public class TripService {
         AllocationRepository allocations,
         TransferRepository transfers,
         ExpenseRepository expenses,
-        NotificationService notifications
+        NotificationService notifications,
+        ChatService chat
     ) {
-        this(trips, sources, users, allocations, transfers, expenses, notifications, Clock.systemUTC());
+        this(trips, sources, users, allocations, transfers, expenses, notifications, chat, Clock.systemUTC());
     }
 
     TripService(
@@ -68,6 +71,7 @@ public class TripService {
         TransferRepository transfers,
         ExpenseRepository expenses,
         NotificationService notifications,
+        ChatService chat,
         Clock clock
     ) {
         this.trips = trips;
@@ -77,6 +81,7 @@ public class TripService {
         this.transfers = transfers;
         this.expenses = expenses;
         this.notifications = notifications;
+        this.chat = chat;
         this.clock = clock;
     }
 
@@ -136,6 +141,10 @@ public class TripService {
             t.setMissionId(req.missionId());
         }
         trips.save(t);
+        // Every trip ships with a "Team chat" group thread (leader + all
+        // members) so the trip dashboard's TEAM CHAT tile has somewhere to
+        // open into the moment the trip is created.
+        chat.ensureTeamThread(t);
         return TripDto.from(t);
     }
 
@@ -211,6 +220,11 @@ public class TripService {
             t.replaceMembers(requested);
         }
 
+        // Membership or leader may have changed — keep the team thread's
+        // participants in sync so nobody sees stale unreads or gets locked
+        // out of an old conversation.
+        chat.ensureTeamThread(t);
+
         return TripDto.from(t);
     }
 
@@ -240,6 +254,36 @@ public class TripService {
             payload,
             recipients
         );
+
+        // REPORT_READY for every admin + super-admin so the inbox surfaces
+        // the cue to generate the finance letter / signed PDF. We don't
+        // pre-render the bytes here — the notification carries the trip
+        // identity and the existing /api/v1/reports/trip/{id}/finance
+        // endpoint produces them on demand when the admin clicks through.
+        Set<UUID> adminRecipients = new LinkedHashSet<>();
+        for (ae.gov.pdd.pettycash.user.User u : users.findAll()) {
+            if (u.getRole() == UserRole.ADMIN
+                || u.getRole() == UserRole.SUPER_ADMIN) {
+                adminRecipients.add(u.getId());
+            }
+        }
+        if (!adminRecipients.isEmpty()) {
+            Map<String, Object> reportPayload = new LinkedHashMap<>();
+            reportPayload.put("tripId", t.getId().toString());
+            reportPayload.put("tripName", t.getName());
+            reportPayload.put("scope", "trip");
+            reportPayload.put("kind", "finance-letter");
+            reportPayload.put("reason", "trip-closed");
+            notifications.fanOut(
+                NotificationType.REPORT_READY,
+                false,
+                NotificationRefType.TRIP,
+                t.getId(),
+                reportPayload,
+                adminRecipients
+            );
+        }
+
         return TripDto.from(t);
     }
 

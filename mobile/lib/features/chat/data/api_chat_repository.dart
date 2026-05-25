@@ -34,6 +34,35 @@ class ApiChatRepository implements ChatRepository {
   }
 
   @override
+  Future<ChatThread> teamThread({required String tripId}) async {
+    try {
+      final Response<dynamic> resp = await _dio.get<dynamic>(
+        '/api/v1/trips/$tripId/chat/team',
+      );
+      return _threadFromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
+  @override
+  Future<List<ChatThread>> threadsForUser({required String userId}) async {
+    // userId is ignored on the wire — the backend derives it from the JWT
+    // principal — but the interface keeps it explicit so the fake repo can
+    // filter without an auth dependency.
+    try {
+      final Response<dynamic> resp = await _dio.get<dynamic>(
+        '/api/v1/chat/threads',
+      );
+      return (resp.data as List<dynamic>)
+          .map((dynamic e) => _threadFromJson(e as Map<String, dynamic>))
+          .toList(growable: false);
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
+  @override
   Stream<List<ChatMessage>> watchMessages(String threadId) {
     final StreamController<List<ChatMessage>> ctrl =
         StreamController<List<ChatMessage>>.broadcast();

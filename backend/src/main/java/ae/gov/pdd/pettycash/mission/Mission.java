@@ -88,4 +88,22 @@ public class Mission {
         this.status = MissionStatus.CLOSED;
         this.closedAt = at;
     }
+
+    public void reopen() {
+        this.status = MissionStatus.ACTIVE;
+        this.closedAt = null;
+    }
+
+    public void rename(String name, String nameAr) {
+        this.name = name;
+        this.nameAr = nameAr;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setParentMissionId(UUID parentMissionId) {
+        this.parentMissionId = parentMissionId;
+    }
 }

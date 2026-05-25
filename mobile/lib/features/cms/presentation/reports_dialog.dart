@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import 'widgets/cms_theme.dart';
 import '../../../core/l10n/locale_names.dart';
 import '../../../core/money/money.dart';
 import '../../../l10n/generated/app_localizations.dart';
@@ -72,7 +73,7 @@ class _ReportsCatalog extends ConsumerWidget {
               Text(
                 l.reports_intro,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: CmsColors.textSecondary,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -108,6 +109,16 @@ class _ReportsCatalog extends ConsumerWidget {
                       ReportKind.directorGeneral,
                     ),
                   ),
+                  // Daily snapshot — picks a date, then downloads the
+                  // trip-full XLSX restricted to that one UTC day.
+                  _ReportCard(
+                    title: 'DAILY',
+                    subtitle:
+                        'One day of expenses on this trip, ready to '
+                        'send to finance.',
+                    icon: Icons.today,
+                    onTap: () => _downloadDaily(context, ref),
+                  ),
                 ],
               ),
             ],
@@ -122,6 +133,46 @@ class _ReportsCatalog extends ConsumerWidget {
       context: context,
       builder: (BuildContext _) => _ReportPreviewDialog(kind: kind, trip: trip),
     );
+  }
+
+  /// Daily report: prompt for a date, then download the day-scoped XLSX
+  /// directly (no preview — the XLSX speaks for itself once it opens).
+  Future<void> _downloadDaily(BuildContext context, WidgetRef ref) async {
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: now.add(const Duration(days: 1)),
+      initialDate: now,
+    );
+    if (picked == null || !context.mounted) return;
+    try {
+      final DownloadedReport report = await ref
+          .read(reportDownloadRepositoryProvider)
+          .download(
+            kind: ReportDownloadKind.tripDaily,
+            tripId: trip.id,
+            date: picked,
+            format: ReportFormat.xlsx,
+          );
+      saveBytesToDisk(
+        bytes: report.bytes,
+        filename: report.filename,
+        contentType: report.contentType,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Downloaded ${report.filename}')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Daily report download failed: $e'),
+          backgroundColor: CmsColors.outflow,
+        ),
+      );
+    }
   }
 }
 
@@ -144,7 +195,7 @@ class _ReportCard extends StatelessWidget {
       width: 200,
       height: 160,
       child: Material(
-        color: AppColors.cream,
+        color: CmsColors.cream,
         borderRadius: const BorderRadius.all(AppRadii.card),
         child: InkWell(
           onTap: onTap,
@@ -154,7 +205,7 @@ class _ReportCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Icon(icon, color: AppColors.brandBrown, size: 28),
+                Icon(icon, color: CmsColors.brandBrown, size: 28),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   title,
@@ -167,7 +218,7 @@ class _ReportCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: CmsColors.textSecondary,
                   ),
                 ),
                 const Spacer(),
@@ -176,7 +227,7 @@ class _ReportCard extends StatelessWidget {
                     Text(
                       AppLocalizations.of(context).reports_card_preview,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.brandBrown,
+                        color: CmsColors.brandBrown,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
                       ),
@@ -184,7 +235,7 @@ class _ReportCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     const Icon(
                       Icons.chevron_right,
-                      color: AppColors.brandBrown,
+                      color: CmsColors.brandBrown,
                       size: 16,
                     ),
                   ],
@@ -425,11 +476,11 @@ class _ReportHeader extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.brandBrown,
+                color: CmsColors.brandBrown,
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
-              child: const Icon(Icons.flight, color: AppColors.cream),
+              child: const Icon(Icons.flight, color: CmsColors.cream),
             ),
             const SizedBox(width: AppSpacing.md),
             Column(
@@ -445,7 +496,7 @@ class _ReportHeader extends StatelessWidget {
                 Text(
                   l.reports_body_letterhead_ar,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: CmsColors.textSecondary,
                   ),
                 ),
               ],
@@ -465,7 +516,7 @@ class _ReportHeader extends StatelessWidget {
           '${trip.name} · ${trip.countryName} · ${DateFormat.yMMMd(l.localeName).format(trip.createdAt)}'
           '${trip.closedAt != null ? ' → ${DateFormat.yMMMd(l.localeName).format(trip.closedAt!)}' : ''}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
+            color: CmsColors.textSecondary,
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -516,7 +567,7 @@ class _UserReport extends StatelessWidget {
             store.sourceById(g.key).localizedName(context).toUpperCase(),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
-              color: AppColors.brandBrown,
+              color: CmsColors.brandBrown,
               letterSpacing: 1.2,
             ),
           ),
@@ -564,11 +615,11 @@ class _TripFullReport extends StatelessWidget {
             children: <Widget>[
               CircleAvatar(
                 radius: 14,
-                backgroundColor: AppColors.brandBrown,
+                backgroundColor: CmsColors.brandBrown,
                 child: Text(
                   store.userById(g.key).displayName.substring(0, 1),
                   style: const TextStyle(
-                    color: AppColors.cream,
+                    color: CmsColors.cream,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -642,7 +693,7 @@ class _FinanceLetter extends ConsumerWidget {
         Text(
           l.reports_body_sources,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.brandBrown,
+            color: CmsColors.brandBrown,
             letterSpacing: 1.2,
           ),
         ),
@@ -727,9 +778,9 @@ class _SignaturePanel extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: AppColors.cream,
+            color: CmsColors.cream,
             borderRadius: const BorderRadius.all(AppRadii.card),
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(color: CmsColors.divider),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,8 +792,8 @@ class _SignaturePanel extends StatelessWidget {
                         ? Icons.verified_outlined
                         : Icons.draw_outlined,
                     color: isSigned
-                        ? AppColors.success
-                        : AppColors.brandBrown,
+                        ? CmsColors.success
+                        : CmsColors.brandBrown,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
@@ -752,8 +803,8 @@ class _SignaturePanel extends StatelessWidget {
                           : l.reports_sign_status_unsigned,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: isSigned
-                            ? AppColors.success
-                            : AppColors.textPrimary,
+                            ? CmsColors.success
+                            : CmsColors.textPrimary,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
                       ),
@@ -847,7 +898,7 @@ class _DgReport extends StatelessWidget {
         Text(
           l.reports_body_per_member,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.brandBrown,
+            color: CmsColors.brandBrown,
             letterSpacing: 1.2,
           ),
         ),
@@ -861,7 +912,7 @@ class _DgReport extends StatelessWidget {
         Text(
           l.reports_body_per_category,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.brandBrown,
+            color: CmsColors.brandBrown,
             letterSpacing: 1.2,
           ),
         ),
@@ -905,13 +956,13 @@ class _ExpenseTable extends StatelessWidget {
     final AppLocalizations l = AppLocalizations.of(context);
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: CmsColors.divider),
         borderRadius: const BorderRadius.all(AppRadii.chip),
       ),
       child: Column(
         children: <Widget>[
           Container(
-            color: AppColors.cream,
+            color: CmsColors.cream,
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
               vertical: 4,
@@ -941,7 +992,7 @@ class _ExpenseTable extends StatelessWidget {
                 vertical: 4,
               ),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.divider)),
+                border: Border(top: BorderSide(color: CmsColors.divider)),
               ),
               child: Row(
                 children: <Widget>[
@@ -1032,8 +1083,8 @@ class _TotalLine extends StatelessWidget {
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: highlight
-                    ? AppColors.brandBrown
-                    : AppColors.textPrimary,
+                    ? CmsColors.brandBrown
+                    : CmsColors.textPrimary,
                 letterSpacing: 1.2,
               ),
             ),
@@ -1044,10 +1095,10 @@ class _TotalLine extends StatelessWidget {
               fontWeight: FontWeight.w700,
               fontSize: highlight ? 18 : 14,
               color: amount.isNegative
-                  ? AppColors.outflow
+                  ? CmsColors.outflow
                   : (highlight
-                        ? AppColors.brandBrown
-                        : AppColors.textPrimary),
+                        ? CmsColors.brandBrown
+                        : CmsColors.textPrimary),
             ),
           ),
         ],

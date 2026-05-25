@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../expenses/application/expenses_providers.dart';
+import 'widgets/cms_theme.dart';
 
 /// Admin-only — admin can extend the category list (CLAUDE.md §5 — categories
 /// are addable by Admin).
@@ -142,7 +143,7 @@ class _AddCategoryDialogState extends ConsumerState<AddCategoryDialog> {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.cream,
+                              color: CmsColors.cream,
                             ),
                           )
                         : const Icon(Icons.check),

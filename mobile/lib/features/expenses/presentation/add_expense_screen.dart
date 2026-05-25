@@ -14,6 +14,8 @@ import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../funds/application/funds_providers.dart';
 import '../../funds/domain/funding.dart';
+import '../../ocr/data/ocr_repository.dart';
+import '../../ocr/domain/ocr_suggestion.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import '../application/expenses_providers.dart';
@@ -33,11 +35,38 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
 }
 
+/// One row on the Add Expense form when the invoice contains multiple
+/// line items. Each row owns its own three controllers so users can
+/// type freely while live-total recomputes. Disposed in
+/// [_AddExpenseScreenState.dispose] alongside the rest of the form.
+class _LineItem {
+  _LineItem({String? desc, String qty = '1', String unit = ''})
+      : descCtrl = TextEditingController(text: desc ?? ''),
+        qtyCtrl = TextEditingController(text: qty),
+        unitCtrl = TextEditingController(text: unit);
+  final TextEditingController descCtrl;
+  final TextEditingController qtyCtrl;
+  final TextEditingController unitCtrl;
+
+  void dispose() {
+    descCtrl.dispose();
+    qtyCtrl.dispose();
+    unitCtrl.dispose();
+  }
+
+  /// Compute this row's contribution to the total in major units.
+  double totalMajor() {
+    final double q = double.tryParse(qtyCtrl.text.trim()) ?? 0;
+    final double u =
+        double.tryParse(unitCtrl.text.replaceAll(',', '').trim()) ?? 0;
+    return (q <= 0 || u <= 0) ? 0 : q * u;
+  }
+}
+
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final TextEditingController _vendorCtrl = TextEditingController();
-  final TextEditingController _qtyCtrl = TextEditingController(text: '1');
-  final TextEditingController _unitCtrl = TextEditingController();
   final TextEditingController _noteCtrl = TextEditingController();
+  final List<_LineItem> _lines = <_LineItem>[_LineItem()];
   static const Uuid _uuid = Uuid();
 
   String? _sourceId;
@@ -45,21 +74,26 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   DateTime _occurredAt = DateTime.now();
   bool _submitting = false;
   XFile? _receiptFile;
+  bool _ocrBusy = false;
 
   @override
   void initState() {
     super.initState();
-    // Live total recompute as qty/unit change.
-    _qtyCtrl.addListener(() => setState(() {}));
-    _unitCtrl.addListener(() => setState(() {}));
+    _attachListeners(_lines.first);
+  }
+
+  void _attachListeners(_LineItem li) {
+    li.qtyCtrl.addListener(() => setState(() {}));
+    li.unitCtrl.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _vendorCtrl.dispose();
-    _qtyCtrl.dispose();
-    _unitCtrl.dispose();
     _noteCtrl.dispose();
+    for (final _LineItem li in _lines) {
+      li.dispose();
+    }
     super.dispose();
   }
 
@@ -111,6 +145,27 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         balancesAsync: balancesAsync,
                       ),
                       const SizedBox(height: 12),
+                      // Invoice upload first — staff snap the receipt before
+                      // typing anything, then the OCR auto-fill (when
+                      // available) populates the fields below. Order matches
+                      // the actual workflow on the ground.
+                      _SectionLabel(label: 'Invoice'),
+                      const SizedBox(height: 4),
+                      _PhotoButton(
+                        file: _receiptFile,
+                        onPick: _pickReceipt,
+                        onClear: () => setState(() => _receiptFile = null),
+                      ),
+                      if (_receiptFile != null) ...<Widget>[
+                        const SizedBox(height: 8),
+                        _OcrAutofillButton(
+                          busy: _ocrBusy,
+                          onTap: _runOcr,
+                        ),
+                        const SizedBox(height: 8),
+                        _OcrDisclaimer(),
+                      ],
+                      const SizedBox(height: 14),
                       _SectionLabel(label: 'Category'),
                       const SizedBox(height: 4),
                       categoriesAsync.when(
@@ -135,54 +190,45 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: <Widget>[
-                          Expanded(
-                            child: _Field(
-                              label: 'Qty',
-                              child: TextField(
-                                controller: _qtyCtrl,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: <TextInputFormatter>[
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
+                      _SectionLabel(label: 'Line items'),
+                      const SizedBox(height: 4),
+                      for (int i = 0; i < _lines.length; i++) ...<Widget>[
+                        if (i > 0) const SizedBox(height: 8),
+                        _LineItemRow(
+                          index: i,
+                          line: _lines[i],
+                          currency: trip.currency,
+                          canRemove: _lines.length > 1,
+                          onRemove: () => setState(() {
+                            _lines.removeAt(i).dispose();
+                          }),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              final _LineItem li = _LineItem();
+                              _attachListeners(li);
+                              _lines.add(li);
+                            });
+                          },
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add line item'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.brand,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 6,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _Field(
-                              label: 'Per unit',
-                              child: TextField(
-                                controller: _unitCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
-                                inputFormatters: <TextInputFormatter>[
-                                  FilteringTextInputFormatter.allow(
-                                    RegExp(r'[0-9.,]'),
-                                  ),
-                                ],
-                                decoration: const InputDecoration(
-                                  hintText: '0',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _TotalReadOnly(
-                              total: _total(trip.currency),
-                              currency: trip.currency,
-                            ),
-                          ),
-                        ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _GrandTotal(
+                        total: _total(trip.currency),
+                        currency: trip.currency,
                       ),
                       const SizedBox(height: 14),
                       _SectionLabel(label: 'Deduct from source'),
@@ -197,12 +243,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           onPick: (String id) =>
                               setState(() => _sourceId = id),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      _PhotoButton(
-                        file: _receiptFile,
-                        onPick: _pickReceipt,
-                        onClear: () => setState(() => _receiptFile = null),
                       ),
                       const SizedBox(height: 12),
                       _Field(
@@ -229,7 +269,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 child: _SubmitButton(
                   enabled: !_submitting &&
                       _vendorCtrl.text.trim().isNotEmpty &&
-                      _unitCtrl.text.trim().isNotEmpty,
+                      _receiptFile != null &&
+                      _lines.any((_LineItem li) => li.totalMajor() > 0),
                   submitting: _submitting,
                   onTap: () => _submit(trip),
                 ),
@@ -242,17 +283,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Money _total(String currency) {
-    final double qty = double.tryParse(_qtyCtrl.text.trim()) ?? 0;
-    final double unit =
-        double.tryParse(_unitCtrl.text.replaceAll(',', '').trim()) ?? 0;
-    if (qty <= 0 || unit <= 0) return Money.zero(currency);
-    return Money.fromMajor(qty * unit, currency);
+    final double total = _lines.fold<double>(
+      0, (double acc, _LineItem li) => acc + li.totalMajor(),
+    );
+    if (total <= 0) return Money.zero(currency);
+    return Money.fromMajor(total, currency);
   }
 
   Future<void> _submit(Trip trip) async {
     final Money amount = _total(trip.currency);
     if (amount.isZero) {
-      showPddToast(context, 'Amount must be greater than 0');
+      showPddToast(context, 'Add at least one line item with qty + unit cost');
+      return;
+    }
+    if (_receiptFile == null) {
+      showPddToast(context, 'Attach an invoice photo before submitting');
       return;
     }
     if (_sourceId == null) {
@@ -268,9 +313,31 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     try {
       final String userId =
           ref.read(currentUserProvider).valueOrNull?.id ?? '';
-      final int qty = int.tryParse(_qtyCtrl.text.trim()) ?? 1;
+      // Total quantity is the sum across rows so the canonical record still
+      // captures the volume even though the model has no line-item table.
+      final int qty = _lines.fold<int>(
+        0,
+        (int acc, _LineItem li) =>
+            acc + (int.tryParse(li.qtyCtrl.text.trim()) ?? 0),
+      );
+      // Encode each line into `details` so the audit trail keeps the
+      // breakdown even though we're not splitting into N rows on the
+      // server. Format mirrors a receipt's printed layout.
+      final List<String> lineParts = <String>[];
+      for (final _LineItem li in _lines) {
+        if (li.totalMajor() <= 0) continue;
+        final String desc = li.descCtrl.text.trim();
+        final String q = li.qtyCtrl.text.trim();
+        final String u = li.unitCtrl.text.trim();
+        lineParts.add(
+          desc.isEmpty
+              ? '$q × $u'
+              : '$desc ($q × $u)',
+        );
+      }
       final String details = <String>[
         _vendorCtrl.text.trim(),
+        if (lineParts.isNotEmpty) lineParts.join(' + '),
         if (_noteCtrl.text.trim().isNotEmpty) _noteCtrl.text.trim(),
       ].join(' — ');
 
@@ -349,6 +416,69 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     } catch (e) {
       if (mounted) showPddToast(context, 'Receipt pick failed: $e');
+    }
+  }
+
+  /// Send the picked photo to the server's Tesseract endpoint and prefill
+  /// whatever it could extract. Leaves fields the user already filled
+  /// alone — only writes into blanks — so re-running OCR on a corrected
+  /// form doesn't blow away the user's edits.
+  Future<void> _runOcr() async {
+    final XFile? file = _receiptFile;
+    if (file == null) return;
+    setState(() => _ocrBusy = true);
+    try {
+      final Uint8List bytes = await file.readAsBytes();
+      final OcrSuggestion s =
+          await ref.read(ocrRepositoryProvider).ocrReceipt(
+                bytes: bytes,
+                filename: file.name,
+                mime: _mimeFor(file.name),
+              );
+      if (!s.engineAvailable) {
+        if (mounted) {
+          showPddToast(
+            context,
+            s.message ?? 'OCR not configured on the server.',
+          );
+        }
+        return;
+      }
+      int prefills = 0;
+      setState(() {
+        if (s.vendor != null && _vendorCtrl.text.trim().isEmpty) {
+          _vendorCtrl.text = s.vendor!;
+          prefills++;
+        }
+        // OCR fills the FIRST line item only — multi-line invoices need
+        // the user to add the remaining rows manually since the extractor
+        // returns one total, not a line breakdown.
+        final _LineItem first = _lines.first;
+        if (s.amountMinor != null && first.unitCtrl.text.trim().isEmpty) {
+          first.unitCtrl.text =
+              (s.amountMinor! / 100.0).toStringAsFixed(2);
+          if (first.qtyCtrl.text.trim().isEmpty) {
+            first.qtyCtrl.text = '1';
+          }
+          prefills++;
+        }
+        if (s.occurredAt != null) {
+          _occurredAt = s.occurredAt!;
+          prefills++;
+        }
+      });
+      if (mounted) {
+        showPddToast(
+          context,
+          prefills == 0
+              ? (s.message ?? 'No fields detected in the receipt.')
+              : 'Prefilled $prefills field${prefills == 1 ? '' : 's'} from receipt.',
+        );
+      }
+    } catch (e) {
+      if (mounted) showPddToast(context, 'OCR failed: $e');
+    } finally {
+      if (mounted) setState(() => _ocrBusy = false);
     }
   }
 
@@ -562,46 +692,205 @@ class _CategoryCell extends StatelessWidget {
   }
 }
 
-class _TotalReadOnly extends StatelessWidget {
-  const _TotalReadOnly({required this.total, required this.currency});
-  final Money total;
+/// One row on the Add Expense line-items list. Description-qty-unit
+/// inputs plus a delete affordance when more than one row exists.
+class _LineItemRow extends StatelessWidget {
+  const _LineItemRow({
+    required this.index,
+    required this.line,
+    required this.currency,
+    required this.canRemove,
+    required this.onRemove,
+  });
+  final int index;
+  final _LineItem line;
   final String currency;
+  final bool canRemove;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    return _Field(
-      label: 'Total',
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: AppColors.bgInset,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.line),
-        ),
-        alignment: Alignment.centerLeft,
-        child: RichText(
-          text: TextSpan(
-            children: <InlineSpan>[
-              TextSpan(
-                text: _fmt(total),
-                style: AppTypography.geistMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink1,
+    final double total = line.totalMajor();
+    final NumberFormat fmt = NumberFormat.decimalPattern('en_US');
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 10),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.brandTint,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  '${index + 1}',
+                  style: AppTypography.geist(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.brand,
+                  ),
                 ),
               ),
-              TextSpan(
-                text: ' $currency',
-                style: AppTypography.geist(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.ink3,
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: line.descCtrl,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Line item description (optional)',
+                  ),
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+              if (canRemove)
+                IconButton(
+                  tooltip: 'Remove line',
+                  icon: const Icon(
+                    Icons.close, size: 16, color: AppColors.ink3,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 30, minHeight: 30,
+                  ),
+                  onPressed: onRemove,
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Expanded(
+                child: _Field(
+                  label: 'Qty',
+                  child: TextField(
+                    controller: line.qtyCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _Field(
+                  label: 'Per unit',
+                  child: TextField(
+                    controller: line.unitCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'[0-9.,]'),
+                      ),
+                    ],
+                    decoration: const InputDecoration(
+                      hintText: '0',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _Field(
+                  label: 'Line total',
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.bgInset,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      total == 0
+                          ? '—'
+                          : '${fmt.format(total)} $currency',
+                      style: AppTypography.geistMono(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink1,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Grand total below the line items list — sum across every line.
+class _GrandTotal extends StatelessWidget {
+  const _GrandTotal({required this.total, required this.currency});
+  final Money total;
+  final String currency;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: total.isZero ? AppColors.bgCard : AppColors.brandSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: total.isZero
+              ? AppColors.line
+              : AppColors.brand.withValues(alpha: 0.5),
         ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Text(
+            'GRAND TOTAL',
+            style: AppTypography.geist(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppColors.ink2,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            total.isZero ? '—' : _fmt(total),
+            style: AppTypography.geistMono(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: total.isZero ? AppColors.ink3 : AppColors.brand,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            currency,
+            style: AppTypography.geist(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: total.isZero ? AppColors.ink3 : AppColors.brand,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -722,8 +1011,10 @@ class _PhotoButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.bgCard,
             borderRadius: BorderRadius.circular(14),
+            // Red-tinted border to telegraph that the invoice is required
+            // before the form will let the user record the expense.
             border: Border.all(
-              color: AppColors.lineStrong,
+              color: AppColors.red.withValues(alpha: 0.55),
               style: BorderStyle.solid,
             ),
           ),
@@ -731,7 +1022,7 @@ class _PhotoButton extends StatelessWidget {
             children: <Widget>[
               const Icon(
                 Icons.photo_camera_outlined,
-                color: AppColors.ink2,
+                color: AppColors.red,
                 size: 20,
               ),
               const SizedBox(width: 10),
@@ -740,16 +1031,27 @@ class _PhotoButton extends StatelessWidget {
                   'Attach invoice photo',
                   style: AppTypography.geist(
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.ink2,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink1,
                   ),
                 ),
               ),
-              Text(
-                'Optional',
-                style: AppTypography.geist(
-                  fontSize: 11,
-                  color: AppColors.ink3,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6, vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.redSoft,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'REQUIRED',
+                  style: AppTypography.geist(
+                    fontSize: 10,
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
                 ),
               ),
             ],
@@ -800,6 +1102,83 @@ class _PhotoButton extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Persistent warning shown whenever a receipt is attached — reminds the
+/// user that any auto-populated fields are best-effort and must be checked
+/// against the original receipt before the expense is recorded. Sits
+/// directly below the Auto-fill button so the message lands at the moment
+/// the user is about to act on the prefilled data.
+class _OcrDisclaimer extends StatelessWidget {
+  const _OcrDisclaimer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.amberSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.amber.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(
+            Icons.info_outline,
+            size: 16,
+            color: AppColors.goldDeep,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Please verify auto-populated details against the original '
+              'invoice before submitting.',
+              style: AppTypography.geist(
+                fontSize: 11.5,
+                color: AppColors.goldDeep,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OcrAutofillButton extends StatelessWidget {
+  const _OcrAutofillButton({required this.busy, required this.onTap});
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: busy ? null : onTap,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          side: BorderSide(color: AppColors.brand.withValues(alpha: 0.6)),
+          foregroundColor: AppColors.brand,
+        ),
+        icon: busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.brand,
+                ),
+              )
+            : const Icon(Icons.auto_fix_high, size: 18),
+        label: Text(busy ? 'Reading receipt…' : 'Auto-fill from receipt'),
+      ),
     );
   }
 }

@@ -2,13 +2,18 @@ package ae.gov.pdd.pettycash.mission;
 
 import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
 import ae.gov.pdd.pettycash.common.error.ApiException;
+import ae.gov.pdd.pettycash.trip.TripRepository;
 import ae.gov.pdd.pettycash.user.UserRole;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,16 +24,35 @@ import java.util.UUID;
 
 /**
  * Mission CRUD. List is open to all authenticated callers so the
- * mobile / CMS pickers can populate. Create is admin-only.
+ * mobile / CMS pickers can populate. Mutations are admin-only.
  */
 @RestController
 @RequestMapping("/api/v1/missions")
 class MissionController {
 
     private final MissionRepository missions;
+    private final TripRepository trips;
 
-    MissionController(MissionRepository missions) {
+    MissionController(MissionRepository missions, TripRepository trips) {
         this.missions = missions;
+        this.trips = trips;
+    }
+
+    private void requireAdmin(AuthenticatedUser caller) {
+        if (caller.role() != UserRole.ADMIN
+            && caller.role() != UserRole.SUPER_ADMIN) {
+            throw new ApiException(
+                HttpStatus.FORBIDDEN, "auth/forbidden", "Forbidden",
+                "Only Admin / Super Admin can modify missions."
+            );
+        }
+    }
+
+    private Mission load(UUID id) {
+        return missions.findById(id).orElseThrow(() -> new ApiException(
+            HttpStatus.NOT_FOUND, "missions/not-found", "Mission not found",
+            "No mission with id " + id + "."
+        ));
     }
 
     @GetMapping
@@ -44,13 +68,7 @@ class MissionController {
         @Valid @RequestBody CreateMissionRequest req,
         @AuthenticationPrincipal AuthenticatedUser caller
     ) {
-        if (caller.role() != UserRole.ADMIN
-            && caller.role() != UserRole.SUPER_ADMIN) {
-            throw new ApiException(
-                HttpStatus.FORBIDDEN, "auth/forbidden", "Forbidden",
-                "Only Admin / Super Admin can create missions."
-            );
-        }
+        requireAdmin(caller);
         String code = req.code() != null && !req.code().isBlank()
             ? req.code().trim().toUpperCase()
             : _genCode(req.name());
@@ -73,6 +91,82 @@ class MissionController {
         return MissionDto.from(missions.save(m));
     }
 
+    @PutMapping("/{id}")
+    public MissionDto update(
+        @PathVariable UUID id,
+        @Valid @RequestBody UpdateMissionRequest req,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        requireAdmin(caller);
+        Mission m = load(id);
+
+        // Parent change: reject self-parent and immediate cycles. Deeper
+        // cycle detection is overkill for the v1 UI which keeps nesting flat.
+        if (req.parentMissionId() != null) {
+            if (req.parentMissionId().equals(id)) {
+                throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "missions/parent-cycle",
+                    "Invalid parent", "A mission cannot be its own parent."
+                );
+            }
+            if (!missions.existsById(req.parentMissionId())) {
+                throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "missions/parent-missing",
+                    "Parent mission not found",
+                    "Parent mission " + req.parentMissionId() + " does not exist."
+                );
+            }
+        }
+
+        m.rename(req.name().trim(),
+            req.nameAr() == null ? null : req.nameAr().trim());
+        m.setDescription(req.description());
+        m.setParentMissionId(req.parentMissionId());
+
+        // Status transition: ACTIVE → CLOSED records `closed_at`, CLOSED →
+        // ACTIVE re-opens. No-op when status matches current.
+        if (req.status() != null && req.status() != m.getStatus()) {
+            if (req.status() == MissionStatus.CLOSED) {
+                m.close(Instant.now());
+            } else {
+                m.reopen();
+            }
+        }
+
+        return MissionDto.from(missions.save(m));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+        @PathVariable UUID id,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        requireAdmin(caller);
+        Mission m = load(id);
+
+        long trips = this.trips.countByMissionId(id);
+        if (trips > 0) {
+            throw new ApiException(
+                HttpStatus.CONFLICT, "missions/has-trips",
+                "Mission has trips",
+                "Cannot delete: " + trips + " trip(s) are attached. "
+                    + "Reassign or delete them first."
+            );
+        }
+        long children = missions.countByParentMissionId(id);
+        if (children > 0) {
+            throw new ApiException(
+                HttpStatus.CONFLICT, "missions/has-children",
+                "Mission has children",
+                "Cannot delete: " + children + " child mission(s) exist. "
+                    + "Reassign or delete them first."
+            );
+        }
+
+        missions.delete(m);
+        return ResponseEntity.noContent().build();
+    }
+
     private static String _genCode(String name) {
         String slug = name.toUpperCase().replaceAll("[^A-Z0-9]+", "-");
         if (slug.length() > 16) slug = slug.substring(0, 16);
@@ -87,6 +181,14 @@ class MissionController {
         String code,
         String description,
         UUID parentMissionId
+    ) {}
+
+    public record UpdateMissionRequest(
+        @NotBlank String name,
+        String nameAr,
+        String description,
+        UUID parentMissionId,
+        MissionStatus status
     ) {}
 
     public record MissionDto(

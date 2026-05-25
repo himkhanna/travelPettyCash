@@ -1,12 +1,15 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../app/theme.dart';
+import '../../../app/theme.dart' show AppRadii, AppSpacing;
 import '../../../core/api/hydration_service.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
+import '../../audit/application/audit_providers.dart';
+import '../../audit/domain/audit_entry.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../expenses/application/expenses_providers.dart';
@@ -15,72 +18,95 @@ import '../../funds/application/funds_providers.dart';
 import '../../funds/domain/funding.dart';
 import '../../missions/application/mission_providers.dart';
 import '../../missions/domain/mission.dart';
-import '../../reports/presentation/save_to_disk.dart';
 import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
-import 'add_category_dialog.dart';
-import 'admin_expense_comment_dialog.dart';
 import 'create_trip_dialog.dart';
-import 'reports_dialog.dart';
-import 'trip_admin_actions.dart';
 import 'widgets/cms_layout.dart';
+import 'widgets/cms_theme.dart';
 
-/// Admin / Super Admin console. Trip list on the left, selected-trip
-/// expenses + balances on the right.
-class CmsDashboard extends ConsumerStatefulWidget {
+// ============================================================================
+// Aggregate provider — fans out per-trip expense + allocation reads.
+// ============================================================================
+
+class DashboardData {
+  const DashboardData({
+    required this.trips,
+    required this.missions,
+    required this.expenses,
+    required this.allocations,
+    required this.sources,
+    required this.audit,
+  });
+  final List<Trip> trips;
+  final List<Mission> missions;
+  final List<Expense> expenses;
+  final List<Allocation> allocations;
+  final List<Source> sources;
+  final List<AuditEntry> audit;
+}
+
+final FutureProvider<DashboardData> dashboardDataProvider =
+    FutureProvider<DashboardData>((Ref ref) async {
+  final List<Trip> trips = await ref.watch(adminAllTripsProvider.future);
+  final List<List<Expense>> perTripExpenses =
+      await Future.wait(<Future<List<Expense>>>[
+    for (final Trip t in trips)
+      ref.read(expenseRepositoryProvider).list(tripId: t.id),
+  ]);
+  final List<List<Allocation>> perTripAllocs =
+      await Future.wait(<Future<List<Allocation>>>[
+    for (final Trip t in trips)
+      ref.read(allocationRepositoryProvider).forTrip(t.id),
+  ]);
+  final List<Mission> missions =
+      await ref.watch(missionsProvider.future);
+  final List<Source> sources = await ref.watch(sourcesProvider.future);
+  List<AuditEntry> audit = const <AuditEntry>[];
+  try {
+    audit = await ref.watch(auditFeedProvider.future);
+  } catch (_) {
+    audit = const <AuditEntry>[];
+  }
+  return DashboardData(
+    trips: trips,
+    missions: missions,
+    expenses: <Expense>[for (final List<Expense> c in perTripExpenses) ...c],
+    allocations: <Allocation>[
+      for (final List<Allocation> c in perTripAllocs) ...c
+    ],
+    sources: sources,
+    audit: audit,
+  );
+});
+
+/// All trips visible to Admin/SuperAdmin. Exposed at module scope so
+/// trip detail can invalidate it after edits.
+final FutureProvider<List<Trip>> adminAllTripsProvider =
+    FutureProvider<List<Trip>>((Ref ref) async {
+  final User? user = await ref.watch(currentUserProvider.future);
+  if (user == null) return <Trip>[];
+  return ref.read(tripRepositoryProvider).allTrips();
+});
+
+// ============================================================================
+// Screen
+// ============================================================================
+
+class CmsDashboard extends ConsumerWidget {
   const CmsDashboard({super.key});
 
   @override
-  ConsumerState<CmsDashboard> createState() => _CmsDashboardState();
-}
-
-class _CmsDashboardState extends ConsumerState<CmsDashboard> {
-  String? _selectedTripId;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<User?> userAsync = ref.watch(currentUserProvider);
     final User? me = userAsync.valueOrNull;
-
-    // If the user isn't loaded yet, OR resolved to null (role unset),
-    // never show the empty CMS — show a spinner. If we know the role
-    // is unset (hasValue + null), bounce back to the portal sign-in.
     if (me == null) {
       if (userAsync.hasValue) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (context.mounted) context.go('/portal');
         });
       }
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              const CircularProgressIndicator(),
-              const SizedBox(height: AppSpacing.md),
-              if (userAsync.hasValue)
-                Column(
-                  children: <Widget>[
-                    const Text(
-                      'Not logged in.',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    FilledButton(
-                      onPressed: () => context.go('/portal'),
-                      child: const Text('Sign in to Admin Portal'),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
-    // Portal guard: only Admin / Super Admin belong in the CMS. A Member
-    // or Leader who lands here (bookmark, link share) is bounced to the
-    // wrong-portal screen rather than seeing an empty/forbidden state.
     if (me.role != UserRole.admin && me.role != UserRole.superAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
@@ -90,176 +116,567 @@ class _CmsDashboardState extends ConsumerState<CmsDashboard> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Wait for the API → DemoStore hydration to land before rendering pickers,
-    // reports, etc. The user can hard-refresh straight to /cms with a stored
-    // token; in that path login_screen never fires hydrateAll, so this gate
-    // is the safety net.
     final AsyncValue<bool> hydrationAsync =
         ref.watch(authenticatedHydrationProvider);
-
-    final AsyncValue<List<Trip>> tripsAsync = ref.watch(_allTripsProvider);
+    final AsyncValue<DashboardData> dataAsync =
+        ref.watch(dashboardDataProvider);
 
     return CmsLayout(
-      active: CmsNavItem.dashboard,
+      active: CmsNavItem.home,
+      showTitleStrip: false,
       trailing: <Widget>[
         if (me.role == UserRole.admin)
-          IconButton(
-            icon: const Icon(Icons.category_outlined),
-            tooltip: 'Add expense category',
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (BuildContext _) => const AddCategoryDialog(),
+          ElevatedButton.icon(
+            onPressed: () => _openCreateTrip(context, ref),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('New trip'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: CmsColors.accent,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+              minimumSize: const Size(0, 34),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        if (me.role == UserRole.admin && _selectedTripId != null)
-          IconButton(
-            icon: const Icon(Icons.description_outlined),
-            tooltip: 'Reports for selected trip',
-            onPressed: () {
-              final Trip? t = tripsAsync.valueOrNull
-                  ?.where((Trip t) => t.id == _selectedTripId)
-                  .firstOrNull;
-              if (t != null) showReportsCatalog(context, trip: t);
-            },
-          ),
       ],
-      floatingActionButton: me.role == UserRole.admin
-          ? FloatingActionButton.extended(
-              backgroundColor: AppColors.brandBrown,
-              foregroundColor: AppColors.cream,
-              icon: const Icon(Icons.add),
-              label: const Text('CREATE TRIP'),
-              onPressed: _openCreateTrip,
-            )
-          : null,
-      child: hydrationAsync.when(
-        loading: () => const _HydrationLoading(),
-        error: (Object e, _) => Center(
-          child: Text('Could not load reference data: $e'),
+      rightRail: hydrationAsync.maybeWhen(
+        data: (bool _) => dataAsync.maybeWhen(
+          data: (DashboardData d) => _RightRail(data: d),
+          orElse: () => const SizedBox.shrink(),
         ),
-        data: (bool ready) => !ready
-            ? const _HydrationLoading()
-            : tripsAsync.when(
+        orElse: () => const SizedBox.shrink(),
+      ),
+      child: hydrationAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(child: Text('Error: $e')),
-        data: (List<Trip> trips) {
-          if (_selectedTripId == null && trips.isNotEmpty) {
-            // Pick the first active trip as the default selection.
-            _selectedTripId = trips
-                .firstWhere(
-                  (Trip t) => t.status == TripStatus.active,
-                  orElse: () => trips.first,
-                )
-                .id;
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              SizedBox(
-                width: 360,
-                child: _TripsList(
-                  trips: trips,
-                  selectedId: _selectedTripId,
-                  onSelect: (String id) =>
-                      setState(() => _selectedTripId = id),
-                ),
+        data: (bool ready) => !ready
+            ? const Center(child: CircularProgressIndicator())
+            : dataAsync.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
+                error: (Object e, _) => Center(child: Text('Error: $e')),
+                data: (DashboardData d) => _Body(me: me, data: d),
               ),
-              const VerticalDivider(width: 1, color: AppColors.divider),
-              Expanded(
-                child: _selectedTripId == null
-                    ? const _EmptyDetail()
-                    : _TripDetail(tripId: _selectedTripId!),
-              ),
-            ],
-          );
-        },
-      ),
       ),
     );
   }
 
-  Future<void> _openCreateTrip() async {
+  Future<void> _openCreateTrip(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final bool? created = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext _) => const CreateTripDialog(),
     );
-    if (created == true && mounted) {
-      ref.invalidate(_allTripsProvider);
+    if (created == true) {
+      ref.invalidate(adminAllTripsProvider);
+      ref.invalidate(dashboardDataProvider);
     }
   }
 }
 
-/// All trips visible to Admin/SuperAdmin (status-agnostic).
-final FutureProvider<List<Trip>> _allTripsProvider = FutureProvider<List<Trip>>((
-  Ref ref,
-) async {
-  final User? user = await ref.watch(currentUserProvider.future);
-  if (user == null) return <Trip>[];
-  return ref.read(tripRepositoryProvider).allTrips();
-});
+// ============================================================================
+// Body
+// ============================================================================
 
-class _TripsList extends StatelessWidget {
-  const _TripsList({
-    required this.trips,
-    required this.selectedId,
-    required this.onSelect,
-  });
-
-  final List<Trip> trips;
-  final String? selectedId;
-  final ValueChanged<String> onSelect;
+class _Body extends StatelessWidget {
+  const _Body({required this.me, required this.data});
+  final User me;
+  final DashboardData data;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.surface,
+    final _Aggregates agg = _Aggregates.from(data);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 60),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.sm,
+          _Greeting(me: me, agg: agg),
+          const SizedBox(height: 18),
+          _KpiRow(agg: agg, data: data),
+          const SizedBox(height: 22),
+          _NeedsAttention(data: data, agg: agg),
+          const SizedBox(height: 22),
+          _ActiveTripsSection(data: data, agg: agg),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Aggregates
+// ============================================================================
+
+class _Aggregates {
+  _Aggregates({
+    required this.activeTrips,
+    required this.totalTrips,
+    required this.spend30d,
+    required this.spend30dPrev,
+    required this.budgetRemaining,
+    required this.totalBudget,
+    required this.approvalsPending,
+    required this.approvalsUrgent,
+    required this.dominantCurrency,
+    required this.spendByDay,
+    required this.spentByTrip,
+    required this.spentByMission,
+    required this.overBudgetTrips,
+    required this.nearBudgetTrips,
+    required this.receiptsMissing,
+  });
+
+  final int activeTrips;
+  final int totalTrips;
+  final int spend30d;
+  final int spend30dPrev;
+  final int budgetRemaining;
+  final int totalBudget;
+  final int approvalsPending;
+  final int approvalsUrgent;
+  final String dominantCurrency;
+
+  /// Day buckets for the right-rail spend chart — index 0 = 30d ago,
+  /// 29 = today. Values are minor units in [dominantCurrency].
+  final List<int> spendByDay;
+
+  /// Trip id → total spent (in trip's own currency).
+  final Map<String, Money> spentByTrip;
+  /// Mission id → spent (in dominant currency only — multi-currency mix
+  /// would make the right-rail comparison meaningless).
+  final Map<String, int> spentByMission;
+
+  final List<Trip> overBudgetTrips;
+  /// Trips at ≥85% but <100% of budget.
+  final List<Trip> nearBudgetTrips;
+  /// Count of expenses without an attached receipt.
+  final int receiptsMissing;
+
+  static _Aggregates from(DashboardData d) {
+    final Map<String, Trip> tripById = <String, Trip>{
+      for (final Trip t in d.trips) t.id: t,
+    };
+    final List<Trip> active = d.trips
+        .where((Trip t) => t.status == TripStatus.active)
+        .toList();
+
+    // Pick dominant currency from active trips (fallback to all).
+    String dominant(Iterable<Trip> set) {
+      final Map<String, int> tally = <String, int>{};
+      for (final Trip t in set) {
+        tally.update(t.currency, (int v) => v + 1, ifAbsent: () => 1);
+      }
+      if (tally.isEmpty) return 'AED';
+      return tally.entries
+          .reduce((MapEntry<String, int> a, MapEntry<String, int> b) =>
+              a.value >= b.value ? a : b)
+          .key;
+    }
+    final String dom = active.isNotEmpty ? dominant(active) : dominant(d.trips);
+
+    // 30-day spend bucket: only count expenses in [dom] currency to keep
+    // the headline comparable. Cross-currency aggregation would mislead.
+    final DateTime now = DateTime.now();
+    final DateTime start30 = now.subtract(const Duration(days: 30));
+    final DateTime startPrev = now.subtract(const Duration(days: 60));
+    final List<int> byDay = List<int>.filled(30, 0);
+    int spend = 0;
+    int spendPrev = 0;
+    final Map<String, Money> spentByTrip = <String, Money>{};
+    final Map<String, int> spentByMission = <String, int>{};
+    int receiptsMissing = 0;
+    for (final Expense e in d.expenses) {
+      if (e.receiptObjectKey == null) receiptsMissing++;
+      spentByTrip.update(
+        e.tripId,
+        (Money v) => v + e.amount,
+        ifAbsent: () => e.amount,
+      );
+      final Trip? trip = tripById[e.tripId];
+      if (trip == null) continue;
+      if (trip.currency != dom) continue;
+      final int minor = e.amount.amountMinor;
+      if (e.occurredAt.isAfter(start30)) {
+        spend += minor;
+        final int dayIdx = 29 -
+            now.difference(e.occurredAt).inDays.clamp(0, 29);
+        byDay[dayIdx] += minor;
+      } else if (e.occurredAt.isAfter(startPrev)) {
+        spendPrev += minor;
+      }
+      if (trip.missionId != null) {
+        spentByMission.update(
+          trip.missionId!,
+          (int v) => v + minor,
+          ifAbsent: () => minor,
+        );
+      }
+    }
+
+    // Budget remaining: trip.totalBudget in dominant currency only.
+    int totalBudget = 0;
+    for (final Trip t in active) {
+      if (t.currency != dom) continue;
+      totalBudget += t.totalBudget.amountMinor;
+    }
+    final int remaining = totalBudget - spend;
+
+    // Approvals: pending allocations addressed to anyone, plus the audit-
+    // flagged "needs review" rows. Urgent = older than 2 days.
+    final List<Allocation> pendingAllocs = d.allocations
+        .where((Allocation a) => a.status == AllocationStatus.pending)
+        .toList();
+    int urgent = 0;
+    final DateTime twoDaysAgo =
+        DateTime.now().subtract(const Duration(days: 2));
+    for (final Allocation a in pendingAllocs) {
+      if (a.createdAt.isBefore(twoDaysAgo)) urgent++;
+    }
+
+    // Over-budget & near-budget detection per active trip.
+    final List<Trip> overBudget = <Trip>[];
+    final List<Trip> nearBudget = <Trip>[];
+    for (final Trip t in active) {
+      final Money? spentM = spentByTrip[t.id];
+      if (spentM == null || t.totalBudget.isZero) continue;
+      final double ratio =
+          spentM.amountMinor / t.totalBudget.amountMinor;
+      if (ratio >= 1.0) {
+        overBudget.add(t);
+      } else if (ratio >= 0.85) {
+        nearBudget.add(t);
+      }
+    }
+
+    return _Aggregates(
+      activeTrips: active.length,
+      totalTrips: d.trips.length,
+      spend30d: spend,
+      spend30dPrev: spendPrev,
+      budgetRemaining: remaining,
+      totalBudget: totalBudget,
+      approvalsPending: pendingAllocs.length,
+      approvalsUrgent: urgent,
+      dominantCurrency: dom,
+      spendByDay: byDay,
+      spentByTrip: spentByTrip,
+      spentByMission: spentByMission,
+      overBudgetTrips: overBudget,
+      nearBudgetTrips: nearBudget,
+      receiptsMissing: receiptsMissing,
+    );
+  }
+}
+
+// ============================================================================
+// Greeting + summary line
+// ============================================================================
+
+class _Greeting extends StatelessWidget {
+  const _Greeting({required this.me, required this.agg});
+  final User me;
+  final _Aggregates agg;
+
+  @override
+  Widget build(BuildContext context) {
+    final int h = DateTime.now().hour;
+    final String greet = h < 12
+        ? 'Good morning'
+        : h < 17
+            ? 'Good afternoon'
+            : 'Good evening';
+    final String first = me.displayName.split(' ').first;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                DateFormat('EEEE · MMM d, yyyy')
+                    .format(DateTime.now())
+                    .toUpperCase(),
+                style: const TextStyle(
+                  color: CmsColors.textTertiary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '$greet, $first.',
+                style: const TextStyle(
+                  color: CmsColors.textPrimary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _summaryLine(),
+                style: const TextStyle(
+                  color: CmsColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _summaryLine() {
+    final List<String> parts = <String>[];
+    parts.add(
+      '${agg.activeTrips} active trip${agg.activeTrips == 1 ? '' : 's'}',
+    );
+    if (agg.approvalsPending > 0) {
+      parts.add(
+        '${agg.approvalsPending} approval'
+        '${agg.approvalsPending == 1 ? '' : 's'} need${agg.approvalsPending == 1 ? 's' : ''} you',
+      );
+    }
+    if (agg.overBudgetTrips.isNotEmpty) {
+      parts.add(
+        '${agg.overBudgetTrips.length} trip'
+        '${agg.overBudgetTrips.length == 1 ? '' : 's'} over budget today',
+      );
+    }
+    return '${parts.join(', ')}.';
+  }
+}
+
+class _GhostButton extends StatelessWidget {
+  const _GhostButton({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () {},
+      icon: Icon(icon, size: 14, color: CmsColors.textBody),
+      label: Text(
+        label,
+        style: const TextStyle(
+          color: CmsColors.textBody,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: CmsColors.divider),
+        backgroundColor: CmsColors.surfaceCard,
+        minimumSize: const Size(0, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// KPI row — 4 cards each with a sparkline
+// ============================================================================
+
+class _KpiRow extends StatelessWidget {
+  const _KpiRow({required this.agg, required this.data});
+  final _Aggregates agg;
+  final DashboardData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final int totalExpenses = data.expenses.length;
+    final DateTime sevenDaysAgo =
+        DateTime.now().subtract(const Duration(days: 7));
+    final int expenses7d = data.expenses
+        .where((Expense e) => e.occurredAt.isAfter(sevenDaysAgo))
+        .length;
+    final double receiptCoveragePct = totalExpenses == 0
+        ? 100
+        : ((totalExpenses - agg.receiptsMissing) / totalExpenses) * 100;
+
+    return LayoutBuilder(
+      builder: (BuildContext _, BoxConstraints c) {
+        final int cols =
+            c.maxWidth >= 1100 ? 4 : c.maxWidth >= 720 ? 2 : 1;
+        const double gap = 12;
+        final double w = (c.maxWidth - (cols - 1) * gap) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: <Widget>[
+            SizedBox(
+              width: w,
+              child: _KpiCard(
+                label: 'Active trips',
+                value: '${agg.activeTrips}',
+                subtitle: 'of ${agg.totalTrips} total',
+                trendUp: true,
+                sparkline: _sparkline(agg.spendByDay),
+              ),
             ),
-            child: Row(
-              children: <Widget>[
-                Text(
-                  'TRIPS',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                    letterSpacing: 1.6,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${trips.length} total',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: w,
+              child: _KpiCard(
+                label: 'Expenses logged',
+                value: '$totalExpenses',
+                subtitle: expenses7d > 0
+                    ? '+$expenses7d in last 7 days'
+                    : 'no new this week',
+                trendUp: expenses7d > 0,
+                sparkline: _sparkline(agg.spendByDay),
+              ),
+            ),
+            SizedBox(
+              width: w,
+              child: _KpiCard(
+                label: 'Receipts missing',
+                value: '${agg.receiptsMissing}',
+                subtitle: agg.receiptsMissing == 0
+                    ? 'all expenses have receipts'
+                    : '${receiptCoveragePct.toStringAsFixed(0)}% '
+                        'of $totalExpenses have receipts',
+                trendUp: agg.receiptsMissing == 0,
+                sparkline: _sparkline(agg.spendByDay),
+              ),
+            ),
+            SizedBox(
+              width: w,
+              child: _KpiCard(
+                label: 'Pending fund transfers',
+                value: '${agg.approvalsPending}',
+                subtitle: agg.approvalsPending == 0
+                    ? 'no funds awaiting acceptance'
+                    : agg.approvalsUrgent > 0
+                        ? '${agg.approvalsUrgent} older than 2 days'
+                        : 'all received this week',
+                trendUp:
+                    agg.approvalsUrgent == 0 && agg.approvalsPending == 0,
+                sparkline: _sparkline(agg.spendByDay),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  List<FlSpot> _sparkline(List<int> values) {
+    return <FlSpot>[
+      for (int i = 0; i < values.length; i++)
+        FlSpot(i.toDouble(), values[i].toDouble()),
+    ];
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  const _KpiCard({
+    required this.label,
+    required this.value,
+    required this.subtitle,
+    required this.trendUp,
+    required this.sparkline,
+  });
+  final String label;
+  final String value;
+  final String subtitle;
+  final bool trendUp;
+  final List<FlSpot> sparkline;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color trendColor = trendUp ? CmsColors.accent : CmsColors.outflow;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: CmsColors.surfaceCard,
+        borderRadius: const BorderRadius.all(AppRadii.card),
+        border: Border.all(color: CmsColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: CmsColors.textTertiary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
             ),
           ),
-          const Divider(height: 1),
-          Expanded(
-            child: trips.isEmpty
-                ? const Center(child: Text('No trips yet.'))
-                : ListView.separated(
-                    itemCount: trips.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, color: AppColors.divider),
-                    itemBuilder: (BuildContext context, int i) {
-                      final Trip t = trips[i];
-                      return _TripRow(
-                        trip: t,
-                        selected: selectedId == t.id,
-                        onTap: () => onSelect(t.id),
-                      );
-                    },
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: CmsColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              height: 1.0,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 28,
+            child: sparkline.isEmpty
+                ? const SizedBox.shrink()
+                : LineChart(
+                    LineChartData(
+                      lineTouchData: const LineTouchData(enabled: false),
+                      gridData: const FlGridData(show: false),
+                      titlesData: const FlTitlesData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: <LineChartBarData>[
+                        LineChartBarData(
+                          spots: sparkline,
+                          isCurved: true,
+                          curveSmoothness: 0.3,
+                          barWidth: 1.6,
+                          color: trendColor,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: trendColor.withValues(alpha: 0.08),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: trendUp ? CmsColors.accent : CmsColors.outflow,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -267,404 +684,213 @@ class _TripsList extends StatelessWidget {
   }
 }
 
-class _TripRow extends StatelessWidget {
-  const _TripRow({
-    required this.trip,
-    required this.selected,
+// ============================================================================
+// Needs your attention
+// ============================================================================
+
+class _NeedsAttention extends ConsumerWidget {
+  const _NeedsAttention({required this.data, required this.agg});
+  final DashboardData data;
+  final _Aggregates agg;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final DemoStore store = ref.read(demoStoreProvider);
+    final List<_AttentionCard> alerts = <_AttentionCard>[];
+
+    for (final Trip t in agg.overBudgetTrips.take(2)) {
+      final Money spent = agg.spentByTrip[t.id] ?? Money.zero(t.currency);
+      final Money over = spent - t.totalBudget;
+      alerts.add(_AttentionCard(
+        icon: Icons.priority_high,
+        iconBg: CmsColors.redSoft,
+        iconColor: CmsColors.outflow,
+        title: '${t.name} is over budget',
+        subtitle:
+            '${spent.format()} / ${t.totalBudget.format()} · +${over.format()}',
+        ctaLabel: 'Review',
+        onTap: () => context.go('/cms/trips/${t.id}'),
+      ));
+    }
+    if (agg.approvalsPending > 0) {
+      alerts.add(_AttentionCard(
+        icon: Icons.check_box_outlined,
+        iconBg: CmsColors.brandTint,
+        iconColor: CmsColors.brand,
+        title: '${agg.approvalsPending} '
+            'expense${agg.approvalsPending == 1 ? '' : 's'} '
+            'awaiting your approval',
+        subtitle: agg.approvalsUrgent > 0
+            ? '${agg.approvalsUrgent} urgent · oldest > 2 days'
+            : 'all received in the last 2 days',
+        ctaLabel: 'Approve queue',
+        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Approvals queue: coming soon')),
+        ),
+      ));
+    }
+    for (final Trip t in agg.nearBudgetTrips.take(2)) {
+      final Money spent = agg.spentByTrip[t.id] ?? Money.zero(t.currency);
+      final double pct = t.totalBudget.isZero
+          ? 0
+          : (spent.amountMinor / t.totalBudget.amountMinor) * 100;
+      alerts.add(_AttentionCard(
+        icon: Icons.warning_amber_outlined,
+        iconBg: CmsColors.amberSoft,
+        iconColor: CmsColors.warning,
+        title: '${t.name} is approaching budget cap',
+        subtitle:
+            '${spent.format()} / ${t.totalBudget.format()} · ${pct.toStringAsFixed(0)}% used',
+        ctaLabel: 'Open trip',
+        onTap: () => context.go('/cms/trips/${t.id}'),
+      ));
+    }
+    if (agg.receiptsMissing > 0) {
+      // Surface up to 2 trip names that have the missing receipts.
+      final Set<String> tripIds = data.expenses
+          .where((Expense e) => e.receiptObjectKey == null)
+          .map((Expense e) => e.tripId)
+          .toSet();
+      final List<String> names = tripIds
+          .map((String id) {
+            try {
+              return store.tripById(id).name;
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<String>()
+          .take(2)
+          .toList();
+      alerts.add(_AttentionCard(
+        icon: Icons.receipt_long_outlined,
+        iconBg: CmsColors.bgElev,
+        iconColor: CmsColors.textSecondary,
+        title: '${agg.receiptsMissing} '
+            'receipt${agg.receiptsMissing == 1 ? '' : 's'} missing context',
+        subtitle: names.isEmpty
+            ? 'Spread across multiple trips'
+            : 'Across ${names.join(' and ')}',
+        ctaLabel: 'Triage',
+        onTap: () => context.go('/cms/expenses?missingReceipt=1'),
+      ));
+    }
+
+    if (alerts.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _SectionHeader(
+          icon: Icons.flash_on,
+          title: 'Needs your attention',
+          badge: '${alerts.length}',
+          trailingLabel: 'View all',
+          onTrailingTap: () {},
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: CmsColors.surfaceCard,
+            borderRadius: const BorderRadius.all(AppRadii.card),
+            border: Border.all(color: CmsColors.divider),
+          ),
+          child: Column(
+            children: <Widget>[
+              for (int i = 0; i < alerts.length; i++) ...<Widget>[
+                if (i > 0)
+                  const Divider(height: 1, color: CmsColors.divider),
+                alerts[i],
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AttentionCard extends StatelessWidget {
+  const _AttentionCard({
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.ctaLabel,
     required this.onTap,
   });
-
-  final Trip trip;
-  final bool selected;
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final String ctaLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.cream : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: <Widget>[
-              Text(
-                _flagFor(trip.countryCode),
-                style: const TextStyle(fontSize: 28),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      trip.name,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      '${trip.countryName} · ${trip.currency} · ${trip.memberIds.length + 1} member${trip.memberIds.length == 0 ? '' : 's'}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _StatusChip(status: trip.status),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _flagFor(String code) {
-    if (code.length != 2) return '🏳️';
-    const int base = 0x1F1E6;
-    final int a = code.toUpperCase().codeUnitAt(0) - 0x41 + base;
-    final int b = code.toUpperCase().codeUnitAt(1) - 0x41 + base;
-    return String.fromCharCodes(<int>[a, b]);
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final TripStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color color = switch (status) {
-      TripStatus.active => AppColors.success,
-      TripStatus.draft => AppColors.warning,
-      TripStatus.closed => AppColors.textSecondary,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: const BorderRadius.all(AppRadii.chip),
-      ),
-      child: Text(
-        status.name.toUpperCase(),
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
-}
-
-class _HydrationLoading extends StatelessWidget {
-  const _HydrationLoading();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
         children: <Widget>[
-          const CircularProgressIndicator(),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Loading directory + trips…',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyDetail extends StatelessWidget {
-  const _EmptyDetail();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(Icons.flight, size: 56, color: AppColors.goldOlive),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Select a trip on the left to view expenses.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TripDetail extends ConsumerWidget {
-  const _TripDetail({required this.tripId});
-  final String tripId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<Trip> tripAsync = ref.watch(tripDetailProvider(tripId));
-    final AsyncValue<TripBalances> balancesAsync = ref.watch(
-      tripBalancesProvider((tripId: tripId, scope: BalanceScope.trip)),
-    );
-    // Expenses now come straight from the API via tripExpensesProvider —
-    // previously this read store.expenses (DemoStore cache), so new member
-    // expenses created on mobile never appeared here until next hydration.
-    final AsyncValue<List<Expense>> expensesAsync =
-        ref.watch(tripExpensesProvider(tripId));
-    final DemoStore store = ref.read(demoStoreProvider);
-
-    return tripAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, _) => Center(child: Text('Error: $e')),
-      data: (Trip trip) => SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        trip.name,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${trip.countryName} · ${trip.currency} · created ${DateFormat.yMMMd().format(trip.createdAt)}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      if (trip.missionId != null) ...<Widget>[
-                        const SizedBox(height: 6),
-                        _MissionChip(missionId: trip.missionId!),
-                      ],
-                    ],
-                  ),
-                ),
-                _StatusChip(status: trip.status),
-              ],
-            ),
-            TripAdminActions(trip: trip),
-            const SizedBox(height: AppSpacing.lg),
-            balancesAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(AppSpacing.md),
-                child: LinearProgressIndicator(),
-              ),
-              error: (Object e, _) => Text('Balance error: $e'),
-              data: (TripBalances b) =>
-                  _BalanceCards(balances: b, tripId: tripId),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _PeopleSection(trip: trip, store: store),
-            const SizedBox(height: AppSpacing.lg),
-            expensesAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: LinearProgressIndicator(),
-              ),
-              error: (Object e, _) => Text('Expense load error: $e'),
-              data: (List<Expense> list) {
-                final List<Expense> sorted = <Expense>[...list]
-                  ..sort((Expense a, Expense b) =>
-                      b.occurredAt.compareTo(a.occurredAt));
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'EXPENSES (${sorted.length})',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: AppColors.textSecondary,
-                        letterSpacing: 1.6,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    _ExpensesTable(
-                      expenses: sorted,
-                      currency: trip.currency,
-                      store: store,
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BalanceCards extends ConsumerWidget {
-  const _BalanceCards({required this.balances, required this.tripId});
-  final TripBalances balances;
-  final String tripId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Admin top-ups create new admin→leader allocations but don't mutate the
-    // trip's static `totalBudget` field. Sum every admin allocation (pending
-    // + accepted) so this card reflects all the cash the admin has committed
-    // to the trip, not just the value at create-time. Declined allocations
-    // are excluded.
-    final List<Allocation> allocs =
-        ref.watch(tripAllocationsProvider(tripId)).valueOrNull ??
-            const <Allocation>[];
-    final Money committed = allocs
-        .where((Allocation a) =>
-            a.fromUserId == null &&
-            a.status != AllocationStatus.declined)
-        .fold<Money>(
-          balances.totalBudget.isZero
-              ? Money.zero(balances.totalSpent.currencyCode)
-              : Money.zero(balances.totalBudget.currencyCode),
-          (Money acc, Allocation a) => acc + a.amount,
-        );
-    // Prefer the larger of (static budget, sum of allocations). On a fresh
-    // trip these are equal; after an Assign Additional Funds run the sum
-    // overtakes the static field.
-    final Money totalBudget =
-        committed.amountMinor > balances.totalBudget.amountMinor
-            ? committed
-            : balances.totalBudget;
-
-    // Pending top-ups not yet accepted — surfaced inline so the admin sees
-    // the gap explicitly rather than wondering why nothing changed.
-    final Money pendingTopup = allocs
-        .where((Allocation a) =>
-            a.fromUserId == null &&
-            a.status == AllocationStatus.pending)
-        .fold<Money>(
-          Money.zero(totalBudget.currencyCode),
-          (Money acc, Allocation a) => acc + a.amount,
-        );
-
-    final Money remaining = totalBudget - balances.totalSpent;
-    final bool spentNonZero = !balances.totalSpent.isZero;
-    return Column(
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: _StatCard(
-                label: 'TOTAL BUDGET',
-                value: totalBudget.format(),
-                color: AppColors.brandBrown,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _StatCard(
-                label: 'TOTAL SPENT',
-                value: balances.totalSpent.format(),
-                color:
-                    spentNonZero ? AppColors.outflow : AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _StatCard(
-                label: 'REMAINING',
-                value: remaining.format(),
-                color: remaining.isNegative
-                    ? AppColors.outflow
-                    : AppColors.success,
-              ),
-            ),
-          ],
-        ),
-        if (!pendingTopup.isZero) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
-              color: AppColors.amberSoft,
-              borderRadius: const BorderRadius.all(AppRadii.sm),
-              border: Border.all(
-                color: AppColors.amber.withValues(alpha: 0.4),
-              ),
+              color: iconBg,
+              borderRadius: BorderRadius.circular(7),
             ),
-            child: Row(
+            alignment: Alignment.center,
+            child: Icon(icon, size: 15, color: iconColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const Icon(
-                  Icons.hourglass_top_outlined,
-                  color: AppColors.goldDeep,
-                  size: 16,
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: CmsColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Pending leader acceptance: ${pendingTopup.format()}',
-                    style: const TextStyle(
-                      color: AppColors.goldDeep,
-                      fontWeight: FontWeight.w600,
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: CmsColors.textSecondary,
+                    fontSize: 11.5,
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: const BorderRadius.all(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: onTap,
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(Icons.arrow_forward, size: 13),
+            label: Text(ctaLabel),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: CmsColors.divider),
+              foregroundColor: CmsColors.textPrimary,
+              minimumSize: const Size(0, 30),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              textStyle: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(7),
+              ),
             ),
           ),
         ],
@@ -673,299 +899,911 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _PeopleSection extends StatelessWidget {
-  const _PeopleSection({required this.trip, required this.store});
-  final Trip trip;
-  final DemoStore store;
+// ============================================================================
+// Active trips table
+// ============================================================================
+
+class _ActiveTripsSection extends ConsumerStatefulWidget {
+  const _ActiveTripsSection({required this.data, required this.agg});
+  final DashboardData data;
+  final _Aggregates agg;
+
+  @override
+  ConsumerState<_ActiveTripsSection> createState() =>
+      _ActiveTripsSectionState();
+}
+
+class _ActiveTripsSectionState extends ConsumerState<_ActiveTripsSection> {
+  TripStatus _filter = TripStatus.active;
 
   @override
   Widget build(BuildContext context) {
-    final User leader = store.userById(trip.leaderId);
+    final Map<String, Mission> missionById = <String, Mission>{
+      for (final Mission m in widget.data.missions) m.id: m,
+    };
+    final DemoStore store = ref.read(demoStoreProvider);
+    final List<Trip> visible = widget.data.trips
+        .where((Trip t) => t.status == _filter)
+        .toList()
+      ..sort((Trip a, Trip b) => b.createdAt.compareTo(a.createdAt));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          'PEOPLE',
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.textSecondary,
-            letterSpacing: 1.6,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
+        Row(
           children: <Widget>[
-            _PersonChip(user: leader, role: 'Leader'),
-            for (final String id in trip.memberIds)
-              _PersonChip(user: store.userById(id), role: 'Member'),
+            const _SectionTitle(
+              icon: Icons.flight_takeoff_outlined,
+              title: 'Active trips',
+            ),
+            const SizedBox(width: 8),
+            _Badge(label: '${visible.length}'),
+            const Spacer(),
+            _Tabs(
+              current: _filter,
+              onChange: (TripStatus s) => setState(() => _filter = s),
+            ),
+            const SizedBox(width: 8),
+            _GhostButton(icon: Icons.filter_list, label: 'Filter'),
+            const SizedBox(width: 6),
+            _GhostButton(icon: Icons.sort, label: 'Sort'),
           ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: CmsColors.surfaceCard,
+            borderRadius: const BorderRadius.all(AppRadii.card),
+            border: Border.all(color: CmsColors.divider),
+          ),
+          child: Column(
+            children: <Widget>[
+              _TripTableHeader(),
+              for (int i = 0; i < visible.length; i++) ...<Widget>[
+                if (i > 0)
+                  const Divider(height: 1, color: CmsColors.divider),
+                _TripTableRow(
+                  trip: visible[i],
+                  mission: visible[i].missionId == null
+                      ? null
+                      : missionById[visible[i].missionId!],
+                  spent: widget.agg.spentByTrip[visible[i].id],
+                  store: store,
+                ),
+              ],
+              if (visible.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'No trips in this view.',
+                      style: TextStyle(color: CmsColors.textSecondary),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
-class _PersonChip extends StatelessWidget {
-  const _PersonChip({required this.user, required this.role});
-  final User user;
-  final String role;
-
+class _Tabs extends StatelessWidget {
+  const _Tabs({required this.current, required this.onChange});
+  final TripStatus current;
+  final ValueChanged<TripStatus> onChange;
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: const BorderRadius.all(AppRadii.chip),
-        border: Border.all(color: AppColors.divider),
+        color: CmsColors.bgElev,
+        borderRadius: BorderRadius.circular(7),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: role == 'Leader'
-                ? AppColors.brandBrown
-                : AppColors.goldOlive,
-            child: Text(
-              _initials(user.displayName),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
+          for (final TripStatus s in TripStatus.values)
+            _TabBtn(
+              label: _labelFor(s),
+              selected: current == s,
+              onTap: () => onChange(s),
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                user.displayName,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Text(
-                role,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  String _initials(String name) {
-    final List<String> parts = name
-        .split(' ')
-        .where((String p) => p.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
+  String _labelFor(TripStatus s) => switch (s) {
+        TripStatus.active => 'Active',
+        TripStatus.draft => 'Drafts',
+        TripStatus.closed => 'Closed',
+      };
+}
+
+class _TabBtn extends StatelessWidget {
+  const _TabBtn({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? CmsColors.surfaceCard : Colors.transparent,
+      borderRadius: BorderRadius.circular(5),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(5),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: selected
+                  ? CmsColors.textPrimary
+                  : CmsColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-class _ExpensesTable extends ConsumerWidget {
-  const _ExpensesTable({
-    required this.expenses,
-    required this.currency,
+class _TripTableHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    TextStyle h() => const TextStyle(
+          color: CmsColors.textTertiary,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.0,
+        );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: CmsColors.divider)),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(width: 90, child: Text('TRIP', style: h())),
+          Expanded(flex: 3, child: Text('', style: h())),
+          Expanded(flex: 3, child: Text('MISSION', style: h())),
+          Expanded(flex: 2, child: Text('LEAD', style: h())),
+          Expanded(flex: 3, child: Text('BUDGET', style: h())),
+          Expanded(flex: 2, child: Text('MEMBERS', style: h())),
+          SizedBox(width: 70, child: Text('OPEN', style: h())),
+          SizedBox(width: 80, child: Text('CREATED', style: h())),
+          const SizedBox(width: 28),
+        ],
+      ),
+    );
+  }
+}
+
+class _TripTableRow extends StatelessWidget {
+  const _TripTableRow({
+    required this.trip,
+    required this.mission,
+    required this.spent,
     required this.store,
   });
-
-  final List<Expense> expenses;
-  final String currency;
+  final Trip trip;
+  final Mission? mission;
+  final Money? spent;
   final DemoStore store;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (expenses.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceCard,
-          borderRadius: const BorderRadius.all(AppRadii.card),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Center(
-          child: Text(
-            'No expenses logged on this trip yet.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final double pct = spent == null || trip.totalBudget.isZero
+        ? 0
+        : (spent!.amountMinor / trip.totalBudget.amountMinor)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    final Color budgetColor = pct >= 0.98
+        ? CmsColors.outflow
+        : pct >= 0.85
+            ? CmsColors.warning
+            : CmsColors.accent;
+    String leadName;
+    try {
+      leadName = store.userById(trip.leaderId).displayName;
+    } catch (_) {
+      leadName = '—';
     }
 
-    final Money total = expenses.fold(
-      Money.zero(currency),
-      (Money a, Expense e) => a + e.amount,
-    );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: const BorderRadius.all(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: <Widget>[
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
-            decoration: const BoxDecoration(
-              color: AppColors.cream,
-              borderRadius: BorderRadius.vertical(top: AppRadii.card),
-            ),
-            child: Row(
-              children: const <Widget>[
-                Expanded(flex: 2, child: _Th(label: 'DATE')),
-                Expanded(flex: 3, child: _Th(label: 'USER')),
-                Expanded(flex: 2, child: _Th(label: 'CATEGORY')),
-                Expanded(flex: 3, child: _Th(label: 'SOURCE')),
-                Expanded(flex: 4, child: _Th(label: 'DETAILS')),
-                Expanded(
-                  flex: 2,
-                  child: _Th(label: 'AMOUNT', align: TextAlign.right),
-                ),
-                SizedBox(width: 48, child: _Th(label: 'RX', align: TextAlign.center)),
-                SizedBox(width: 48, child: _Th(label: 'CHAT', align: TextAlign.center)),
-              ],
-            ),
-          ),
-          for (final Expense e in expenses) ...<Widget>[
-            const Divider(height: 1, color: AppColors.divider),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
+    return InkWell(
+      onTap: () => GoRouter.of(context).go('/cms/trips/${trip.id}'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            SizedBox(
+              width: 90,
               child: Row(
                 children: <Widget>[
-                  Expanded(
-                    flex: 2,
-                    child: Text(DateFormat.yMMMd().format(e.occurredAt)),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      store.userById(e.userId).displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  Text(_flag(trip.countryCode),
+                      style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 6),
+                  Text(
+                    trip.countryCode.toUpperCase(),
+                    style: const TextStyle(
+                      color: CmsColors.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                  Expanded(
-                    flex: 2,
-                    child: Row(
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    trip.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: CmsColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    'T-${trip.id.substring(trip.id.length - 4).toUpperCase()} · ${trip.countryName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: CmsColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: mission == null
+                  ? const Text(
+                      '—',
+                      style: TextStyle(color: CmsColors.textTertiary),
+                    )
+                  : Row(
                       children: <Widget>[
                         Container(
-                          width: 8,
-                          height: 8,
+                          width: 6,
+                          height: 6,
                           decoration: BoxDecoration(
-                            color: AppColors.forCategory(e.categoryCode),
+                            color: _missionColor(mission!.id),
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          store.categoryByCode(e.categoryCode).nameEn,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Expanded(
+                          child: Text(
+                            mission!.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: CmsColors.textBody,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  Expanded(
-                    flex: 3,
+            ),
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: <Widget>[
+                  CircleAvatar(
+                    radius: 10,
+                    backgroundColor: CmsColors.brandTint,
                     child: Text(
-                      store.sourceById(e.sourceId).name,
+                      _initials(leadName),
+                      style: const TextStyle(
+                        color: CmsColors.textPrimary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      leadName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 4,
-                    child: Text(
-                      e.details.isEmpty ? '—' : e.details,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      e.amount.format(),
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 48,
-                    child: _ReceiptCell(expense: e),
-                  ),
-                  SizedBox(
-                    width: 48,
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.chat_bubble_outline,
-                        size: 18,
-                        color: AppColors.brandBrown,
-                      ),
-                      tooltip: 'Comment on this expense',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
-                      ),
-                      // Inline comment dialog. Routing to /m/trips/<id>/chat
-                      // here would bounce admin via the wrong-portal guard;
-                      // the dialog posts straight to the trip chat thread.
-                      onPressed: () => showDialog<void>(
-                        context: context,
-                        builder: (_) =>
-                            AdminExpenseCommentDialog(expense: e),
+                      style: const TextStyle(
+                        color: CmsColors.textBody,
+                        fontSize: 12,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-          const Divider(height: 1, color: AppColors.divider),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
-            decoration: const BoxDecoration(
-              color: AppColors.cream,
-              borderRadius: BorderRadius.vertical(bottom: AppRadii.card),
-            ),
-            child: Row(
-              children: <Widget>[
-                const Expanded(
-                  child: Text(
-                    'TOTAL',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          spent == null
+                              ? '— / ${trip.totalBudget.format()}'
+                              : '${_compact(spent!.amountMinor)} / ${_compact(trip.totalBudget.amountMinor)} ${trip.currency}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: CmsColors.textBody,
+                            fontSize: 11.5,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${(pct * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          color: budgetColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: pct,
+                      minHeight: 4,
+                      backgroundColor: CmsColors.bgElev,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(budgetColor),
                     ),
                   ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: _MemberAvatars(
+                memberIds: trip.memberIds,
+                store: store,
+              ),
+            ),
+            SizedBox(
+              width: 70,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3,
                 ),
-                Text(
-                  total.format(),
+                decoration: BoxDecoration(
+                  color: CmsColors.amberSoft,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  '${trip.memberIds.length + 1} OPEN',
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.brandBrown,
+                    color: CmsColors.warning,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
                   ),
                 ),
+              ),
+            ),
+            SizedBox(
+              width: 80,
+              child: Text(
+                DateFormat('MMM d, yyyy').format(trip.createdAt),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: CmsColors.textBody,
+                  fontSize: 11.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.more_horiz,
+              size: 16,
+              color: CmsColors.textTertiary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberAvatars extends StatelessWidget {
+  const _MemberAvatars({required this.memberIds, required this.store});
+  final List<String> memberIds;
+  final DemoStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> firstThree = memberIds.take(3).toList();
+    final int extra = memberIds.length - firstThree.length;
+    return Row(
+      children: <Widget>[
+        for (int i = 0; i < firstThree.length; i++)
+          Transform.translate(
+            offset: Offset(-8.0 * i, 0),
+            child: CircleAvatar(
+              radius: 11,
+              backgroundColor: _avatarBg(i),
+              child: Text(
+                _avatarInitial(firstThree[i]),
+                style: const TextStyle(
+                  color: CmsColors.surfaceCard,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        if (extra > 0)
+          Transform.translate(
+            offset: Offset(-8.0 * firstThree.length, 0),
+            child: CircleAvatar(
+              radius: 11,
+              backgroundColor: CmsColors.bgElev,
+              child: Text(
+                '+$extra',
+                style: const TextStyle(
+                  color: CmsColors.textPrimary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _avatarInitial(String userId) {
+    try {
+      final String name = store.userById(userId).displayName;
+      final List<String> parts = name.split(' ');
+      if (parts.isEmpty) return '?';
+      return parts.first[0].toUpperCase();
+    } catch (_) {
+      return '?';
+    }
+  }
+
+  Color _avatarBg(int i) {
+    const List<Color> palette = <Color>[
+      Color(0xFF8B6B3A),
+      Color(0xFF6B8A3F),
+      Color(0xFFA85C2A),
+    ];
+    return palette[i % palette.length];
+  }
+}
+
+// ============================================================================
+// Right rail — spend chart + missions list + recent activity
+// ============================================================================
+
+class _RightRail extends StatelessWidget {
+  const _RightRail({required this.data});
+  final DashboardData data;
+  @override
+  Widget build(BuildContext context) {
+    final _Aggregates agg = _Aggregates.from(data);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _SpendChartCard(agg: agg),
+          const SizedBox(height: 14),
+          _MissionsCard(data: data, agg: agg),
+          const SizedBox(height: 14),
+          _RecentActivityCard(audit: data.audit),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpendChartCard extends StatelessWidget {
+  const _SpendChartCard({required this.agg});
+  final _Aggregates agg;
+  @override
+  Widget build(BuildContext context) {
+    final NumberFormat fmt = NumberFormat.decimalPattern('en_US');
+    final double delta = agg.spend30dPrev == 0
+        ? 0
+        : ((agg.spend30d - agg.spend30dPrev) / agg.spend30dPrev) * 100;
+    final double maxVal = agg.spendByDay.fold<int>(0,
+            (int a, int b) => b > a ? b : a).toDouble().clamp(1, double.infinity);
+
+    return _RailCard(
+      title: 'Spend · Last 30 days',
+      trailingLabel: 'Reporting',
+      onTrailingTap: () {},
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '${agg.dominantCurrency} ${fmt.format(agg.spend30d / 100.0)}',
+            style: const TextStyle(
+              color: CmsColors.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
+          ),
+          Row(
+            children: <Widget>[
+              Text(
+                delta == 0
+                    ? '—'
+                    : '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  color: delta >= 0 ? CmsColors.accent : CmsColors.outflow,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'MoM',
+                style: TextStyle(
+                  color: CmsColors.textTertiary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 80,
+            child: BarChart(
+              BarChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                borderData: FlBorderData(show: false),
+                alignment: BarChartAlignment.spaceBetween,
+                maxY: maxVal,
+                barTouchData: BarTouchData(enabled: false),
+                barGroups: <BarChartGroupData>[
+                  for (int i = 0; i < agg.spendByDay.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: <BarChartRodData>[
+                        BarChartRodData(
+                          toY: agg.spendByDay[i].toDouble(),
+                          color: CmsColors.accent.withValues(alpha: 0.7),
+                          width: 4,
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: <Widget>[
+              Text(
+                _shortDate(DateTime.now().subtract(const Duration(days: 30))),
+                style: const TextStyle(
+                  color: CmsColors.textTertiary,
+                  fontSize: 10,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _shortDate(DateTime.now().subtract(const Duration(days: 15))),
+                style: const TextStyle(
+                  color: CmsColors.textTertiary,
+                  fontSize: 10,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _shortDate(DateTime.now()),
+                style: const TextStyle(
+                  color: CmsColors.textTertiary,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _shortDate(DateTime d) => DateFormat('MMM d').format(d);
+}
+
+class _MissionsCard extends StatelessWidget {
+  const _MissionsCard({required this.data, required this.agg});
+  final DashboardData data;
+  final _Aggregates agg;
+  @override
+  Widget build(BuildContext context) {
+    final NumberFormat fmt = NumberFormat.compact(locale: 'en');
+    // Compute per-mission spend + budget. Budget = sum of trip budgets
+    // in dominant currency that reference this mission.
+    final Map<String, int> budgetByMission = <String, int>{};
+    final Map<String, int> tripsCountByMission = <String, int>{};
+    for (final Trip t in data.trips) {
+      if (t.missionId == null) continue;
+      if (t.currency != agg.dominantCurrency) continue;
+      budgetByMission.update(
+        t.missionId!,
+        (int v) => v + t.totalBudget.amountMinor,
+        ifAbsent: () => t.totalBudget.amountMinor,
+      );
+      tripsCountByMission.update(
+        t.missionId!,
+        (int v) => v + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final List<_MissionRow> rows = <_MissionRow>[];
+    for (final Mission m in data.missions) {
+      final int budget = budgetByMission[m.id] ?? 0;
+      final int spent = agg.spentByMission[m.id] ?? 0;
+      final int trips = tripsCountByMission[m.id] ?? 0;
+      if (budget == 0 && spent == 0) continue;
+      rows.add(_MissionRow(
+        name: m.name,
+        spent: spent,
+        budget: budget,
+        trips: trips,
+      ));
+    }
+    rows.sort((_MissionRow a, _MissionRow b) {
+      final double ar = a.budget == 0 ? 0 : a.spent / a.budget;
+      final double br = b.budget == 0 ? 0 : b.spent / b.budget;
+      return br.compareTo(ar);
+    });
+
+    return _RailCard(
+      title: 'Missions · Spend vs Budget',
+      trailingLabel: 'All',
+      onTrailingTap: () => GoRouter.of(context).go('/cms/missions'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                'No mission spend yet.',
+                style: TextStyle(color: CmsColors.textSecondary, fontSize: 12),
+              ),
+            )
+          else
+            for (int i = 0; i < rows.length; i++) ...<Widget>[
+              if (i > 0) const SizedBox(height: 10),
+              _MissionRowView(
+                row: rows[i],
+                color: CmsColors.missionPalette[i % CmsColors.missionPalette.length],
+                currency: agg.dominantCurrency,
+                fmt: fmt,
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MissionRow {
+  const _MissionRow({
+    required this.name,
+    required this.spent,
+    required this.budget,
+    required this.trips,
+  });
+  final String name;
+  final int spent;
+  final int budget;
+  final int trips;
+}
+
+class _MissionRowView extends StatelessWidget {
+  const _MissionRowView({
+    required this.row,
+    required this.color,
+    required this.currency,
+    required this.fmt,
+  });
+  final _MissionRow row;
+  final Color color;
+  final String currency;
+  final NumberFormat fmt;
+
+  @override
+  Widget build(BuildContext context) {
+    final double pct = row.budget == 0
+        ? 0
+        : (row.spent / row.budget).clamp(0.0, 1.5).toDouble();
+    final double barFill = pct.clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                row.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: CmsColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              '${(pct * 100).toStringAsFixed(0)}%',
+              style: TextStyle(
+                color: pct >= 1.0 ? CmsColors.outflow : CmsColors.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: Container(
+            height: 5,
+            color: CmsColors.bgElev,
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: barFill,
+              child: Container(color: color),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: <Widget>[
+            Text(
+              '$currency ${fmt.format(row.spent / 100.0)} of '
+              '$currency ${fmt.format(row.budget / 100.0)}',
+              style: const TextStyle(
+                color: CmsColors.textSecondary,
+                fontSize: 10.5,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${row.trips} trip${row.trips == 1 ? '' : 's'}',
+              style: const TextStyle(
+                color: CmsColors.textTertiary,
+                fontSize: 10.5,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.audit});
+  final List<AuditEntry> audit;
+  @override
+  Widget build(BuildContext context) {
+    final List<AuditEntry> head = audit.take(5).toList();
+    return _RailCard(
+      title: 'Recent activity',
+      trailingLabel: 'View log',
+      onTrailingTap: () => GoRouter.of(context).go('/cms/audit'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (head.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                'No activity yet.',
+                style: TextStyle(color: CmsColors.textSecondary, fontSize: 12),
+              ),
+            )
+          else
+            for (int i = 0; i < head.length; i++) ...<Widget>[
+              if (i > 0) const SizedBox(height: 8),
+              _ActivityRow(e: head[i]),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.e});
+  final AuditEntry e;
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: e.tripId == null
+          ? null
+          : () => GoRouter.of(context).go('/cms/trips/${e.tripId}'),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          CircleAvatar(
+            radius: 10,
+            backgroundColor: _avatarColor(e.action),
+            child: Text(
+              _initials(e.actorName),
+              style: const TextStyle(
+                color: CmsColors.surfaceCard,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  '${e.actorName.split(' ').last} ${_actionVerb(e.action)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: CmsColors.textBody,
+                    fontSize: 11.5,
+                    height: 1.3,
+                  ),
+                ),
+                if (e.tripName != null)
+                  Text(
+                    '${e.tripName} · ${_timeAgo(e.at)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: CmsColors.textTertiary,
+                      fontSize: 10.5,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -973,119 +1811,254 @@ class _ExpensesTable extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _Th extends StatelessWidget {
-  const _Th({required this.label, this.align = TextAlign.left});
-  final String label;
-  final TextAlign align;
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      textAlign: align,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: AppColors.textSecondary,
-        letterSpacing: 1.2,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
-
-/// "View receipt" affordance on each expense row. Empty when no receipt
-/// is attached; tapping fetches a fresh presigned MinIO URL and opens it
-/// in a new browser tab.
-class _ReceiptCell extends ConsumerStatefulWidget {
-  const _ReceiptCell({required this.expense});
-  final Expense expense;
-
-  @override
-  ConsumerState<_ReceiptCell> createState() => _ReceiptCellState();
-}
-
-class _ReceiptCellState extends ConsumerState<_ReceiptCell> {
-  bool _busy = false;
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.expense.receiptObjectKey == null) {
-      return const SizedBox.shrink();
+  Color _avatarColor(AuditAction a) {
+    switch (a) {
+      case AuditAction.expenseLogged:
+        return CmsColors.accent;
+      case AuditAction.allocationFromAdmin:
+      case AuditAction.allocationFromLeader:
+      case AuditAction.allocationAccepted:
+        return CmsColors.brand;
+      case AuditAction.allocationDeclined:
+      case AuditAction.transferDeclined:
+        return CmsColors.outflow;
+      case AuditAction.tripCreated:
+      case AuditAction.tripClosed:
+        return CmsColors.warning;
+      default:
+        return CmsColors.textSecondary;
     }
-    return IconButton(
-      icon: _busy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(
-              Icons.receipt_long_outlined,
-              size: 18,
-              color: AppColors.brandBrown,
-            ),
-      tooltip: 'View receipt',
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      onPressed: _busy ? null : _open,
-    );
   }
 
-  Future<void> _open() async {
-    setState(() => _busy = true);
-    try {
-      final String url = await ref
-          .read(expenseRepositoryProvider)
-          .receiptUrl(widget.expense.id);
-      openUrl(url);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open receipt: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
+  String _actionVerb(AuditAction a) {
+    switch (a) {
+      case AuditAction.tripCreated:
+        return 'created a trip';
+      case AuditAction.tripClosed:
+        return 'closed a trip';
+      case AuditAction.allocationFromAdmin:
+      case AuditAction.allocationFromLeader:
+        return 'allocated funds';
+      case AuditAction.allocationAccepted:
+        return 'accepted an allocation';
+      case AuditAction.allocationDeclined:
+        return 'declined an allocation';
+      case AuditAction.transferSent:
+        return 'sent a transfer';
+      case AuditAction.transferAccepted:
+        return 'accepted a transfer';
+      case AuditAction.transferDeclined:
+        return 'declined a transfer';
+      case AuditAction.expenseLogged:
+        return e.amount == null
+            ? 'submitted an expense'
+            : 'submitted an expense of ${e.amount!.format()}';
+      case AuditAction.userSignedIn:
+        return 'signed in';
+      case AuditAction.userCreated:
+        return 'added a new user';
+      case AuditAction.userUpdated:
+        return 'updated a user';
     }
   }
 }
 
-/// Inline pill for the trip detail header that resolves a mission id into
-/// its name + code. Falls back to "Mission" if the missions list hasn't
-/// loaded yet (rare; missionsProvider is small and pre-warmed by hydration).
-class _MissionChip extends ConsumerWidget {
-  const _MissionChip({required this.missionId});
-  final String missionId;
+// ============================================================================
+// Shared bits
+// ============================================================================
 
+class _RailCard extends StatelessWidget {
+  const _RailCard({
+    required this.title,
+    required this.trailingLabel,
+    required this.onTrailingTap,
+    required this.child,
+  });
+  final String title;
+  final String trailingLabel;
+  final VoidCallback onTrailingTap;
+  final Widget child;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final List<Mission>? missions =
-        ref.watch(missionsProvider).valueOrNull;
-    final Mission? mission =
-        missions?.where((Mission m) => m.id == missionId).firstOrNull;
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 14),
       decoration: BoxDecoration(
-        color: AppColors.brandTint,
-        borderRadius: const BorderRadius.all(AppRadii.chip),
-        border: Border.all(color: AppColors.brandSoft),
+        color: CmsColors.surfaceCard,
+        borderRadius: const BorderRadius.all(AppRadii.card),
+        border: Border.all(color: CmsColors.divider),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Icon(Icons.flag_outlined, size: 14, color: AppColors.brand),
-          const SizedBox(width: 6),
-          Text(
-            mission != null
-                ? '${mission.code} · ${mission.name}'
-                : 'Mission',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.brand,
-            ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title.toUpperCase(),
+                  style: const TextStyle(
+                    color: CmsColors.textTertiary,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              InkWell(
+                onTap: onTrailingTap,
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        trailingLabel,
+                        style: const TextStyle(
+                          color: CmsColors.textSecondary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.arrow_forward,
+                        size: 11,
+                        color: CmsColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 10),
+          child,
         ],
       ),
     );
   }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.badge,
+    required this.trailingLabel,
+    required this.onTrailingTap,
+  });
+  final IconData icon;
+  final String title;
+  final String badge;
+  final String trailingLabel;
+  final VoidCallback onTrailingTap;
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _SectionTitle(icon: icon, title: title),
+        const SizedBox(width: 8),
+        _Badge(label: badge),
+        const Spacer(),
+        InkWell(
+          onTap: onTrailingTap,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Text(
+              trailingLabel,
+              style: const TextStyle(
+                color: CmsColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.icon, required this.title});
+  final IconData icon;
+  final String title;
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: 14, color: CmsColors.textPrimary),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: const TextStyle(
+            color: CmsColors.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: CmsColors.bgElev,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: CmsColors.textPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+String _flag(String code) {
+  if (code.length != 2) return '🏳';
+  const int base = 0x1F1E6;
+  final int a = code.toUpperCase().codeUnitAt(0) - 0x41 + base;
+  final int b = code.toUpperCase().codeUnitAt(1) - 0x41 + base;
+  return String.fromCharCodes(<int>[a, b]);
+}
+
+String _initials(String name) {
+  final List<String> parts =
+      name.trim().split(RegExp(r'\s+')).where((String p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return '?';
+  if (parts.length == 1) return parts.first[0].toUpperCase();
+  return (parts.first[0] + parts.last[0]).toUpperCase();
+}
+
+String _compact(int minor) =>
+    NumberFormat.compact(locale: 'en').format(minor / 100.0);
+
+String _timeAgo(DateTime at) {
+  final Duration d = DateTime.now().difference(at);
+  if (d.inMinutes < 1) return 'now';
+  if (d.inHours < 1) return '${d.inMinutes}m';
+  if (d.inDays < 1) return '${d.inHours}h';
+  if (d.inDays < 7) return '${d.inDays}d';
+  return DateFormat('MMM d').format(at);
+}
+
+Color _missionColor(String id) {
+  final int hash = id.hashCode.abs();
+  return CmsColors.missionPalette[hash % CmsColors.missionPalette.length];
 }

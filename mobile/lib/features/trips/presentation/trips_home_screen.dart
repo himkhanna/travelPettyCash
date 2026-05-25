@@ -8,6 +8,7 @@ import '../../../core/api/hydration_service.dart';
 import '../../../core/money/money.dart';
 import '../../../shared/widgets/home_bottom_nav.dart';
 import '../../../shared/widgets/pdd_primitives.dart';
+import '../../auth/application/auth_actions.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../funds/application/funds_providers.dart';
@@ -104,23 +105,46 @@ class TripsHomeScreen extends ConsumerWidget {
                 children: <Widget>[
                   PddTopBar(
                     user: me,
-                    subtitle: _roleLabel(me?.role),
+                    subtitle: _greeting(me),
+                    title: me?.displayName.split(' ').first ?? 'Welcome',
                     onNotifs: () => context.go('/m/notifications'),
                     hasNotif: hasUnread,
+                    actions: <Widget>[
+                      PddTopBarIconButton(
+                        icon: Icons.logout,
+                        tooltip: 'Sign out',
+                        onTap: () => confirmAndSignOut(context, ref),
+                      ),
+                    ],
                   ),
-                  // Global pending-funds banner — surfaces every pending
-                  // allocation / transfer addressed to this user across all
-                  // their trips so they don't have to drill into each one.
+                  // Hero summary card — role-aware. Member sees their
+                  // combined wallet across active trips; Leader sees the
+                  // team-wide trip totals they're responsible for.
+                  if (me != null && active.isNotEmpty)
+                    _HeroSummary(me: me, activeTrips: active),
+                  // Quick-stats strip — at-a-glance counters.
+                  if (me != null)
+                    _QuickStatsStrip(
+                      activeCount: active.length,
+                      meId: me.id,
+                      activeTrips: active,
+                      unread: unreadCount,
+                    ),
+                  // Pending-funds banner — surfaces every pending allocation
+                  // / transfer addressed to this user across all trips so
+                  // they don't have to drill into each one.
                   if (me != null)
                     _GlobalPendingBanner(meId: me.id, trips: active),
-                  if (active.isEmpty) _NoActiveTripCard(),
-                  // Active trips render as compact rows — same layout as
-                  // Upcoming / Archived, with a tiny balance line added so
-                  // the user can scan their money status without tapping
-                  // through. Hero cards used to live here but pushed
-                  // additional trips off-screen.
+                  // Recent activity feed — top 5 notifications, rendered
+                  // compactly. "View all" jumps to the full inbox.
+                  if (notifs.isNotEmpty)
+                    _RecentActivityCard(
+                      notifs: notifs.take(5).toList(),
+                    ),
+                  if (active.isEmpty && upcoming.isEmpty && archived.isEmpty)
+                    _NoActiveTripCard(),
                   if (active.isNotEmpty) ...<Widget>[
-                    const PddSectionLabel(label: 'Active'),
+                    const PddSectionLabel(label: 'Active trips'),
                     for (final Trip t in active)
                       _TripRowCompact(
                         trip: t,
@@ -687,5 +711,693 @@ class _Pill extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Home dashboard — hero summary + quick stats + recent activity
+// ────────────────────────────────────────────────────────────────────
+
+/// Greets the user with a time-of-day label so the subtitle on Home
+/// doesn't read as the same "Welcome back" every visit.
+String _greeting(User? me) {
+  final int h = DateTime.now().hour;
+  final String period = h < 5
+      ? 'Good evening'
+      : h < 12
+          ? 'Good morning'
+          : h < 17
+              ? 'Good afternoon'
+              : 'Good evening';
+  final String role = _roleLabel(me?.role);
+  return me == null ? period : '$period · $role';
+}
+
+/// Role-aware hero card sitting just under the top bar. Member sees their
+/// combined wallet across active trips (per-currency stripes when the user
+/// has trips in more than one currency). Leader sees the same totals AS
+/// trip-wide so they can scan the budgets they're accountable for.
+class _HeroSummary extends ConsumerWidget {
+  const _HeroSummary({required this.me, required this.activeTrips});
+  final User me;
+  final List<Trip> activeTrips;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool isLeader = me.role == UserRole.leader;
+    final BalanceScope scope =
+        isLeader ? BalanceScope.trip : BalanceScope.me;
+
+    // Sum balances per currency across the user's active trips.
+    final Map<String, Money> availableByCurrency = <String, Money>{};
+    final Map<String, Money> spentByCurrency = <String, Money>{};
+    final Map<String, Money> committedByCurrency = <String, Money>{};
+    bool anyLoading = false;
+    for (final Trip t in activeTrips) {
+      final AsyncValue<TripBalances> async = ref.watch(
+        tripBalancesProvider((tripId: t.id, scope: scope)),
+      );
+      async.when(
+        loading: () => anyLoading = true,
+        error: (Object _, __) {},
+        data: (TripBalances b) {
+          final Money available = scope == BalanceScope.trip
+              ? (b.totalBudget - b.totalSpent)
+              : b.totalBalance;
+          final Money committed = scope == BalanceScope.trip
+              ? b.totalBudget
+              : b.totalBalance + b.totalSpent;
+          availableByCurrency.update(
+            t.currency,
+            (Money v) => v + available,
+            ifAbsent: () => available,
+          );
+          spentByCurrency.update(
+            t.currency,
+            (Money v) => v + b.totalSpent,
+            ifAbsent: () => b.totalSpent,
+          );
+          committedByCurrency.update(
+            t.currency,
+            (Money v) => v + committed,
+            ifAbsent: () => committed,
+          );
+        },
+      );
+    }
+
+    final String headline = isLeader ? 'Team budget available' : 'Your wallet';
+    final String byline = isLeader
+        ? 'Across ${activeTrips.length} trip${activeTrips.length == 1 ? '' : 's'} you lead'
+        : 'Across ${activeTrips.length} active trip${activeTrips.length == 1 ? '' : 's'}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              AppColors.brandDeep,
+              AppColors.brand,
+              Color(0xFF155049),
+            ],
+            stops: <double>[0.0, 0.6, 1.0],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: AppShadows.card,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    headline,
+                    style: AppTypography.geist(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.06 * 11,
+                      color: AppColors.bgCard.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.bgCard.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    isLeader
+                        ? Icons.account_tree_outlined
+                        : Icons.account_balance_wallet_outlined,
+                    color: AppColors.bgCard,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (anyLoading && availableByCurrency.isEmpty)
+              SizedBox(
+                height: 28,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: LinearProgressIndicator(
+                    backgroundColor:
+                        AppColors.bgCard.withValues(alpha: 0.15),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.bgCard.withValues(alpha: 0.55),
+                    ),
+                    minHeight: 3,
+                  ),
+                ),
+              )
+            else
+              _MultiCurrencyTotal(amounts: availableByCurrency),
+            const SizedBox(height: 6),
+            Text(
+              byline,
+              style: AppTypography.geist(
+                fontSize: 11,
+                color: AppColors.bgCard.withValues(alpha: 0.72),
+              ),
+            ),
+            if (committedByCurrency.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 14),
+              for (final MapEntry<String, Money> e
+                  in committedByCurrency.entries)
+                _HeroProgressLine(
+                  currency: e.key,
+                  spent: spentByCurrency[e.key] ??
+                      Money.zero(e.key),
+                  total: e.value,
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Renders a multi-currency total inline (e.g. "SAR 4,250  ·  EGP 800").
+/// When the user is single-currency this collapses to the standard
+/// amount + ticker presentation.
+class _MultiCurrencyTotal extends StatelessWidget {
+  const _MultiCurrencyTotal({required this.amounts});
+  final Map<String, Money> amounts;
+
+  @override
+  Widget build(BuildContext context) {
+    if (amounts.isEmpty) {
+      return Text(
+        '—',
+        style: AppTypography.geistMono(
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+          color: AppColors.bgCard,
+        ),
+      );
+    }
+    final List<MapEntry<String, Money>> entries = amounts.entries.toList()
+      ..sort(
+        (MapEntry<String, Money> a, MapEntry<String, Money> b) =>
+            b.value.amountMinor - a.value.amountMinor,
+      );
+    if (entries.length == 1) {
+      final MapEntry<String, Money> e = entries.first;
+      return RichText(
+        text: TextSpan(
+          children: <InlineSpan>[
+            TextSpan(
+              text: _amountOnly(e.value),
+              style: AppTypography.geistMono(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: AppColors.bgCard,
+                letterSpacing: -0.02 * 28,
+              ),
+            ),
+            TextSpan(
+              text: '  ${e.key}',
+              style: AppTypography.geist(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.bgCard.withValues(alpha: 0.75),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    // Multi-currency — show top currency big, others as chips.
+    final MapEntry<String, Money> first = entries.first;
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.end,
+      spacing: 10,
+      runSpacing: 4,
+      children: <Widget>[
+        RichText(
+          text: TextSpan(
+            children: <InlineSpan>[
+              TextSpan(
+                text: _amountOnly(first.value),
+                style: AppTypography.geistMono(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.bgCard,
+                  letterSpacing: -0.02 * 26,
+                ),
+              ),
+              TextSpan(
+                text: '  ${first.key}',
+                style: AppTypography.geist(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.bgCard.withValues(alpha: 0.75),
+                ),
+              ),
+            ],
+          ),
+        ),
+        for (final MapEntry<String, Money> e in entries.skip(1))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.bgCard.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${e.key} ${_amountOnly(e.value)}',
+                style: AppTypography.geistMono(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.bgCard,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HeroProgressLine extends StatelessWidget {
+  const _HeroProgressLine({
+    required this.currency,
+    required this.spent,
+    required this.total,
+  });
+  final String currency;
+  final Money spent;
+  final Money total;
+
+  @override
+  Widget build(BuildContext context) {
+    final double pct = total.isZero
+        ? 0.0
+        : (spent.amountMinor / total.amountMinor).clamp(0.0, 1.0).toDouble();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                currency,
+                style: AppTypography.geist(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.bgCard.withValues(alpha: 0.85),
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_amountOnly(spent)} of ${_amountOnly(total)}',
+                style: AppTypography.geistMono(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.bgCard.withValues(alpha: 0.72),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 4,
+              backgroundColor: AppColors.bgCard.withValues(alpha: 0.18),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                AppColors.gold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Three-tile horizontal strip with at-a-glance counters under the hero
+/// card: Active trips, Pending acceptances, Unread inbox.
+class _QuickStatsStrip extends ConsumerWidget {
+  const _QuickStatsStrip({
+    required this.activeCount,
+    required this.meId,
+    required this.activeTrips,
+    required this.unread,
+  });
+  final int activeCount;
+  final String meId;
+  final List<Trip> activeTrips;
+  final int unread;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    int pending = 0;
+    for (final Trip t in activeTrips) {
+      pending += ref.watch(tripAllocationsProvider(t.id)).maybeWhen<int>(
+            data: (List<Allocation> all) => all
+                .where((Allocation a) =>
+                    a.toUserId == meId &&
+                    a.status == AllocationStatus.pending)
+                .length,
+            orElse: () => 0,
+          );
+      pending += ref.watch(tripTransfersProvider(t.id)).maybeWhen<int>(
+            data: (List<Transfer> all) => all
+                .where((Transfer x) =>
+                    x.toUserId == meId &&
+                    x.status == AllocationStatus.pending)
+                .length,
+            orElse: () => 0,
+          );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: _StatTile(
+              icon: Icons.flight_takeoff_outlined,
+              label: 'Active',
+              value: '$activeCount',
+              accent: AppColors.brand,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _StatTile(
+              icon: Icons.hourglass_top_outlined,
+              label: 'Pending',
+              value: '$pending',
+              accent: pending > 0 ? AppColors.amber : AppColors.ink3,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _StatTile(
+              icon: Icons.notifications_none_outlined,
+              label: 'Unread',
+              value: '$unread',
+              accent: unread > 0 ? AppColors.red : AppColors.ink3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 13, color: accent),
+              ),
+              const Spacer(),
+              Text(
+                value,
+                style: AppTypography.geist(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink1,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.geist(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink3,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact card showing the latest few notifications as a "recent activity"
+/// feed. Pulls straight from notifications (the only audit-style source a
+/// non-admin user can see).
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.notifs});
+  final List<AppNotification> notifs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+              child: Row(
+                children: <Widget>[
+                  Text(
+                    'Recent activity',
+                    style: AppTypography.geist(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink1,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () =>
+                        GoRouter.of(context).go('/m/notifications'),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 28),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      foregroundColor: AppColors.brand,
+                    ),
+                    child: Text(
+                      'View all',
+                      style: AppTypography.geist(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.brand,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            for (int i = 0; i < notifs.length; i++) ...<Widget>[
+              if (i > 0) const Divider(height: 1, color: AppColors.line),
+              _ActivityRow(n: notifs[i]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.n});
+  final AppNotification n;
+
+  @override
+  Widget build(BuildContext context) {
+    final ({Color color, IconData icon}) cfg = _styleFor(n.type);
+    final bool unread = n.state == NotificationState.unread;
+    return InkWell(
+      onTap: () {
+        final String? tripId = n.payload['tripId'] as String?;
+        if (n.type == NotificationType.expenseQuery) {
+          final String? expenseId = n.payload['expenseId'] as String?;
+          if (tripId != null && expenseId != null) {
+            GoRouter.of(context).go('/m/trips/$tripId/expenses/$expenseId');
+            return;
+          }
+        }
+        if (n.type == NotificationType.chatMessage) {
+          final String? threadId = n.payload['threadId'] as String?;
+          if (tripId != null && threadId != null) {
+            GoRouter.of(context).go('/m/trips/$tripId/chat/$threadId');
+            return;
+          }
+        }
+        if (tripId != null) {
+          GoRouter.of(context).go('/m/trips/$tripId/dashboard');
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: cfg.color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              alignment: Alignment.center,
+              child: Icon(cfg.icon, size: 13, color: cfg.color),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    _summarize(n),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.geist(
+                      fontSize: 12.5,
+                      color: AppColors.ink1,
+                      height: 1.3,
+                      fontWeight:
+                          unread ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _timeAgo(n.createdAt),
+                    style: AppTypography.geist(
+                      fontSize: 10.5,
+                      color: AppColors.ink3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (unread)
+              Container(
+                margin: const EdgeInsets.only(left: 6, top: 4),
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: AppColors.red,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ({Color color, IconData icon}) _styleFor(NotificationType t) {
+    switch (t) {
+      case NotificationType.allocationReceived:
+        return (color: AppColors.gold, icon: Icons.account_balance_outlined);
+      case NotificationType.transferReceived:
+        return (color: AppColors.brand, icon: Icons.swap_horiz);
+      case NotificationType.transferAccepted:
+        return (color: AppColors.green, icon: Icons.check_circle_outline);
+      case NotificationType.tripAssigned:
+        return (color: AppColors.brand, icon: Icons.flight_outlined);
+      case NotificationType.tripClosed:
+        return (color: AppColors.ink3, icon: Icons.lock_outline);
+      case NotificationType.expenseQuery:
+        return (color: AppColors.amber, icon: Icons.help_outline);
+      case NotificationType.reportReady:
+        return (color: AppColors.brand, icon: Icons.description_outlined);
+      case NotificationType.chatMessage:
+        return (color: AppColors.brand, icon: Icons.chat_bubble_outline);
+    }
+  }
+
+  String _summarize(AppNotification n) {
+    switch (n.type) {
+      case NotificationType.allocationReceived:
+        return 'Funds allocated to you';
+      case NotificationType.transferReceived:
+        return 'You received a transfer';
+      case NotificationType.transferAccepted:
+        return n.payload['response'] == 'declined'
+            ? 'Your transfer was declined'
+            : 'Your transfer was accepted';
+      case NotificationType.tripAssigned:
+        return 'Added to a new trip';
+      case NotificationType.tripClosed:
+        return 'A trip you were on was closed';
+      case NotificationType.expenseQuery:
+        final String snip = (n.payload['snippet'] as String?) ?? '';
+        return snip.isEmpty ? 'Comment on an expense' : 'Comment: "$snip"';
+      case NotificationType.reportReady:
+        final String tripName =
+            (n.payload['tripName'] as String?) ?? 'a trip';
+        return 'Report ready for $tripName';
+      case NotificationType.chatMessage:
+        final String tripName =
+            (n.payload['tripName'] as String?) ?? 'a trip';
+        final String snip = (n.payload['snippet'] as String?) ?? '';
+        return snip.isEmpty
+            ? 'New message in $tripName'
+            : 'Chat in $tripName: "$snip"';
+    }
+  }
+
+  String _timeAgo(DateTime at) {
+    final Duration d = DateTime.now().difference(at);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inHours < 1) return '${d.inMinutes}m ago';
+    if (d.inDays < 1) return '${d.inHours}h ago';
+    if (d.inDays < 7) return '${d.inDays}d ago';
+    return DateFormat('d MMM').format(at);
   }
 }

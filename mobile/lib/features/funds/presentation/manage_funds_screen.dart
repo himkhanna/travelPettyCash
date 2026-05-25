@@ -285,6 +285,8 @@ class _MemberRow extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       member.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     if (pending > 0)
@@ -324,6 +326,8 @@ class _MemberRow extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       s.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary,
                       ),

@@ -112,6 +112,8 @@ class ApiNotificationsRepository implements NotificationsRepository {
       case NotificationType.tripAssigned:
       case NotificationType.tripClosed:
       case NotificationType.expenseQuery:
+      case NotificationType.reportReady:
+      case NotificationType.chatMessage:
         // Not actionable on the backend — just mark read and return.
         return markRead(notificationId);
     }
@@ -167,6 +169,10 @@ class ApiNotificationsRepository implements NotificationsRepository {
         return NotificationType.tripClosed;
       case 'EXPENSE_QUERY':
         return NotificationType.expenseQuery;
+      case 'REPORT_READY':
+        return NotificationType.reportReady;
+      case 'CHAT_MESSAGE':
+        return NotificationType.chatMessage;
       default:
         throw ArgumentError('Unknown notification type: $s');
     }

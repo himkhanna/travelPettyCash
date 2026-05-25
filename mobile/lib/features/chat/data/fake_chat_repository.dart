@@ -32,6 +32,42 @@ class FakeChatRepository implements ChatRepository {
   }
 
   @override
+  Future<ChatThread> teamThread({required String tripId}) async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    // The fake repo just picks the largest existing thread on this trip as
+    // the "team chat" stand-in. Good enough for offline UI work; the real
+    // backend creates a canonical thread keyed off a deterministic ID.
+    final List<ChatThread> tripThreads = _store.chatThreads
+        .where((ChatThread t) => t.tripId == tripId)
+        .toList();
+    if (tripThreads.isEmpty) {
+      throw StateError(
+        'Fake mode: no chat threads seeded for trip $tripId. '
+        'Switch to API mode or run DemoChatSeeder.',
+      );
+    }
+    tripThreads.sort((ChatThread a, ChatThread b) =>
+        b.participantIds.length.compareTo(a.participantIds.length));
+    return tripThreads.first;
+  }
+
+  @override
+  Future<List<ChatThread>> threadsForUser({required String userId}) async {
+    await _store.ensureLoaded();
+    await _cfg.waitLatency();
+    return _store.chatThreads
+        .where((ChatThread t) => t.participantIds.contains(userId))
+        .toList()
+      ..sort(
+        (ChatThread a, ChatThread b) =>
+            (b.lastMessageAt ?? DateTime(0)).compareTo(
+              a.lastMessageAt ?? DateTime(0),
+            ),
+      );
+  }
+
+  @override
   Stream<List<ChatMessage>> watchMessages(String threadId) {
     Future<List<ChatMessage>> snapshot() async {
       await _store.ensureLoaded();

@@ -20,5 +20,14 @@ pdd:
     # docker-compose maps the MinIO API to host port 9100 to avoid collisions
     # with another local MinIO; container-to-container traffic uses minio:9000.
     endpoint: http://localhost:9100
+  ocr:
+    # UB Mannheim Tesseract installer default. Pointing install-dir here
+    # lets ReceiptOcrService prepend it to jna.library.path so JNA finds
+    # libtesseract*.dll without requiring the user to add the dir to PATH,
+    # and auto-derives tessdata-path from <install-dir>/tessdata.
+    # Stays 'eng' until ara.traineddata is added — re-run the installer
+    # with "Additional language data → Arabic" ticked, then set 'eng+ara'.
+    install-dir: C:/Program Files/Tesseract-OCR
+    languages: eng
   demo:
     seed: true

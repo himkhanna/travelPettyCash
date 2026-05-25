@@ -112,6 +112,28 @@ public class ExpenseService {
         return ExpenseDto.from(e);
     }
 
+    /**
+     * Admin-only: all non-deleted expenses without an attached receipt.
+     * Used by the dashboard's "Receipt triage" feed so the admin can act
+     * on the missing-evidence backlog in one place.
+     */
+    @Transactional(readOnly = true)
+    public List<ExpenseDto> missingReceipts(AuthenticatedUser caller) {
+        if (caller.role() != UserRole.ADMIN
+            && caller.role() != UserRole.SUPER_ADMIN) {
+            throw new ApiException(
+                org.springframework.http.HttpStatus.FORBIDDEN,
+                "auth/forbidden", "Forbidden",
+                "Admin only."
+            );
+        }
+        return expenses
+            .findByReceiptObjectKeyIsNullAndDeletedAtIsNullOrderByOccurredAtDesc()
+            .stream()
+            .map(ExpenseDto::from)
+            .toList();
+    }
+
     // ---- create -------------------------------------------------------
 
     /**

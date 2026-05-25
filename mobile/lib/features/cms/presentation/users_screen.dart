@@ -9,6 +9,7 @@ import '../../auth/application/auth_providers.dart';
 import '../../auth/application/user_directory_providers.dart';
 import '../../auth/domain/user.dart';
 import 'widgets/cms_layout.dart';
+import 'widgets/cms_theme.dart';
 
 /// Updates the DemoStore name-lookup cache so other screens calling
 /// `store.userById(...)` for chips and headers pick up the new display name
@@ -27,11 +28,20 @@ void _upsertUserCache(WidgetRef ref, User user) {
 /// Admin-only Users management screen. Lists every user with their role
 /// + status, lets the admin create new users, edit existing ones, and
 /// deactivate without deleting (history preservation per CLAUDE.md §12).
-class CmsUsersScreen extends ConsumerWidget {
+///
+/// Supports `?focus=<userId>` — used by the global search dropdown so
+/// clicking a user hit opens the edit dialog for that user directly
+/// instead of leaving the admin to scan the table.
+class CmsUsersScreen extends ConsumerStatefulWidget {
   const CmsUsersScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CmsUsersScreen> createState() => _CmsUsersScreenState();
+}
+
+class _CmsUsersScreenState extends ConsumerState<CmsUsersScreen> {
+  @override
+  Widget build(BuildContext context) {
     final AsyncValue<User?> meAsync = ref.watch(currentUserProvider);
     final User? me = meAsync.valueOrNull;
     if (me == null) {
@@ -43,7 +53,6 @@ class CmsUsersScreen extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (me.role != UserRole.admin && me.role != UserRole.superAdmin) {
-      // Members and Leaders shouldn't even reach this route, but guard for it.
       return const CmsLayout(
         active: CmsNavItem.users,
         child: Center(child: Text('You do not have access to this page.')),
@@ -52,13 +61,19 @@ class CmsUsersScreen extends ConsumerWidget {
 
     final AsyncValue<List<User>> usersAsync =
         ref.watch(usersDirectoryProvider);
+    // ?focus=<userId> ships from the top-bar global search. The matching
+    // row is highlighted by _UserRow; we no longer auto-open the edit
+    // dialog because a failed dialog build left the page stuck behind a
+    // scrim with no way to dismiss. The admin can click the row.
+    final String? focusId =
+        GoRouterState.of(context).uri.queryParameters['focus'];
 
     return CmsLayout(
       active: CmsNavItem.users,
       floatingActionButton: me.role == UserRole.admin
           ? FloatingActionButton.extended(
-              backgroundColor: AppColors.brandBrown,
-              foregroundColor: AppColors.cream,
+              backgroundColor: CmsColors.brandBrown,
+              foregroundColor: CmsColors.cream,
               icon: const Icon(Icons.person_add_alt_1),
               label: const Text('CREATE USER'),
               onPressed: () => _openCreate(context, ref),
@@ -70,7 +85,12 @@ class CmsUsersScreen extends ConsumerWidget {
         data: (List<User> users) {
           final List<User> sorted = <User>[...users]
             ..sort((User a, User b) => a.displayName.compareTo(b.displayName));
-          return _UsersTable(users: sorted, me: me, canEdit: me.role == UserRole.admin);
+          return _UsersTable(
+            users: sorted,
+            me: me,
+            canEdit: me.role == UserRole.admin,
+            focusedUserId: focusId,
+          );
         },
       ),
     );
@@ -93,11 +113,15 @@ class _UsersTable extends ConsumerWidget {
     required this.users,
     required this.me,
     required this.canEdit,
+    this.focusedUserId,
   });
 
   final List<User> users;
   final User me;
   final bool canEdit;
+  /// When set, the row with this id renders with a subtle highlight so the
+  /// user can tell which one the search hit landed on.
+  final String? focusedUserId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -105,9 +129,9 @@ class _UsersTable extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceCard,
+          color: CmsColors.surfaceCard,
           borderRadius: const BorderRadius.all(AppRadii.card),
-          border: Border.all(color: AppColors.divider),
+          border: Border.all(color: CmsColors.divider),
         ),
         child: Column(
           children: <Widget>[
@@ -118,7 +142,7 @@ class _UsersTable extends ConsumerWidget {
                 vertical: AppSpacing.sm,
               ),
               decoration: const BoxDecoration(
-                color: AppColors.cream,
+                color: CmsColors.cream,
                 borderRadius: BorderRadius.vertical(top: AppRadii.card),
               ),
               child: Row(
@@ -152,13 +176,14 @@ class _UsersTable extends ConsumerWidget {
               child: ListView.separated(
                 itemCount: users.length,
                 separatorBuilder: (_, __) =>
-                    const Divider(height: 1, color: AppColors.divider),
+                    const Divider(height: 1, color: CmsColors.divider),
                 itemBuilder: (BuildContext context, int i) {
                   final User u = users[i];
                   return _UserRow(
                     user: u,
                     isSelf: u.id == me.id,
                     canEdit: canEdit,
+                    focused: u.id == focusedUserId,
                   );
                 },
               ),
@@ -172,7 +197,7 @@ class _UsersTable extends ConsumerWidget {
   String _h(String t) => t.toUpperCase();
   TextStyle _headerStyle(BuildContext context) =>
       Theme.of(context).textTheme.labelSmall!.copyWith(
-        color: AppColors.textSecondary,
+        color: CmsColors.textSecondary,
         letterSpacing: 1.4,
         fontWeight: FontWeight.w700,
       );
@@ -183,15 +208,20 @@ class _UserRow extends ConsumerWidget {
     required this.user,
     required this.isSelf,
     required this.canEdit,
+    this.focused = false,
   });
 
   final User user;
   final bool isSelf;
   final bool canEdit;
+  final bool focused;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
+    return Container(
+      color: focused
+          ? CmsColors.accentSoft
+          : Colors.transparent,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
@@ -230,7 +260,7 @@ class _UserRow extends ConsumerWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.goldOlive.withValues(alpha: 0.2),
+                      color: CmsColors.goldOlive.withValues(alpha: 0.2),
                       borderRadius: const BorderRadius.all(AppRadii.chip),
                     ),
                     child: const Text(
@@ -238,7 +268,7 @@ class _UserRow extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.goldOlive,
+                        color: CmsColors.goldOlive,
                       ),
                     ),
                   ),
@@ -252,7 +282,7 @@ class _UserRow extends ConsumerWidget {
               user.username,
               style: const TextStyle(
                 fontFamily: 'monospace',
-                color: AppColors.textSecondary,
+                color: CmsColors.textSecondary,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -261,7 +291,7 @@ class _UserRow extends ConsumerWidget {
             flex: 3,
             child: Text(
               user.email,
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: CmsColors.textSecondary),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -300,13 +330,13 @@ class _UserRow extends ConsumerWidget {
   Color _avatarColor(UserRole r) {
     switch (r) {
       case UserRole.admin:
-        return AppColors.brandBrown;
+        return CmsColors.brandBrown;
       case UserRole.superAdmin:
-        return AppColors.goldOlive;
+        return CmsColors.goldOlive;
       case UserRole.leader:
-        return AppColors.brandBrown;
+        return CmsColors.brandBrown;
       case UserRole.member:
-        return AppColors.textSecondary;
+        return CmsColors.textSecondary;
     }
   }
 }
@@ -318,10 +348,10 @@ class _RoleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (String label, Color color) = switch (role) {
-      UserRole.superAdmin => ('Director General', AppColors.goldOlive),
-      UserRole.admin => ('Admin', AppColors.brandBrown),
-      UserRole.leader => ('Leader', AppColors.brandBrown),
-      UserRole.member => ('Member', AppColors.textSecondary),
+      UserRole.superAdmin => ('Director General', CmsColors.goldOlive),
+      UserRole.admin => ('Admin', CmsColors.brandBrown),
+      UserRole.leader => ('Leader', CmsColors.brandBrown),
+      UserRole.member => ('Member', CmsColors.textSecondary),
     };
     return Align(
       alignment: Alignment.centerLeft,
@@ -351,7 +381,7 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = active ? AppColors.success : AppColors.outflow;
+    final Color color = active ? CmsColors.success : CmsColors.outflow;
     return Align(
       alignment: Alignment.centerLeft,
       child: Row(
@@ -446,7 +476,7 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
+              color: CmsColors.textSecondary,
               letterSpacing: 1.4,
             ),
           ),
@@ -561,26 +591,26 @@ class _EditUserDialogState extends ConsumerState<EditUserDialog> {
               vertical: AppSpacing.sm,
             ),
             decoration: BoxDecoration(
-              color: AppColors.cream,
+              color: CmsColors.cream,
               borderRadius: const BorderRadius.all(AppRadii.chip),
             ),
             child: Row(
               children: <Widget>[
                 const Icon(Icons.alternate_email,
-                    size: 16, color: AppColors.textSecondary),
+                    size: 16, color: CmsColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(
                   widget.user.username,
                   style: const TextStyle(
                     fontFamily: 'monospace',
-                    color: AppColors.textSecondary,
+                    color: CmsColors.textSecondary,
                   ),
                 ),
                 const Spacer(),
                 Text(
                   'Username is immutable',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: CmsColors.textSecondary,
                   ),
                 ),
               ],
@@ -605,7 +635,7 @@ class _EditUserDialogState extends ConsumerState<EditUserDialog> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
+              color: CmsColors.textSecondary,
               letterSpacing: 1.4,
             ),
           ),
@@ -622,7 +652,7 @@ class _EditUserDialogState extends ConsumerState<EditUserDialog> {
               'You cannot change your own role.',
               style: TextStyle(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: CmsColors.textSecondary,
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -638,7 +668,7 @@ class _EditUserDialogState extends ConsumerState<EditUserDialog> {
                       ? 'User can sign in and act on this trip.'
                       : 'User is locked out and hidden from new assignments.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: CmsColors.textSecondary,
               ),
             ),
             value: _active,
@@ -737,7 +767,7 @@ class _UserDialogShell extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
-                  const Icon(Icons.person_outline, color: AppColors.brandBrown),
+                  const Icon(Icons.person_outline, color: CmsColors.brandBrown),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
@@ -768,21 +798,21 @@ class _UserDialogShell extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: AppColors.outflow.withValues(alpha: 0.1),
+                  color: CmsColors.outflow.withValues(alpha: 0.1),
                   borderRadius: const BorderRadius.all(AppRadii.chip),
                   border: Border.all(
-                    color: AppColors.outflow.withValues(alpha: 0.4),
+                    color: CmsColors.outflow.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Row(
                   children: <Widget>[
                     const Icon(Icons.error_outline,
-                        size: 18, color: AppColors.outflow),
+                        size: 18, color: CmsColors.outflow),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
                         error!,
-                        style: const TextStyle(color: AppColors.outflow),
+                        style: const TextStyle(color: CmsColors.outflow),
                       ),
                     ),
                   ],
@@ -801,7 +831,7 @@ class _UserDialogShell extends StatelessWidget {
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandBrown,
+                      backgroundColor: CmsColors.brandBrown,
                     ),
                     onPressed: saving ? null : onSave,
                     icon: saving
@@ -810,14 +840,14 @@ class _UserDialogShell extends StatelessWidget {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.cream,
+                              color: CmsColors.cream,
                             ),
                           )
                         : const Icon(Icons.check),
                     label: const Text(
                       'SAVE',
                       style: TextStyle(
-                        color: AppColors.cream,
+                        color: CmsColors.cream,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
                       ),

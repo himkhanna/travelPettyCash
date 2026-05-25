@@ -35,6 +35,27 @@ final FutureProviderFamily<List<ChatThread>, String> tripThreadsProvider =
       return ref.read(chatRepositoryProvider).threads(tripId: tripId);
     });
 
+/// Global chat list — every thread the current user participates in, across
+/// every trip. Backs the Chat screen reached from the Profile menu.
+final FutureProvider<List<ChatThread>> allChatsProvider =
+    FutureProvider<List<ChatThread>>((Ref ref) async {
+  final User? user = await ref.watch(currentUserProvider.future);
+  if (user == null) return <ChatThread>[];
+  return ref.read(chatRepositoryProvider).threadsForUser(userId: user.id);
+});
+
+/// The canonical "team chat" thread for a trip — leader + all members in
+/// one group. Created lazily on the backend, so this is also the path that
+/// guarantees the thread exists before the user is sent into it.
+final FutureProviderFamily<ChatThread, String> teamChatProvider =
+    FutureProvider.family<ChatThread, String>((Ref ref, String tripId) async {
+  final User? user = await ref.watch(currentUserProvider.future);
+  if (user == null) {
+    throw StateError('No current user — cannot resolve team chat.');
+  }
+  return ref.read(chatRepositoryProvider).teamThread(tripId: tripId);
+});
+
 final StreamProviderFamily<List<ChatMessage>, String> threadMessagesProvider =
     StreamProvider.family<List<ChatMessage>, String>((
       Ref ref,

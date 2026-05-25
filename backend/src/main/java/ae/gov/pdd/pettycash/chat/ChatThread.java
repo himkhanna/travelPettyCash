@@ -81,4 +81,14 @@ public class ChatThread {
             : preview.length() > 120 ? preview.substring(0, 117) + "…" : preview;
         this.lastMessageAt = at;
     }
+
+    /**
+     * Replace the participant set. Used by the team-thread sync when a trip's
+     * leader changes or its member roster is patched. JPA-safe: the underlying
+     * @ElementCollection is rewritten on flush.
+     */
+    public void replaceParticipants(Set<UUID> next) {
+        this.participantIds.clear();
+        this.participantIds.addAll(next);
+    }
 }

@@ -380,21 +380,26 @@ class _DetailCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    rows[i].v,
-                    style: rows[i].mono
-                        ? AppTypography.geistMono(
-                            fontSize: 14,
-                            fontWeight:
-                                rows[i].emphasis ? FontWeight.w700 : FontWeight.w500,
-                            color: AppColors.ink1,
-                          )
-                        : AppTypography.geist(
-                            fontSize: 14,
-                            fontWeight:
-                                rows[i].emphasis ? FontWeight.w700 : FontWeight.w500,
-                            color: AppColors.ink1,
-                          ),
+                  Flexible(
+                    child: Text(
+                      rows[i].v,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: rows[i].mono
+                          ? AppTypography.geistMono(
+                              fontSize: 14,
+                              fontWeight:
+                                  rows[i].emphasis ? FontWeight.w700 : FontWeight.w500,
+                              color: AppColors.ink1,
+                            )
+                          : AppTypography.geist(
+                              fontSize: 14,
+                              fontWeight:
+                                  rows[i].emphasis ? FontWeight.w700 : FontWeight.w500,
+                              color: AppColors.ink1,
+                            ),
+                    ),
                   ),
                 ],
               ),

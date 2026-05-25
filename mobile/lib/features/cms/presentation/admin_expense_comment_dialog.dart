@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/fake/demo_store.dart';
+import 'widgets/cms_theme.dart' show CmsColors;
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
 import '../../expenses/application/expenses_providers.dart';
@@ -70,7 +71,7 @@ class _AdminExpenseCommentDialogState
         children: <Widget>[
           Icon(
             Icons.chat_bubble_outline,
-            color: AppColors.brandBrown,
+            color: CmsColors.brandBrown,
             size: 20,
           ),
           SizedBox(width: AppSpacing.sm),
@@ -107,7 +108,7 @@ class _AdminExpenseCommentDialogState
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+                  color: CmsColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 6),
@@ -124,7 +125,7 @@ class _AdminExpenseCommentDialogState
                   'Could not load trip participants',
                   style: const TextStyle(
                     fontSize: 11,
-                    color: AppColors.outflow,
+                    color: CmsColors.outflow,
                   ),
                 ),
                 data: (Trip trip) => _MentionPicker(
@@ -148,7 +149,7 @@ class _AdminExpenseCommentDialogState
                 Text(
                   _error!,
                   style: const TextStyle(
-                    color: AppColors.outflow,
+                    color: CmsColors.outflow,
                     fontSize: 12,
                   ),
                 ),
@@ -160,7 +161,7 @@ class _AdminExpenseCommentDialogState
                 'see the expense.',
                 style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: CmsColors.textSecondary,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -180,8 +181,8 @@ class _AdminExpenseCommentDialogState
         FilledButton.icon(
           onPressed: _sending || me == null ? null : () => _send(me),
           style: FilledButton.styleFrom(
-            backgroundColor: AppColors.brandBrown,
-            foregroundColor: AppColors.cream,
+            backgroundColor: CmsColors.brandBrown,
+            foregroundColor: CmsColors.cream,
             minimumSize: const Size(0, 40),
             padding: const EdgeInsets.symmetric(horizontal: 18),
             visualDensity: VisualDensity.compact,
@@ -192,7 +193,7 @@ class _AdminExpenseCommentDialogState
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppColors.cream,
+                    color: CmsColors.cream,
                   ),
                 )
               : const Icon(Icons.send, size: 16),
@@ -273,9 +274,9 @@ class _ExpenseContextCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.cream,
+        color: CmsColors.cream,
         borderRadius: const BorderRadius.all(AppRadii.chip),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: CmsColors.divider),
       ),
       child: Row(
         children: <Widget>[
@@ -283,7 +284,7 @@ class _ExpenseContextCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.forCategory(categoryCode),
+              color: CmsColors.forCategory(categoryCode),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -311,7 +312,7 @@ class _ExpenseContextCard extends StatelessWidget {
                   'logged by $authorName',
                   style: const TextStyle(
                     fontSize: 11,
-                    color: AppColors.textSecondary,
+                    color: CmsColors.textSecondary,
                   ),
                 ),
               ],
@@ -347,7 +348,7 @@ class _MentionPicker extends StatelessWidget {
     if (candidates.isEmpty) {
       return const Text(
         'No other participants on this trip.',
-        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 12, color: CmsColors.textSecondary),
       );
     }
     return Wrap(
@@ -386,11 +387,11 @@ class _MentionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.brandBrown : AppColors.cream,
+      color: selected ? CmsColors.brandBrown : CmsColors.cream,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: selected ? AppColors.brandBrown : AppColors.divider,
+          color: selected ? CmsColors.brandBrown : CmsColors.divider,
         ),
       ),
       child: InkWell(
@@ -404,7 +405,7 @@ class _MentionChip extends StatelessWidget {
               Icon(
                 selected ? Icons.check : Icons.alternate_email,
                 size: 14,
-                color: selected ? AppColors.cream : AppColors.brandBrown,
+                color: selected ? CmsColors.cream : CmsColors.brandBrown,
               ),
               const SizedBox(width: 4),
               Text(
@@ -412,7 +413,7 @@ class _MentionChip extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: selected ? AppColors.cream : AppColors.brandBrown,
+                  color: selected ? CmsColors.cream : CmsColors.brandBrown,
                 ),
               ),
             ],

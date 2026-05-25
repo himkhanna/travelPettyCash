@@ -60,3 +60,42 @@ sane; **set these in every real environment**:
 | `PDD_JWT_SECRET` | HS256 signing secret (≥32 bytes) |
 | `PDD_CORS_ORIGINS` | CSV allowlist for the CMS web origin |
 | `PDD_PORT` | HTTP port (default 8080) |
+| `PDD_OCR_TESSDATA_PATH` | Path to tessdata directory (see OCR section) |
+| `PDD_OCR_LANGUAGES` | Plus-separated lang codes (default `eng`; use `eng+ara` for Arabic receipts) |
+
+## Receipt OCR (Tesseract)
+
+The `POST /api/v1/ocr/receipt` endpoint runs the uploaded photo through
+[Tesseract](https://github.com/tesseract-ocr/tesseract) via tess4j and
+returns suggested {vendor, amount, date} so the mobile "Auto-fill from
+receipt" button can prefill the Add Expense form.
+
+**The native binary is not bundled** — install it on every host that
+serves OCR. If it's missing the endpoint still responds (with
+`engineAvailable: false`) so expense submission never breaks; the mobile
+app surfaces "OCR not configured on the server." in a toast.
+
+### Windows install
+
+1. Download the [UB Mannheim build](https://github.com/UB-Mannheim/tesseract/wiki)
+   and run the installer (defaults: `C:\Program Files\Tesseract-OCR`).
+2. During install, tick **Arabic** under Additional language data so
+   `ara.traineddata` lands in `C:\Program Files\Tesseract-OCR\tessdata`.
+3. Add `C:\Program Files\Tesseract-OCR` to the system PATH (tess4j
+   loads `libtesseract*.dll` via JNA from there).
+4. Either set env vars, or use `application-local.yml`:
+   ```
+   pdd.ocr.tessdata-path: C:/Program Files/Tesseract-OCR/tessdata
+   pdd.ocr.languages:     eng+ara
+   ```
+5. Restart the backend. The boot log line
+   `Receipt OCR engine initialized (langs='eng+ara', tessdata='...')`
+   confirms it loaded; the `disabled: …` warning means something is
+   still missing.
+
+### Linux / Docker
+
+```bash
+apt-get install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-ara
+# leave PDD_OCR_TESSDATA_PATH empty — Tesseract finds /usr/share/tessdata itself
+```

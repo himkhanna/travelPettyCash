@@ -395,10 +395,14 @@ class _AddRow extends StatelessWidget {
               children: <Widget>[
                 Text(
                   source.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 Text(
                   'Avail. ${available.format()}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: AppColors.textSecondary,
                   ),

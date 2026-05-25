@@ -167,6 +167,10 @@ NotificationType _parseNotificationType(String code) {
       return NotificationType.tripClosed;
     case 'EXPENSE_QUERY':
       return NotificationType.expenseQuery;
+    case 'REPORT_READY':
+      return NotificationType.reportReady;
+    case 'CHAT_MESSAGE':
+      return NotificationType.chatMessage;
     default:
       throw ArgumentError('Unknown notification type: $code');
   }

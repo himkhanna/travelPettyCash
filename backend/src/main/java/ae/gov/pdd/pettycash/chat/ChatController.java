@@ -35,6 +35,26 @@ public class ChatController {
         return service.listForTrip(tripId, caller);
     }
 
+    /**
+     * Returns the trip's "team chat" thread — one canonical group per trip
+     * with leader + all members as participants. Created lazily so existing
+     * trips work without a backfill migration.
+     */
+    @GetMapping("/trips/{tripId}/chat/team")
+    public ChatThreadDto teamThread(
+        @PathVariable UUID tripId,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        return service.ensureAndGetTeamThread(tripId, caller);
+    }
+
+    @GetMapping("/chat/threads")
+    public List<ChatThreadDto> listThreadsForUser(
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        return service.listForUser(caller);
+    }
+
     @GetMapping("/chat/threads/{threadId}/messages")
     public List<ChatMessageDto> listMessages(
         @PathVariable UUID threadId,

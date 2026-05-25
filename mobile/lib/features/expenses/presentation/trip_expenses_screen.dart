@@ -265,6 +265,8 @@ class _ExpenseRow extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       store.userById(expense.userId).displayName.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: AppColors.goldOlive,
                         letterSpacing: 1.2,

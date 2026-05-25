@@ -79,7 +79,7 @@ public class SecurityConfig {
         CorsConfiguration cors = new CorsConfiguration();
         // Closed by default — explicit allowlist per CLAUDE.md §12.
         cors.setAllowedOrigins(corsAllowedOrigins);
-        cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
         cors.setAllowCredentials(true);
         cors.setMaxAge(3600L);

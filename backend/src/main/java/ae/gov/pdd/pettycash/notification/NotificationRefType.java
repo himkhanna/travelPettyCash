@@ -5,4 +5,4 @@ package ae.gov.pdd.pettycash.notification;
  * an allocation / transfer needs to flip every notification that pointed at
  * the same row to {@link NotificationState#ACTED}.
  */
-public enum NotificationRefType { ALLOCATION, TRANSFER, TRIP, EXPENSE }
+public enum NotificationRefType { ALLOCATION, TRANSFER, TRIP, EXPENSE, CHAT_THREAD }

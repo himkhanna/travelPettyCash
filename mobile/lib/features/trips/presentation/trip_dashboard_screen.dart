@@ -11,6 +11,8 @@ import '../../../shared/widgets/sync_status_banner.dart';
 import '../../../shared/widgets/trip_bottom_nav.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
+import '../../chat/application/chat_providers.dart';
+import '../../chat/domain/chat.dart';
 import '../../expenses/application/expenses_providers.dart';
 import '../../expenses/domain/expense.dart';
 import '../../funds/application/funds_providers.dart';
@@ -107,6 +109,13 @@ class TripDashboardScreen extends ConsumerWidget {
                     SliverToBoxAdapter(
                       child: _AllocateActionRow(tripId: tripId),
                     ),
+                  // Team chat tile — every trip has a canonical group thread
+                  // containing the leader + every member. Tap routes straight
+                  // into it; the thread is auto-created server-side on first
+                  // access if it doesn't exist yet.
+                  SliverToBoxAdapter(
+                    child: _TeamChatTile(tripId: tripId),
+                  ),
                   // Donut + categories
                   SliverToBoxAdapter(
                     child: _BreakdownCard(
@@ -799,12 +808,12 @@ class _TeamRow extends StatelessWidget {
               children: <Widget>[
                 Text(
                   user.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.geist(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 6),
                 ClipRRect(
@@ -1161,5 +1170,133 @@ String _dateRange(Trip t) {
     return '${fmt.format(t.createdAt)} – ${fmt.format(t.closedAt!)}';
   }
   return 'From ${fmt.format(t.createdAt)}';
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Team Chat tile
+// ────────────────────────────────────────────────────────────────────
+
+/// Prominent entry point into the trip's "team chat" group thread —
+/// leader + every member in one place. Tap fetches (or creates) the
+/// thread server-side, then routes to the message view.
+class _TeamChatTile extends ConsumerWidget {
+  const _TeamChatTile({required this.tripId});
+  final String tripId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<ChatThread> async = ref.watch(teamChatProvider(tripId));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: Material(
+        color: AppColors.brand,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _open(context, async),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.bgCard.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.forum_outlined,
+                    color: AppColors.bgCard,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        'Team chat',
+                        style: AppTypography.geist(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.bgCard,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        async.maybeWhen(
+                          data: (ChatThread t) {
+                            final int n = t.participantIds.length;
+                            final String members =
+                                '$n member${n == 1 ? '' : 's'}';
+                            if (t.unreadCount > 0) {
+                              return '$members · ${t.unreadCount} unread';
+                            }
+                            return '$members · tap to open';
+                          },
+                          loading: () => 'Loading…',
+                          error: (Object e, _) =>
+                              'Tap to retry · ${e.toString().split('\n').first}',
+                          orElse: () => 'Tap to open',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.geist(
+                          fontSize: 11,
+                          color: AppColors.bgCard.withValues(alpha: 0.78),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (async.maybeWhen(
+                  data: (ChatThread t) => t.unreadCount > 0,
+                  orElse: () => false,
+                ))
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${async.valueOrNull?.unreadCount ?? 0}',
+                      style: const TextStyle(
+                        color: AppColors.brand,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                Icon(
+                  Icons.arrow_forward,
+                  color: AppColors.bgCard.withValues(alpha: 0.85),
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _open(BuildContext context, AsyncValue<ChatThread> async) {
+    async.whenOrNull(
+      data: (ChatThread t) =>
+          context.go('/m/trips/$tripId/chat/${t.id}'),
+      // While the future is still loading the user gets visual feedback
+      // from the "Loading…" subtitle; tapping again once it lands will
+      // navigate. Avoids the awkward "tile does nothing" period.
+    );
+  }
 }
 

@@ -76,6 +76,35 @@ class ReportController {
         return respond(out);
     }
 
+    /** Daily snapshot — same shape as trip-full but limited to one UTC day. */
+    @GetMapping("/trip/{tripId}/daily")
+    public ResponseEntity<ByteArrayResource> tripDailyReport(
+        @PathVariable UUID tripId,
+        @RequestParam("date") String dateIso,
+        @RequestParam(name = "format", defaultValue = "xlsx") String format,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        ReportService.Rendered out = service.tripDailyReport(
+            tripId, java.time.LocalDate.parse(dateIso), format, caller
+        );
+        return respond(out);
+    }
+
+    /** Mission-wide rollup XLSX — optional `date` for a one-day mission snapshot. */
+    @GetMapping("/mission/{missionId}")
+    public ResponseEntity<ByteArrayResource> missionReport(
+        @PathVariable UUID missionId,
+        @RequestParam(name = "date", required = false) String dateIso,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        ReportService.Rendered out = service.missionReport(
+            missionId,
+            dateIso == null ? null : java.time.LocalDate.parse(dateIso),
+            caller
+        );
+        return respond(out);
+    }
+
     private ResponseEntity<ByteArrayResource> respond(ReportService.Rendered r) {
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(r.contentType()))

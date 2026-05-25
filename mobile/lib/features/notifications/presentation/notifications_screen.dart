@@ -110,7 +110,7 @@ class _NotificationCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final DemoStore store = ref.read(demoStoreProvider);
     final bool unread = notification.state == NotificationState.unread;
-    final bool actionable =
+    final bool pendingAction =
         notification.actionable &&
         notification.state != NotificationState.acted;
 
@@ -118,25 +118,7 @@ class _NotificationCard extends ConsumerWidget {
       color: unread ? AppColors.cream : AppColors.surfaceCard,
       borderRadius: const BorderRadius.all(AppRadii.card),
       child: InkWell(
-        onTap: () async {
-          if (unread) {
-            await ref
-                .read(notificationsRepositoryProvider)
-                .markRead(notification.id);
-          }
-          // Deep-link an EXPENSE_QUERY mention to the expense detail
-          // so the recipient can read the full thread and reply inline.
-          if (notification.type == NotificationType.expenseQuery &&
-              context.mounted) {
-            final String? tripId =
-                notification.payload['tripId'] as String?;
-            final String? expenseId =
-                notification.payload['expenseId'] as String?;
-            if (tripId != null && expenseId != null) {
-              context.go('/m/trips/$tripId/expenses/$expenseId');
-            }
-          }
-        },
+        onTap: () => _handleTap(context, ref),
         borderRadius: const BorderRadius.all(AppRadii.card),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -150,6 +132,8 @@ class _NotificationCard extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       _timeLabel(notification.createdAt),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: AppColors.textSecondary,
                         letterSpacing: 1.2,
@@ -172,54 +156,28 @@ class _NotificationCard extends ConsumerWidget {
                 _body(store, notification),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              if (actionable) ...<Widget>[
-                const SizedBox(height: AppSpacing.md),
-                // Compact styles override the global theme's
-                // Size(double.infinity, 52) — otherwise DECLINE claims
-                // full-width inside this Row and pushes ACCEPT off-screen
-                // on the phone-frame viewport.
+              if (pendingAction) ...<Widget>[
+                const SizedBox(height: AppSpacing.sm),
+                // Notifications are display-only. Accept / Decline lives on
+                // the trip dashboard's pending-funds banner — single source
+                // of truth, no chance of a stale Accept button.
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: <Widget>[
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: AppColors.outflow,
-                        side: BorderSide(
-                          color: AppColors.outflow.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      onPressed: () => _respond(
-                        context,
-                        ref,
-                        NotificationAction.decline,
-                      ),
-                      child: const Text(
-                        'DECLINE',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
+                    const Icon(
+                      Icons.arrow_forward,
+                      size: 14,
+                      color: AppColors.brand,
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.success,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      onPressed: () =>
-                          _respond(context, ref, NotificationAction.accept),
-                      child: const Text(
-                        'ACCEPT',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        _ctaHint(notification),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.brand,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
                         ),
                       ),
                     ),
@@ -233,27 +191,61 @@ class _NotificationCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _respond(
-    BuildContext context,
-    WidgetRef ref,
-    NotificationAction action,
-  ) async {
-    try {
+  /// Tap routes the user to wherever they can actually do something:
+  ///  - EXPENSE_QUERY → the expense detail (reply in the thread)
+  ///  - Anything carrying a tripId → that trip's dashboard, where the
+  ///    PendingAllocationsBanner is the single owner of accept/decline.
+  /// Marking-read happens regardless so the inbox count goes down.
+  Future<void> _handleTap(BuildContext context, WidgetRef ref) async {
+    final bool wasUnread = notification.state == NotificationState.unread;
+    if (wasUnread) {
       await ref
           .read(notificationsRepositoryProvider)
-          .act(notificationId: notification.id, action: action);
-      // Balance changes for accepted transfers — invalidate the relevant
-      // dashboard scope so it picks up the move.
+          .markRead(notification.id);
+      // Refresh the inbox so the unread dot disappears immediately rather
+      // than waiting on the next 5s poll.
+      ref.invalidate(myNotificationsProvider);
+    }
+    if (!context.mounted) return;
+
+    if (notification.type == NotificationType.expenseQuery) {
       final String? tripId = notification.payload['tripId'] as String?;
-      if (tripId != null) {
-        ref.invalidate(tripBalancesProvider);
+      final String? expenseId = notification.payload['expenseId'] as String?;
+      if (tripId != null && expenseId != null) {
+        context.go('/m/trips/$tripId/expenses/$expenseId');
+        return;
       }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+
+    if (notification.type == NotificationType.chatMessage) {
+      final String? tripId = notification.payload['tripId'] as String?;
+      final String? threadId = notification.payload['threadId'] as String?;
+      if (tripId != null && threadId != null) {
+        context.go('/m/trips/$tripId/chat/$threadId');
+        return;
       }
+    }
+
+    final String? tripId = notification.payload['tripId'] as String?;
+    if (tripId != null) {
+      context.go('/m/trips/$tripId/dashboard');
+    }
+  }
+
+  /// Inline hint shown beneath the body for notifications that still need
+  /// the user to do something. Keeps the card display-only while pointing
+  /// them at the right surface to act.
+  String _ctaHint(AppNotification n) {
+    switch (n.type) {
+      case NotificationType.allocationReceived:
+      case NotificationType.transferReceived:
+        return 'Open trip to accept';
+      case NotificationType.expenseQuery:
+        return 'Open expense to reply';
+      case NotificationType.chatMessage:
+        return 'Open chat to reply';
+      default:
+        return 'Open trip';
     }
   }
 
@@ -298,6 +290,27 @@ class _NotificationCard extends ConsumerWidget {
         final String tripName = (n.payload['tripName'] as String?) ?? 'a trip';
         return '$byName mentioned you on an expense in $tripName: '
             '"$text"';
+      case NotificationType.reportReady:
+        final String tripName =
+            (n.payload['tripName'] as String?) ?? 'a trip';
+        final String reason =
+            (n.payload['reason'] as String?) ?? 'manual';
+        if (reason == 'trip-closed') {
+          return 'Trip closed — $tripName · open the trip to generate '
+              'and sign the finance letter.';
+        }
+        return 'Report ready for $tripName · open the trip to download.';
+      case NotificationType.chatMessage:
+        final String byName = _userName(
+          store,
+          n.payload['senderId'] as String?,
+        );
+        final String tripName =
+            (n.payload['tripName'] as String?) ?? 'a trip';
+        final String snip = (n.payload['snippet'] as String?) ?? '';
+        return snip.isEmpty
+            ? '$byName sent a message in $tripName.'
+            : '$byName in $tripName: "$snip"';
     }
   }
 
@@ -373,6 +386,16 @@ class _TypeBadge extends StatelessWidget {
         color: AppColors.warning,
         icon: Icons.help_outline,
         label: 'QUERY',
+      ),
+      NotificationType.reportReady => (
+        color: AppColors.brand,
+        icon: Icons.description_outlined,
+        label: 'REPORT',
+      ),
+      NotificationType.chatMessage => (
+        color: AppColors.brandBrown,
+        icon: Icons.chat_bubble_outline,
+        label: 'CHAT',
       ),
     };
     return Container(

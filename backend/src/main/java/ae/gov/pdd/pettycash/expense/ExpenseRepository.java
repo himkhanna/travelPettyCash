@@ -4,6 +4,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -14,6 +16,42 @@ public interface ExpenseRepository
     extends JpaRepository<Expense, UUID>, JpaSpecificationExecutor<Expense> {
 
     List<Expense> findByTripIdAndDeletedAtIsNullOrderByOccurredAtDesc(UUID tripId);
+
+    /**
+     * All non-deleted expenses without an attached receipt. Backs the
+     * dashboard's "Receipt triage" surface — admin reviews each, uploads on
+     * behalf of the member or pings them. Limited via the controller because
+     * Spring Data doesn't bind limit into derived queries.
+     */
+    List<Expense> findByReceiptObjectKeyIsNullAndDeletedAtIsNullOrderByOccurredAtDesc();
+
+    /**
+     * Per-day spend totals in a single currency, between [from, to]
+     * inclusive. Joins through trips to filter by currency since expenses
+     * store amount in minor units without their own currency column (the
+     * trip owns the currency per CLAUDE.md §5). Native query for the
+     * date_trunc + GROUP BY shape — JPQL can't express that cleanly across
+     * dialects.
+     *
+     * Returns rows of {@code [java.sql.Date day, BigInteger amountMinor]}.
+     */
+    @Query(value = """
+        SELECT date_trunc('day', e.occurred_at)::date AS day,
+               COALESCE(SUM(e.amount_minor), 0)       AS total_minor
+          FROM expenses e
+          JOIN trips    t ON t.id = e.trip_id
+         WHERE e.deleted_at IS NULL
+           AND e.occurred_at >= :fromTs
+           AND e.occurred_at <= :toTs
+           AND t.currency    =  :currency
+         GROUP BY day
+         ORDER BY day
+        """, nativeQuery = true)
+    List<Object[]> sumByDayInCurrency(
+        @Param("fromTs") Instant fromTs,
+        @Param("toTs") Instant toTs,
+        @Param("currency") String currency
+    );
 
     /**
      * Filterable trip-expense listing. Each nullable arg is "no filter on

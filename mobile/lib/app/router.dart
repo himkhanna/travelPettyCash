@@ -5,6 +5,13 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/audit/presentation/cms_audit_screen.dart';
 import '../features/auth/presentation/wrong_portal_screen.dart';
 import '../features/cms/presentation/cms_dashboard.dart';
+import '../features/cms/presentation/cms_expenses_screen.dart';
+import '../features/cms/presentation/cms_missions_screen.dart';
+import '../features/cms/presentation/cms_expense_detail_screen.dart';
+import '../features/cms/presentation/cms_reports_screen.dart';
+import '../features/cms/presentation/cms_settings_screen.dart';
+import '../features/cms/presentation/cms_trip_detail_screen.dart';
+import '../features/cms/presentation/cms_trips_screen.dart';
 import '../features/cms/presentation/dg_dashboard.dart';
 import '../features/cms/presentation/users_screen.dart';
 import '../features/expenses/presentation/add_expense_screen.dart';
@@ -23,6 +30,8 @@ import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/trips/presentation/trip_dashboard_screen.dart';
 import '../features/trips/presentation/trip_profile_screen.dart';
 import '../features/trips/presentation/trips_home_screen.dart';
+import '../features/trips/presentation/trips_list_screen.dart';
+import '../features/cms/presentation/cms_mission_detail_screen.dart';
 import '../shared/widgets/phone_viewport.dart';
 
 GoRouter buildAppRouter() {
@@ -74,6 +83,10 @@ GoRouter buildAppRouter() {
           GoRoute(
             path: '/m/trips',
             builder: (_, __) => const TripsHomeScreen(),
+          ),
+          GoRoute(
+            path: '/m/all-trips',
+            builder: (_, __) => const TripsListScreen(),
           ),
           GoRoute(
             path: '/m/trips/:id/dashboard',
@@ -152,14 +165,67 @@ GoRouter buildAppRouter() {
             path: '/m/notifications',
             builder: (_, __) => const NotificationsScreen(),
           ),
+          // Global chat list — every thread for the current user across all
+          // trips. Reached from the Profile menu; trip-scoped chat still
+          // lives under /m/trips/:id/chat.
+          GoRoute(
+            path: '/m/chat',
+            builder: (_, __) => const ChatsListScreen(),
+          ),
         ],
       ),
 
       // CMS — full-width Flutter Web UI for Admin / Super Admin.
       GoRoute(path: '/cms', builder: (_, __) => const CmsDashboard()),
+      GoRoute(
+        path: '/cms/trips',
+        builder: (_, __) => const CmsTripsScreen(),
+      ),
+      GoRoute(
+        path: '/cms/trips/:id',
+        builder: (BuildContext context, GoRouterState state) =>
+            CmsTripDetailScreen(tripId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/cms/missions',
+        builder: (_, __) => const CmsMissionsScreen(),
+      ),
+      GoRoute(
+        path: '/cms/missions/:id',
+        builder: (BuildContext context, GoRouterState state) =>
+            CmsMissionDetailScreen(
+              missionId: state.pathParameters['id']!,
+            ),
+      ),
+      GoRoute(
+        path: '/cms/expenses',
+        builder: (_, __) => const CmsExpensesScreen(),
+      ),
+      GoRoute(
+        path: '/cms/expenses/:id',
+        builder: (BuildContext context, GoRouterState state) =>
+            CmsExpenseDetailScreen(
+              expenseId: state.pathParameters['id']!,
+            ),
+      ),
       GoRoute(path: '/cms/users', builder: (_, __) => const CmsUsersScreen()),
       GoRoute(path: '/cms/audit', builder: (_, __) => const CmsAuditScreen()),
+      // /cms/receipts was a standalone "missing-receipt" view. The Expenses
+      // screen now carries the same data via its "Missing receipt" filter
+      // chip, so this URL redirects there with the filter pre-selected.
+      GoRoute(
+        path: '/cms/receipts',
+        redirect: (_, __) => '/cms/expenses?missingReceipt=1',
+      ),
       GoRoute(path: '/cms/dg', builder: (_, __) => const DgDashboard()),
+      GoRoute(
+        path: '/cms/settings',
+        builder: (_, __) => const CmsSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/cms/reports',
+        builder: (_, __) => const CmsReportsScreen(),
+      ),
     ],
     errorBuilder: (_, GoRouterState state) => Scaffold(
       body: Center(child: Text('Route not found: ${state.matchedLocation}')),
