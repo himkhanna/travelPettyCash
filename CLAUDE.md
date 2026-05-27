@@ -527,6 +527,59 @@ time hunting:
 - **CMS signout** routes to `/portal`, mobile signout routes to
   `/app`. `confirmAndSignOut` takes a `redirect` argument now.
 
+### 2026-05-26 — offline gating
+
+- New `offline_status_provider` ORs the Demo Controls
+  "Offline mode" toggle with `connectivity_plus`'s native signal.
+- New `OfflineScreen` mounted at `/m/offline`. GoRouter's
+  `redirect` sends every `/m/*` path there while offline, except
+  Add Expense (`/m/trips/:id/expenses/new`) and the auth surfaces.
+- Refresh listenable bridges the offline status into the router so
+  toggling offline mid-session bounces the user immediately.
+- Add Expense submit branches on offline state: shows "Saved as
+  draft — will sync when you are back online." and routes back to
+  `/m/offline` (trip dashboard is gated). The row sits in the
+  existing Drift / fake-repo queue and lands on the server when
+  online.
+
+### 2026-05-27 — iPhone-over-HTTP-LAN compatibility
+
+The first real-device demo on iPhone Safari uncovered three things
+the Flutter Web build needed to handle for a non-localhost,
+non-HTTPS LAN URL (`http://192.168.1.46:5173`):
+
+- **`WebTokenStore` for web auth**
+  (`mobile/lib/core/auth/token_store.dart`). `flutter_secure_storage_web`
+  uses `window.crypto.subtle`, which browsers gate to secure
+  contexts (HTTPS or `localhost`). Over plain-HTTP LAN, `subtle` is
+  `undefined`, and the bundle crashes on init with
+  `"undefined is not an object evaluating dart.global.crypto.subtle.generateKey"`.
+  `tokenStoreProvider` now returns a `shared_preferences`-backed
+  store on `kIsWeb`; native iOS/Android still use Keychain/Keystore
+  via `SecureTokenStore`. Trade-off: JWT sits in `localStorage` in
+  plaintext on the web build — same threat model as basically every
+  web app, and irrelevant once we ship over HTTPS or as a native
+  build. See the commit message for the threat-matrix breakdown.
+- **`connectivity_plus` skipped on web** in
+  `offline_status_provider`. Its web impl throws during init on
+  iOS Safari, which killed the whole bundle before the landing
+  could render. On `kIsWeb` we yield from the FakeConfig toggle
+  only; native builds keep the OS-level signal.
+- **CORS allowlist** extended in `application-local.yml` to include
+  `http://192.168.1.46:5173` and `:8080` so iPhone preflights pass.
+  (Production has its own allowlist; this is a local-dev concession.)
+
+Side fixes shipped the same morning:
+
+- Landing screen no longer overflows on a 390-px iPhone viewport —
+  inner Row of (title + Arabic) became a `Wrap`, and the URL pill
+  inside the entry card has `maxLines:1 + overflow:ellipsis +
+  softWrap:false`.
+- Hero balance card on Home: wrapped the amount in
+  `FittedBox(BoxFit.scaleDown)` so 7-digit totals shrink to fit
+  narrow phones; "X of Y" trailer switched from `Spacer + Text` to
+  `Expanded + Text(maxLines:1, ellipsis, textAlign:right)`.
+
 ### Identifier note
 
 Internal IDs remain opaque: Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash`. Rename is tracked separately (see "Still pending" → Identifier migration).
@@ -560,4 +613,4 @@ All four roles use `demo1234` as the password.
 
 ---
 
-*Last updated: 2026-05-25. Update this file in the same PR as any architectural change.*
+*Last updated: 2026-05-27. Update this file in the same PR as any architectural change.*

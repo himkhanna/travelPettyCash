@@ -135,7 +135,7 @@ Manual equivalents:
 # Postgres + MinIO
 docker compose -f ops/docker-compose.yml up -d postgres minio
 
-# Backend (Flyway V001..V009 runs on boot; seeders auto-populate demo data)
+# Backend (Flyway V001..V010 runs on boot; seeders auto-populate demo data)
 cd backend
 gradle bootRun
 
@@ -161,9 +161,44 @@ the Demo Controls bottom sheet:
 
 - Adjust artificial network **latency** (0–2000 ms) — exercise loading states.
 - Set a **failure injection rate** for write calls — exercise error states.
-- Toggle **offline mode** — writes queue locally, sync resumes when you
-  toggle back on.
+- Toggle **offline mode** — every non-Add-Expense mobile route swaps to
+  the offline screen; Add Expense submits queue as drafts and sync when
+  you toggle back online. Real OS-level connectivity loss triggers the
+  same gate on native iOS/Android (via `connectivity_plus`).
 - Switch the demo **role** without returning to the landing page.
+
+### Testing on a real iPhone over Wi-Fi
+
+1. Both devices on the same Wi-Fi. Find the laptop LAN IP via
+   `ipconfig` (e.g. `192.168.1.46`).
+2. Allow the LAN-bound origin in `application-local.yml` if your IP
+   differs from the committed `192.168.1.46` — `pdd.cors.allowed-origins`
+   already lists both `5173` and `8080` for that host. Restart backend
+   if you change this.
+3. Allow Windows Firewall inbound for ports `5173` and `8080` (Private
+   profile is enough on a home network).
+4. Run Flutter bound to all interfaces with the LAN IP baked into the
+   API base:
+   ```powershell
+   flutter run -d web-server --web-port 5173 --web-hostname 0.0.0.0 `
+     --dart-define=PDD_API_BASE=http://192.168.1.46:8080
+   ```
+5. On iPhone Safari, open `http://192.168.1.46:5173/app` and sign in.
+   Share → Add to Home Screen for a fullscreen launcher icon.
+
+Notes:
+
+- **JWT storage is `localStorage` on web**, not `flutter_secure_storage`.
+  Browsers gate `window.crypto.subtle` (which secure-storage uses) to
+  HTTPS/`localhost` origins, so a plain-HTTP LAN URL would otherwise
+  crash the bundle on init. Production deployments serve over HTTPS so
+  `SecureTokenStore` kicks back in.
+- Native iOS install (TestFlight) needs a Mac + Apple Developer
+  account; on Windows alone the PWA-via-Safari path is the only option.
+- If admin-elevation for the firewall rule is locked down on your
+  laptop, **ngrok** (`ngrok http 8080`) gives the iPhone an HTTPS
+  tunnel to the backend without any host change — pass the ngrok URL
+  via `--dart-define=PDD_API_BASE=https://abc.ngrok-free.app`.
 
 ## Demo-day cold-start
 
