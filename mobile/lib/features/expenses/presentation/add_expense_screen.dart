@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/connectivity/offline_status_provider.dart';
 import '../../../core/money/money.dart';
 import '../../../shared/widgets/pdd_primitives.dart';
 import '../../../shared/widgets/sync_status_banner.dart';
@@ -392,11 +393,22 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         tripBalancesProvider((tripId: trip.id, scope: BalanceScope.me)),
       );
       if (!mounted) return;
+      // When the device is offline the fake/Drift repo writes the row
+      // to the local queue with `pendingSync=true`. Call that out
+      // explicitly so the user understands the draft state, and route
+      // back to the offline screen (the trip dashboard is gated).
+      final bool offline = ref.read(isOfflineProvider);
       showPddToast(
         context,
-        'Expense recorded — ${_fmt(amount)} ${trip.currency}',
+        offline
+            ? 'Saved as draft — will sync when you are back online.'
+            : 'Expense recorded — ${_fmt(amount)} ${trip.currency}',
       );
-      context.go('/m/trips/${trip.id}/dashboard');
+      if (offline) {
+        context.go('/m/offline');
+      } else {
+        context.go('/m/trips/${trip.id}/dashboard');
+      }
     } catch (err) {
       if (mounted) showPddToast(context, 'Submission failed: $err');
     } finally {

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/connectivity/offline_screen.dart';
+import '../core/connectivity/offline_status_provider.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/audit/presentation/cms_audit_screen.dart';
 import '../features/auth/presentation/wrong_portal_screen.dart';
@@ -34,10 +37,70 @@ import '../features/trips/presentation/trips_list_screen.dart';
 import '../features/cms/presentation/cms_mission_detail_screen.dart';
 import '../shared/widgets/phone_viewport.dart';
 
-GoRouter buildAppRouter() {
+/// Listens to [offlineStatusProvider] so GoRouter can re-evaluate its
+/// redirect when the device goes online / offline (or the Demo Controls
+/// toggle flips). Without this the redirect would only fire on
+/// navigation, so a user already sitting on /m/trips when the network
+/// dies would just see stale cached data instead of the offline screen.
+class _RouterRefreshNotifier extends ChangeNotifier {
+  void poke() => notifyListeners();
+}
+
+final _RouterRefreshNotifier _routerRefreshNotifier =
+    _RouterRefreshNotifier();
+
+/// Public hook the PddApp widget uses to plumb the offline-status
+/// stream into GoRouter. Called from `app.dart`'s build.
+void wireOfflineRefresh(WidgetRef ref) {
+  ref.listen<AsyncValue<bool>>(
+    offlineStatusProvider,
+    (_, __) => _routerRefreshNotifier.poke(),
+  );
+}
+
+/// Path patterns that stay accessible even while offline:
+///   - `/`, `/login`, `/portal`, `/app`, `/wrong-portal` — auth surfaces
+///   - `/m/offline` itself
+///   - `/m/trips/:id/expenses/new` — Add Expense queues drafts locally
+///   - every `/cms/...` route — CMS is admin-only and runs in the same
+///     bundle but on a different network context; gating it here would
+///     be aggressive.
+bool _routeAllowedOffline(String location) {
+  if (location == '/' ||
+      location == '/login' ||
+      location.startsWith('/portal') ||
+      location.startsWith('/app') ||
+      location.startsWith('/wrong-portal')) {
+    return true;
+  }
+  if (location.startsWith('/m/offline')) return true;
+  if (location.startsWith('/cms/') || location == '/cms') return true;
+  // Add Expense — match `/m/trips/:tripId/expenses/new` with optional
+  // trailing query.
+  if (RegExp(r'^/m/trips/[^/]+/expenses/new(\?.*)?$')
+      .hasMatch(location)) {
+    return true;
+  }
+  return false;
+}
+
+GoRouter buildAppRouter(WidgetRef ref) {
   return GoRouter(
     initialLocation: '/',
     debugLogDiagnostics: false,
+    refreshListenable: _routerRefreshNotifier,
+    redirect: (BuildContext context, GoRouterState state) {
+      // Skip the offline check on routes that explicitly stay
+      // accessible. This needs to be cheap because GoRouter calls it
+      // on every navigation.
+      final String loc = state.uri.toString();
+      if (_routeAllowedOffline(loc)) return null;
+      // Only mobile (`/m/...`) routes are gated. CMS already exits via
+      // the allow-list above.
+      if (!loc.startsWith('/m/')) return null;
+      final bool offline = ref.read(isOfflineProvider);
+      return offline ? '/m/offline' : null;
+    },
     routes: <RouteBase>[
       GoRoute(path: '/', builder: (_, __) => const LandingScreen()),
 
@@ -171,6 +234,13 @@ GoRouter buildAppRouter() {
           GoRoute(
             path: '/m/chat',
             builder: (_, __) => const ChatsListScreen(),
+          ),
+          // Offline destination — every gated /m route redirects here
+          // when isOfflineProvider returns true. Stays inside the
+          // PhoneViewport so it reads as part of the same shell.
+          GoRoute(
+            path: '/m/offline',
+            builder: (_, __) => const OfflineScreen(),
           ),
         ],
       ),

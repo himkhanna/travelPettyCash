@@ -874,27 +874,37 @@ class _MultiCurrencyTotal extends StatelessWidget {
       );
     if (entries.length == 1) {
       final MapEntry<String, Money> e = entries.first;
-      return RichText(
-        text: TextSpan(
-          children: <InlineSpan>[
-            TextSpan(
-              text: _amountOnly(e.value),
-              style: AppTypography.geistMono(
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: AppColors.bgCard,
-                letterSpacing: -0.02 * 28,
-              ),
+      // FittedBox so a long amount (e.g. SAR 1,234,567.89) shrinks
+      // gracefully on a narrow iPhone instead of overflowing the
+      // gradient card right edge.
+      return SizedBox(
+        width: double.infinity,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: RichText(
+            text: TextSpan(
+              children: <InlineSpan>[
+                TextSpan(
+                  text: _amountOnly(e.value),
+                  style: AppTypography.geistMono(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.bgCard,
+                    letterSpacing: -0.02 * 28,
+                  ),
+                ),
+                TextSpan(
+                  text: '  ${e.key}',
+                  style: AppTypography.geist(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.bgCard.withValues(alpha: 0.75),
+                  ),
+                ),
+              ],
             ),
-            TextSpan(
-              text: '  ${e.key}',
-              style: AppTypography.geist(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.bgCard.withValues(alpha: 0.75),
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -905,27 +915,31 @@ class _MultiCurrencyTotal extends StatelessWidget {
       spacing: 10,
       runSpacing: 4,
       children: <Widget>[
-        RichText(
-          text: TextSpan(
-            children: <InlineSpan>[
-              TextSpan(
-                text: _amountOnly(first.value),
-                style: AppTypography.geistMono(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.bgCard,
-                  letterSpacing: -0.02 * 26,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: RichText(
+            text: TextSpan(
+              children: <InlineSpan>[
+                TextSpan(
+                  text: _amountOnly(first.value),
+                  style: AppTypography.geistMono(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.bgCard,
+                    letterSpacing: -0.02 * 26,
+                  ),
                 ),
-              ),
-              TextSpan(
-                text: '  ${first.key}',
-                style: AppTypography.geist(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.bgCard.withValues(alpha: 0.75),
+                TextSpan(
+                  text: '  ${first.key}',
+                  style: AppTypography.geist(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.bgCard.withValues(alpha: 0.75),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         for (final MapEntry<String, Money> e in entries.skip(1))
@@ -983,13 +997,18 @@ class _HeroProgressLine extends StatelessWidget {
                   letterSpacing: 0.6,
                 ),
               ),
-              const Spacer(),
-              Text(
-                '${_amountOnly(spent)} of ${_amountOnly(total)}',
-                style: AppTypography.geistMono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.bgCard.withValues(alpha: 0.72),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_amountOnly(spent)} of ${_amountOnly(total)}',
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.geistMono(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.bgCard.withValues(alpha: 0.72),
+                  ),
                 ),
               ),
             ],

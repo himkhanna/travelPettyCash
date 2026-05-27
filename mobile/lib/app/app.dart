@@ -50,12 +50,15 @@ class PddApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final Locale? override = ref.watch(localePreferenceProvider);
+    // Plumb the offline-status stream into GoRouter so it re-evaluates
+    // its redirect when the device goes online/offline.
+    wireOfflineRefresh(ref);
     return MaterialApp.router(
       title: 'PDD Delegation Expenses',
       debugShowCheckedModeBanner: false,
       theme: buildPddTheme(),
       scrollBehavior: const _PddScrollBehavior(),
-      routerConfig: buildAppRouter(),
+      routerConfig: buildAppRouter(ref),
       locale: override,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
