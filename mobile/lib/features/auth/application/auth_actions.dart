@@ -42,21 +42,27 @@ Future<bool?> confirmAndSignOut(
     ),
   );
   if (ok != true) return ok;
-  await ref.read(authRepositoryProvider).logout();
-  // Navigate FIRST. Both `context.go` and `ref.invalidate` schedule
-  // work for the next frame, and Riverpod typically wins the race —
-  // which rebuilds the current /m/trips screen with a null user
-  // before GoRouter unmounts it, leaving the URL stuck at /m/trips.
-  // Defer the invalidate to a post-frame callback so it only fires
-  // after the new route (LoginScreen at /app) has rendered.
-  if (context.mounted) {
-    context.go(redirect);
+  // Always navigate, even if the server-side logout fails. The local
+  // token store and provider cache are still wiped in the finally
+  // block, so the user is functionally signed out regardless. The
+  // earlier code awaited the network call first — when CORS, a 401,
+  // or a flaky LAN connection threw, the await aborted and
+  // context.go never ran, leaving the user stuck on /m/trips.
+  try {
+    await ref.read(authRepositoryProvider).logout();
+  } catch (_) {
+    // Best-effort: token revocation on the server failed but we're
+    // signing out locally regardless. Surfacing the error would
+    // require keeping the user on the screen — that's worse UX.
   }
+  if (context.mounted) {
+    GoRouter.of(context).go(redirect);
+  }
+  // Defer invalidate to a post-frame callback so it only fires after
+  // the new route (LoginScreen at /app) has rendered. Otherwise
+  // Riverpod's rebuild can race the GoRouter unmount and the home
+  // screen re-renders with a null user.
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    // Drop the cached User so any inflight watcher sees null;
-    // downstream providers (trips, notifications, balances) re-fetch
-    // and short-circuit when the user comes back as null. Safe to
-    // call from a callback — Riverpod tolerates async invalidate.
     ref.invalidate(currentUserProvider);
   });
   return true;

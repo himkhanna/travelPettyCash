@@ -130,7 +130,6 @@ class TripsHomeScreen extends ConsumerWidget {
                       activeCount: active.length,
                       meId: me.id,
                       activeTrips: active,
-                      unread: unreadCount,
                     ),
                   // Pending-funds banner — surfaces every pending allocation
                   // / transfer addressed to this user across all trips so
@@ -1042,12 +1041,10 @@ class _QuickStatsStrip extends ConsumerWidget {
     required this.activeCount,
     required this.meId,
     required this.activeTrips,
-    required this.unread,
   });
   final int activeCount;
   final String meId;
   final List<Trip> activeTrips;
-  final int unread;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1115,16 +1112,9 @@ class _QuickStatsStrip extends ConsumerWidget {
               onTap: () => GoRouter.of(context).go('/m/chat'),
             ),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _StatTile(
-              icon: Icons.notifications_none_outlined,
-              label: 'Unread',
-              value: '$unread',
-              accent: unread > 0 ? AppColors.red : AppColors.ink3,
-              onTap: () => GoRouter.of(context).go('/m/notifications'),
-            ),
-          ),
+          // "Unread" tile removed — duplicated the chat badge once chat
+          // notifications were the bulk of inbox traffic, and the bell
+          // icon in the top bar already shows the same count.
         ],
       ),
     );

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../core/connectivity/offline_screen.dart';
 import '../core/connectivity/offline_status_provider.dart';
+import '../features/auth/application/auth_providers.dart';
+import '../features/auth/domain/user.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/audit/presentation/cms_audit_screen.dart';
 import '../features/auth/presentation/wrong_portal_screen.dart';
@@ -50,10 +52,17 @@ final _RouterRefreshNotifier _routerRefreshNotifier =
     _RouterRefreshNotifier();
 
 /// Public hook the PddApp widget uses to plumb the offline-status
-/// stream into GoRouter. Called from `app.dart`'s build.
+/// stream + the current-user stream into GoRouter. Called from
+/// `app.dart`'s build. Both signals re-evaluate the redirect: the
+/// offline one for connectivity gating, the auth one so logout
+/// bounces /m/* routes to /app even if the caller forgot to navigate.
 void wireOfflineRefresh(WidgetRef ref) {
   ref.listen<AsyncValue<bool>>(
     offlineStatusProvider,
+    (_, __) => _routerRefreshNotifier.poke(),
+  );
+  ref.listen<AsyncValue<User?>>(
+    currentUserProvider,
     (_, __) => _routerRefreshNotifier.poke(),
   );
 }
@@ -90,14 +99,20 @@ GoRouter buildAppRouter(WidgetRef ref) {
     debugLogDiagnostics: false,
     refreshListenable: _routerRefreshNotifier,
     redirect: (BuildContext context, GoRouterState state) {
-      // Skip the offline check on routes that explicitly stay
-      // accessible. This needs to be cheap because GoRouter calls it
-      // on every navigation.
       final String loc = state.uri.toString();
       if (_routeAllowedOffline(loc)) return null;
       // Only mobile (`/m/...`) routes are gated. CMS already exits via
       // the allow-list above.
       if (!loc.startsWith('/m/')) return null;
+      // Auth gate — if currentUserProvider has settled and we have no
+      // user, bounce to /app. Catches the case where the logout
+      // helper's context.go didn't fire (race or thrown exception)
+      // and the user would otherwise sit on a /m/* page with no user.
+      final AsyncValue<User?> userAsync = ref.read(currentUserProvider);
+      if (userAsync is AsyncData<User?> && userAsync.value == null) {
+        return '/app';
+      }
+      // Offline gate.
       final bool offline = ref.read(isOfflineProvider);
       return offline ? '/m/offline' : null;
     },
