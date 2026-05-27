@@ -11,6 +11,8 @@ import '../../../shared/widgets/pdd_primitives.dart';
 import '../../auth/application/auth_actions.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
+import '../../chat/application/chat_providers.dart';
+import '../../chat/domain/chat.dart';
 import '../../funds/application/funds_providers.dart';
 import '../../funds/domain/funding.dart';
 import '../../notifications/application/notifications_providers.dart';
@@ -1031,8 +1033,10 @@ class _HeroProgressLine extends StatelessWidget {
   }
 }
 
-/// Three-tile horizontal strip with at-a-glance counters under the hero
-/// card: Active trips, Pending acceptances, Unread inbox.
+/// Four-tile horizontal strip with at-a-glance counters under the hero
+/// card: Active trips, Pending acceptances, Chats with unread, Unread
+/// inbox. Each tile is tappable and routes to the corresponding screen
+/// so Home doubles as a navigation hub.
 class _QuickStatsStrip extends ConsumerWidget {
   const _QuickStatsStrip({
     required this.activeCount,
@@ -1066,6 +1070,15 @@ class _QuickStatsStrip extends ConsumerWidget {
             orElse: () => 0,
           );
     }
+    // Sum of per-thread unread badges across every chat the user is in.
+    // allChatsProvider polls every 5s so this stays fresh as peers post.
+    final int chatUnread = ref.watch(allChatsProvider).maybeWhen<int>(
+          data: (List<ChatThread> threads) => threads.fold<int>(
+            0,
+            (int acc, ChatThread t) => acc + t.unreadCount,
+          ),
+          orElse: () => 0,
+        );
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Row(
@@ -1076,24 +1089,40 @@ class _QuickStatsStrip extends ConsumerWidget {
               label: 'Active',
               value: '$activeCount',
               accent: AppColors.brand,
+              onTap: () => GoRouter.of(context).go('/m/all-trips'),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
             child: _StatTile(
               icon: Icons.hourglass_top_outlined,
               label: 'Pending',
               value: '$pending',
               accent: pending > 0 ? AppColors.amber : AppColors.ink3,
+              onTap: activeTrips.isEmpty
+                  ? null
+                  : () => GoRouter.of(context)
+                      .go('/m/trips/${activeTrips.first.id}/dashboard'),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _StatTile(
+              icon: Icons.chat_bubble_outline,
+              label: 'Chats',
+              value: '$chatUnread',
+              accent: chatUnread > 0 ? AppColors.brand : AppColors.ink3,
+              onTap: () => GoRouter.of(context).go('/m/chat'),
+            ),
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: _StatTile(
               icon: Icons.notifications_none_outlined,
               label: 'Unread',
               value: '$unread',
               accent: unread > 0 ? AppColors.red : AppColors.ink3,
+              onTap: () => GoRouter.of(context).go('/m/notifications'),
             ),
           ),
         ],
@@ -1108,14 +1137,30 @@ class _StatTile extends StatelessWidget {
     required this.label,
     required this.value,
     required this.accent,
+    this.onTap,
   });
   final IconData icon;
   final String label;
   final String value;
   final Color accent;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final Widget body = _content();
+    if (onTap == null) return body;
+    return Material(
+      color: AppColors.bgCard,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: body,
+      ),
+    );
+  }
+
+  Widget _content() {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       decoration: BoxDecoration(

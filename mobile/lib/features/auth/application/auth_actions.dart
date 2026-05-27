@@ -43,16 +43,21 @@ Future<bool?> confirmAndSignOut(
   );
   if (ok != true) return ok;
   await ref.read(authRepositoryProvider).logout();
-  // Navigate FIRST, then invalidate. Reversed order rebuilt the
-  // current screen with a null User before the route change landed,
-  // and widgets like PddAvatar / PddTopBar that read `user!` crashed
-  // the frame → user saw a blank /m/trips instead of /app.
+  // Navigate FIRST. Both `context.go` and `ref.invalidate` schedule
+  // work for the next frame, and Riverpod typically wins the race —
+  // which rebuilds the current /m/trips screen with a null user
+  // before GoRouter unmounts it, leaving the URL stuck at /m/trips.
+  // Defer the invalidate to a post-frame callback so it only fires
+  // after the new route (LoginScreen at /app) has rendered.
   if (context.mounted) {
     context.go(redirect);
   }
-  // Drop the cached User so any inflight watcher sees null; downstream
-  // providers (trips, notifications, balances) re-fetch and short-circuit
-  // when the user comes back as null.
-  ref.invalidate(currentUserProvider);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Drop the cached User so any inflight watcher sees null;
+    // downstream providers (trips, notifications, balances) re-fetch
+    // and short-circuit when the user comes back as null. Safe to
+    // call from a callback — Riverpod tolerates async invalidate.
+    ref.invalidate(currentUserProvider);
+  });
   return true;
 }
