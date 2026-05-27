@@ -14,8 +14,10 @@ pdd:
     # Flutter web dev server + Swagger UI on the same host. Both localhost
     # and 127.0.0.1 forms are listed because browsers treat them as
     # distinct origins for CORS, and the static-served demo bundle is
-    # opened at http://127.0.0.1:5173/ during local smoke runs.
-    allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000
+    # opened at http://127.0.0.1:5173/ during local smoke runs. The
+    # 192.168.1.46 entries cover the LAN-bound dev server used when
+    # testing on a real iPhone over Wi-Fi.
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://192.168.1.46:5173,http://192.168.1.46:8080
   storage:
     # docker-compose maps the MinIO API to host port 9100 to avoid collisions
     # with another local MinIO; container-to-container traffic uses minio:9000.

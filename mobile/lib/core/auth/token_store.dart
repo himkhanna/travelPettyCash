@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persistent home for the access + refresh tokens issued by `/auth/login`
 /// and `/auth/refresh`. Implementations:
@@ -84,6 +85,41 @@ class InMemoryTokenStore implements TokenStore {
   }
 }
 
+/// shared_preferences-backed store. Used on Flutter Web because
+/// flutter_secure_storage_web depends on `window.crypto.subtle`, which
+/// browsers only expose on secure contexts (HTTPS or localhost). When
+/// the page is served over a plain-HTTP LAN URL (e.g. an iPhone hitting
+/// `http://192.168.1.46:5173`), subtle is undefined and SecureTokenStore
+/// crashes the bundle at init. shared_preferences uses localStorage on
+/// web with no such restriction.
+class WebTokenStore implements TokenStore {
+  static const String _kAccess = 'pdd.auth.access';
+  static const String _kRefresh = 'pdd.auth.refresh';
+
+  @override
+  Future<AuthTokens?> read() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? access = prefs.getString(_kAccess);
+    final String? refresh = prefs.getString(_kRefresh);
+    if (access == null || refresh == null) return null;
+    return AuthTokens(accessToken: access, refreshToken: refresh);
+  }
+
+  @override
+  Future<void> write(AuthTokens tokens) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kAccess, tokens.accessToken);
+    await prefs.setString(_kRefresh, tokens.refreshToken);
+  }
+
+  @override
+  Future<void> clear() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kAccess);
+    await prefs.remove(_kRefresh);
+  }
+}
+
 final Provider<TokenStore> tokenStoreProvider = Provider<TokenStore>(
-  (Ref ref) => SecureTokenStore(),
+  (Ref ref) => kIsWeb ? WebTokenStore() : SecureTokenStore(),
 );

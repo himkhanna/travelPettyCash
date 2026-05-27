@@ -361,7 +361,13 @@ class _PortalEntry extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Row(
+                      // Wrap (not Row) so the Arabic translation flows
+                      // to a second line on narrow iPhone viewports
+                      // instead of pushing past the card's right edge.
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.sm,
+                        runSpacing: 2,
                         children: <Widget>[
                           Text(
                             title,
@@ -374,7 +380,6 @@ class _PortalEntry extends StatelessWidget {
                               letterSpacing: 1.2,
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
                           Text(
                             '· $arabic',
                             style: Theme.of(context)
@@ -395,6 +400,9 @@ class _PortalEntry extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
+                      // URL pill — clip with ellipsis so a long LAN
+                      // base URL (e.g. http://192.168.1.46:8080) can't
+                      // force the Column wider than its Expanded.
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.sm,
@@ -407,6 +415,9 @@ class _PortalEntry extends StatelessWidget {
                         ),
                         child: Text(
                           '$path · $baseUrl',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
                           style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 11,
