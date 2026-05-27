@@ -43,12 +43,16 @@ Future<bool?> confirmAndSignOut(
   );
   if (ok != true) return ok;
   await ref.read(authRepositoryProvider).logout();
+  // Navigate FIRST, then invalidate. Reversed order rebuilt the
+  // current screen with a null User before the route change landed,
+  // and widgets like PddAvatar / PddTopBar that read `user!` crashed
+  // the frame → user saw a blank /m/trips instead of /app.
+  if (context.mounted) {
+    context.go(redirect);
+  }
   // Drop the cached User so any inflight watcher sees null; downstream
   // providers (trips, notifications, balances) re-fetch and short-circuit
   // when the user comes back as null.
   ref.invalidate(currentUserProvider);
-  if (context.mounted) {
-    context.go(redirect);
-  }
   return true;
 }
