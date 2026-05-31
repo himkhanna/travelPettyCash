@@ -376,10 +376,10 @@ Field staff in foreign countries with patchy connectivity is the norm.
 ## 15. Out of scope (don't build this unless asked)
 
 - FX / multi-currency within a single trip.
-- OCR of receipt photos (deferred enhancement).
+- OCR of receipt photos (deferred enhancement). *Shipped in slice 9 ahead of the original plan — Tesseract via tess4j.*
 - Real-time presence / typing indicators in chat.
 - Push notifications via Firebase (sovereignty review pending).
-- A web app for end-users. The CMS for Admin and Super Admin **is** in scope but is a separate Flutter Web build sharing the same backend.
+- **Native iOS / Android builds for v1.** *Decided 2026-05-31:* the app ships as a Flutter Web PWA. Users install via Safari's Add-to-Home-Screen for a fullscreen launcher icon; the existing Flutter codebase still compiles to native, so v2 native is a release-engineering effort, not a code rewrite. Triggers that would flip us to native: (a) PDD IT mandating store-distributed apps for compliance, (b) push notifications becoming a hard requirement (iOS PWA push is anaemic), (c) biometric unlock becoming a launch blocker, (d) field staff hitting offline edge cases that IndexedDB + service worker can't cover.
 - Integration with Odoo / SAP / Oracle finance — under discussion but not contracted.
 
 ---
@@ -387,7 +387,7 @@ Field staff in foreign countries with patchy connectivity is the norm.
 ## 16. Open questions (track here until resolved)
 
 - [ ] UAE Pass integration: required for v1, or post-launch? **Owner:** PM.
-- [ ] Production identity provider: Spring Authorization Server self-hosted vs UAE Pass vs PDD AD. **Owner:** PDD IT.
+- [x] Production identity provider — **resolved 2026-05-31**: Smart Dubai's `smartdubaioidcp` OIDC provider (the Dubai-Gov shared IdP, internally called "DDA SSO"). Architecture in `docs/architecture/ADR-001-dda-sso.md`; Slice A (backend) and Slice B (mobile UI) shipped feature-flagged off. Demo-tenant credentials in hand; prod tenant URL + role-claim contract still to confirm with DDA.
 - [ ] Signature key custody: PDD HSM, Moro Hub HSM, or software keystore for pilot? **Owner:** Security.
 - [x] Final Arabic product name — **resolved 2026-05-17**: *صرفيات الوفود الرسمية* (PDD Delegation Expenses). Internal IDs (`pdd_petty_cash` package / DB / Java root) retained as opaque codes; planned rename migration tracked separately (§17).
 - [x] CMS UI: separate Flutter Web app vs slimmed-down view in mobile codebase — **resolved 2026-05-16**: same Flutter codebase, role-routed entry points `/portal` (admin/super-admin) and `/app` (member/leader), with a portal-mismatch guard that bounces wrong-role tokens.
@@ -622,6 +622,43 @@ so the failure surface is now small.
   shows the same count, and most inbox traffic is chat, so the
   tile read as duplicate. Strip is now Active / Pending / Chats,
   all tappable; `_StatTile` gained an optional `onTap`.
+
+### 2026-05-31 (afternoon) — Dubai-Gov SSO + PWA-only decision
+
+- **ADR-001** committed (`docs/architecture/ADR-001-dda-sso.md`).
+  Single source of truth for the Dubai-Gov OIDC integration. Closes
+  §16's "Production identity provider" question.
+- **Slice A — backend OIDC plumbing.** V011 migration adds
+  `users.external_id`. New `auth/sso` package: `DubaiGovProperties`,
+  `DubaiGovSsoService` (Auth Code + PKCE driven manually with
+  `RestClient`, no Spring OAuth2 client filter — keeps the API
+  stateless), `SsoController` with `/start`, `/callback`, `/exchange`,
+  `/logout-url`. `AuthService.mintForUser(User)` for password-less
+  token issuance. Feature-flagged off via
+  `PDD_SMARTDUBAI_ENABLED=false` (default); endpoints return 404 until
+  flipped. `backend/.env.example` documents the env vars;
+  `scripts/dev-up.ps1` sources `backend/.env` into the spawned backend
+  window.
+- **Slice B — mobile UI.** New `AuthConfigController` returns
+  `{localLogin, sso.dubaigov}` flags. Mobile `AuthConfig` repo +
+  `authConfigProvider` fetches once at app boot. LoginScreen renders
+  a "Sign in with Dubai Gov" button under the password form,
+  conditional on the probe. New routes `/app/auth/callback` +
+  `/portal/auth/callback` host `SsoCallbackScreen` which reads the
+  one-time `code` query param, POSTs to `/auth/sso/exchange`, stows
+  the JWTs via the existing `tokenStoreProvider`, invalidates
+  `currentUserProvider`, and routes home.
+- **Still to wire (Slice C–G).** Real native deep-link handler (only
+  matters when we add the native build), `/auth/config` honouring of
+  `localLogin.enabled` so the password form disappears in prod, real
+  PAdES-via-PKCS#11 hookup, slice + integration tests for the SSO
+  module, OIDC end_session_endpoint workaround using the SAML SLO URL
+  in the logout flow.
+- **PWA-only for v1.** §15 records this. Native (iOS / Android) goes
+  on the v2 roadmap; the existing Dart codebase compiles to both, so
+  it's a release-engineering exercise (Apple Developer account, Mac,
+  store reviews) rather than a code rewrite. Four triggers would
+  flip the decision; see §15.
 
 ### Identifier note
 

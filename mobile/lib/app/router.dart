@@ -7,6 +7,7 @@ import '../core/connectivity/offline_status_provider.dart';
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/domain/user.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/sso_callback_screen.dart';
 import '../features/audit/presentation/cms_audit_screen.dart';
 import '../features/auth/presentation/wrong_portal_screen.dart';
 import '../features/cms/presentation/cms_dashboard.dart';
@@ -135,6 +136,20 @@ GoRouter buildAppRouter(WidgetRef ref) {
           audience: PortalAudience.webAdmin,
           prefillUsername: state.uri.queryParameters['u'],
         ),
+      ),
+      // OIDC callbacks — the backend 302s the browser here after the
+      // user finishes signing in with Dubai-Gov. The screen reads the
+      // one-time `code` query param and swaps it for our own JWT pair.
+      // ADR-001 (docs/architecture/ADR-001-dda-sso.md).
+      GoRoute(
+        path: '/app/auth/callback',
+        builder: (BuildContext context, GoRouterState state) =>
+            const SsoCallbackScreen(audience: PortalAudience.mobileApp),
+      ),
+      GoRoute(
+        path: '/portal/auth/callback',
+        builder: (BuildContext context, GoRouterState state) =>
+            const SsoCallbackScreen(audience: PortalAudience.webAdmin),
       ),
       // Back-compat: the old single /login URL bounces to /portal (the more
       // common reason to hit this route directly is bookmarked admin links).

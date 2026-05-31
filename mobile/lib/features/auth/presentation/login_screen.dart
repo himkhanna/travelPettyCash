@@ -1,3 +1,6 @@
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +13,7 @@ import '../../../core/fake/fake_config.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../shared/widgets/language_toggle_button.dart';
 import '../application/auth_providers.dart';
+import '../data/auth_config_repository.dart';
 import '../data/auth_repository.dart';
 import '../domain/user.dart';
 
@@ -413,6 +417,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         ),
                                       ),
                               ),
+                              // "Sign in with Dubai Gov" — rendered
+                              // only when the backend's /auth/config
+                              // probe says SSO is wired up. See
+                              // docs/architecture/ADR-001-dda-sso.md.
+                              _DubaiGovSsoButton(
+                                audience: widget.audience,
+                                disabled: _submitting,
+                              ),
                               const SizedBox(height: AppSpacing.sm),
                               TextButton(
                                 onPressed: _submitting
@@ -442,5 +454,70 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+}
+
+/// "Sign in with Dubai Gov" button. Watches [authConfigProvider]; if the
+/// backend reports SSO is disabled (or the probe failed), renders an
+/// empty SizedBox. Otherwise opens a top-level navigation to the
+/// backend's `/auth/sso/start` URL, which 302s to Smart Dubai's
+/// authorize page and (on success) bounces back to the SsoCallbackScreen
+/// route for the matching audience.
+class _DubaiGovSsoButton extends ConsumerWidget {
+  const _DubaiGovSsoButton({
+    required this.audience,
+    required this.disabled,
+  });
+  final PortalAudience audience;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<AuthConfig> cfg = ref.watch(authConfigProvider);
+    final bool show = cfg.maybeWhen(
+      data: (AuthConfig c) => c.dubaiGovSsoEnabled,
+      orElse: () => false,
+    );
+    if (!show) return const SizedBox.shrink();
+
+    final String audienceParam = switch (audience) {
+      PortalAudience.mobileApp => 'mobileWeb',
+      PortalAudience.webAdmin => 'portal',
+    };
+    // Same-origin navigation so the cookies / redirect state stay
+    // attached. On Flutter Web `context.go` would try to handle the
+    // /api path inside the SPA router — which has no match — so we
+    // use a hard window-location nav via the platform's URL launcher.
+    // For now the simplest approach: build the absolute URL and use
+    // `window.location.assign` via a tiny dart:html shim. The API
+    // base is configured in ApiConfig so it picks up overrides.
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: OutlinedButton.icon(
+        onPressed: disabled
+            ? null
+            : () => _navigateToStart(ref, audienceParam),
+        icon: const Icon(Icons.shield_outlined, size: 18),
+        label: const Text('SIGN IN WITH DUBAI GOV'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.brand,
+          side: const BorderSide(color: AppColors.brand),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.0,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToStart(WidgetRef ref, String audienceParam) {
+    final String base = ref.read(apiConfigProvider).baseUrl;
+    final String url =
+        '$base/api/v1/auth/sso/start?audience=$audienceParam';
+    // Hard navigation — let the browser follow the IdP redirect chain.
+    // Web-only path; see ADR-001 + the v1 PWA-only decision.
+    html.window.location.href = url;
   }
 }
