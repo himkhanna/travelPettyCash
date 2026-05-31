@@ -580,6 +580,49 @@ Side fixes shipped the same morning:
   narrow phones; "X of Y" trailer switched from `Spacer + Text` to
   `Expanded + Text(maxLines:1, ellipsis, textAlign:right)`.
 
+### 2026-05-27 → 2026-05-31 — logout + chat-polling hardening
+
+Three issues uncovered while demoing on the iPhone-over-LAN setup,
+all of which led to "still on the same page" / "no unread count"
+symptoms. The fixes layered defensively rather than overlapping,
+so the failure surface is now small.
+
+- **Chat list polls every 5 s.** `tripThreadsProvider` and
+  `allChatsProvider` flipped from `FutureProvider` to
+  `StreamProvider` with a poll loop (same cadence as the
+  notifications inbox + the in-thread messages stream). A
+  fingerprint dedupe on `(id, unreadCount, lastMessageAt)` keeps
+  the UI from rebuilding when nothing changed. Previously the
+  unread badge never updated after the first fetch — the user
+  could open and close a chat all day and the badge stayed at 0
+  for any new peer message.
+- **Logout always navigates, with three guards.**
+  `confirmAndSignOut` (`auth_actions.dart`) now:
+  1. Wraps `authRepository.logout()` in `try/catch` so a CORS,
+     401, or LAN-flake throw doesn't abort the navigation.
+  2. Calls `GoRouter.of(context).go(redirect)` *before*
+     `ref.invalidate(currentUserProvider)` so Riverpod can't win
+     the next-frame race and rebuild the current screen with a
+     null user.
+  3. Defers the invalidate itself into
+     `WidgetsBinding.instance.addPostFrameCallback` so it only
+     fires after the new route's first frame has rendered.
+- **Router-level auth gate** (`app/router.dart`).
+  `wireOfflineRefresh` now also listens to `currentUserProvider`
+  so the GoRouter redirect re-evaluates on auth state changes.
+  The redirect itself, when the path matches `/m/*`, checks
+  whether `currentUserProvider` has settled to
+  `AsyncData(null)` — if so, bounces to `/app`. Even if the
+  logout helper's `context.go` is lost to a context-disposed
+  edge case, GoRouter catches it on the next refresh.
+- **Home quick-stats tile shuffle.** Added a tappable **Chats**
+  tile reading the sum of `unreadCount` across
+  `allChatsProvider` threads (deep-links to `/m/chat`). Removed
+  the **Unread** notifications tile — the top-bar bell already
+  shows the same count, and most inbox traffic is chat, so the
+  tile read as duplicate. Strip is now Active / Pending / Chats,
+  all tappable; `_StatTile` gained an optional `onTap`.
+
 ### Identifier note
 
 Internal IDs remain opaque: Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash`. Rename is tracked separately (see "Still pending" → Identifier migration).
@@ -613,4 +656,4 @@ All four roles use `demo1234` as the password.
 
 ---
 
-*Last updated: 2026-05-27. Update this file in the same PR as any architectural change.*
+*Last updated: 2026-05-31. Update this file in the same PR as any architectural change.*
