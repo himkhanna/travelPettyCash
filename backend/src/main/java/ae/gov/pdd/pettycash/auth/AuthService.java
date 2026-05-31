@@ -94,6 +94,32 @@ public class AuthService {
         );
     }
 
+    /**
+     * Mint an access + refresh pair for a user without going through the
+     * password check. Used by the SSO flow once the IdP has confirmed
+     * the user's identity. The minted tokens are indistinguishable from
+     * password-login tokens — same TTL, same shape — so every
+     * downstream consumer (JwtAuthenticationFilter, /me, refresh) keeps
+     * working unchanged.
+     */
+    @Transactional
+    public LoginResult mintForUser(User user) {
+        if (!user.isActive()) {
+            throw invalidCredentials();
+        }
+        String access = jwtService.issueAccessToken(user);
+        IssuedRefresh refresh = issueRefreshToken(user.getId(), null);
+        return new LoginResult(
+            user,
+            new AuthTokens(
+                access,
+                refresh.raw(),
+                jwtService.getAccessTtl().toSeconds(),
+                refreshTtl.toSeconds()
+            )
+        );
+    }
+
     @Transactional
     public LoginResult refresh(String rawRefreshToken) {
         String hash = sha256Hex(rawRefreshToken);

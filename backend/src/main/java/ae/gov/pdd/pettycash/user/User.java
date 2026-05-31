@@ -41,6 +41,12 @@ public class User {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /** OIDC `sub` claim from Smart Dubai. Null for local-login users
+     *  (the four demo accounts). Unique-indexed where NOT NULL.
+     *  See docs/architecture/ADR-001-dda-sso.md. */
+    @Column(name = "external_id", length = 255)
+    private String externalId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -74,7 +80,12 @@ public class User {
     public String getPasswordHash() { return passwordHash; }
     public UserRole getRole() { return role; }
     public boolean isActive() { return active; }
+    public String getExternalId() { return externalId; }
     public Instant getCreatedAt() { return createdAt; }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;

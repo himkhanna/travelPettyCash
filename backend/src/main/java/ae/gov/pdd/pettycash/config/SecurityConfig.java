@@ -53,7 +53,13 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(
                     "/api/v1/auth/login",
-                    "/api/v1/auth/refresh"
+                    "/api/v1/auth/refresh",
+                    // Dubai-Gov OIDC bootstrap endpoints — the user
+                    // has no JWT yet, so they MUST be public. The
+                    // /exchange endpoint is one-time-code gated; the
+                    // /callback is state-gated; the /start has nothing
+                    // sensitive at all.
+                    "/api/v1/auth/sso/**"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET,
                     "/actuator/health",

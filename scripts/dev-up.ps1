@@ -58,7 +58,26 @@ if (-not $SkipDocker) {
 # --- 2. Backend (Spring Boot) -------------------------------------------------
 if (-not $SkipBackend) {
     Write-Host "==> Spawning backend window (gradle bootRun, profile=local)" -ForegroundColor Cyan
-    $backendCmd = $RefreshPath +
+    # Load backend/.env into the spawned window's environment so the JVM
+    # picks up secrets like PDD_SMARTDUBAI_CLIENT_SECRET without ever
+    # committing them. Lines of the form KEY=VALUE are exported; blank
+    # lines and # comments are ignored. backend/.env is gitignored.
+    $loadEnv = @"
+`$envFile = '$RepoRoot\backend\.env'
+if (Test-Path `$envFile) {
+    Get-Content `$envFile | ForEach-Object {
+        if (`$_ -match '^\s*#') { return }
+        if (`$_ -match '^\s*$') { return }
+        if (`$_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+            `$k = `$matches[1]
+            `$v = `$matches[2].Trim('"').Trim("'")
+            Set-Item -Path "Env:`$k" -Value `$v
+        }
+    }
+    Write-Host '    (loaded backend/.env)' -ForegroundColor DarkGray
+}
+"@
+    $backendCmd = $RefreshPath + $loadEnv +
                   "Set-Location '$RepoRoot\backend'; " +
                   "Write-Host 'PDD backend - Ctrl+C to stop' -ForegroundColor Green; " +
                   "if (-not (Get-Command gradle -ErrorAction SilentlyContinue)) { Write-Host 'ERROR: gradle not on PATH' -ForegroundColor Red; return }; " +

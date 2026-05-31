@@ -11,6 +11,9 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByUsername(String username);
     boolean existsByUsername(String username);
+    /** Lookup federated users by Smart Dubai OIDC `sub` claim.
+     *  See docs/architecture/ADR-001-dda-sso.md. */
+    Optional<User> findByExternalId(String externalId);
 
     /** Case-insensitive search across name + handle for global search. */
     @Query("""
