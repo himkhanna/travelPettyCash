@@ -24,8 +24,8 @@ import 'dio_client.dart';
 
 /// Drives a one-shot pull of every dataset the UI reads from DemoStore
 /// when the app is in [BackendMode.api]. After this completes, every
-/// existing screen that reads {@code store.userById(...)},
-/// {@code store.tripById(...)}, {@code store.allocations} etc. resolves
+/// existing screen that reads `store.userById(...)`,
+/// `store.tripById(...)`, `store.allocations` etc. resolves
 /// correctly against backend-sourced data.
 ///
 /// In [BackendMode.fake] this is a no-op — the prototype's JSON assets
@@ -180,8 +180,8 @@ final Provider<HydrationService> hydrationServiceProvider =
 ///
 /// Watch this on any post-login screen (CMS dashboard, mobile trip list,
 /// etc.) and gate rendering on it — in API mode it triggers
-/// {@link HydrationService.hydrateAll} as a side effect the first time a
-/// non-null user resolves. In fake mode it short-circuits to {@code true}
+/// [HydrationService.hydrateAll] as a side effect the first time a
+/// non-null user resolves. In fake mode it short-circuits to `true`
 /// since the JSON-asset load handles caching on its own.
 final FutureProvider<bool> authenticatedHydrationProvider =
     FutureProvider<bool>((Ref ref) async {

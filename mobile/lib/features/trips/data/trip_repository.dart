@@ -23,7 +23,7 @@ abstract class TripRepository {
   Future<Trip> closeTrip(String tripId);
 
   /// Admin only — partial update. Any null field is left unchanged. The
-  /// {@code memberIds} list is the full replacement set, not a delta.
+  /// `memberIds` list is the full replacement set, not a delta.
   Future<Trip> updateTrip({
     required String tripId,
     String? name,
