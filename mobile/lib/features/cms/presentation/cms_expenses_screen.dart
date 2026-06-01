@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../app/theme.dart' show AppRadii, AppSpacing;
+import '../../../app/theme.dart' show AppRadii;
 import '../../../core/api/hydration_service.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../auth/application/auth_providers.dart';

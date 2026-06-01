@@ -418,6 +418,8 @@ class _SidebarItem extends StatelessWidget {
     this.selected = false,
     this.enabled = true,
     this.onTap,
+    // Plumbed for sidebar unread badges; no call site supplies it yet.
+    // ignore: unused_element_parameter
     this.badge,
   });
   final IconData icon;

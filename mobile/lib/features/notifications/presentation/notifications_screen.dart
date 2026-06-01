@@ -9,9 +9,7 @@ import '../../../core/money/money.dart';
 import '../../../shared/widgets/pdd_primitives.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/user.dart';
-import '../../trips/application/trips_providers.dart';
 import '../application/notifications_providers.dart';
-import '../data/notifications_repository.dart';
 import '../domain/notification.dart';
 
 /// Screen-inventory #16 — Notifications list with ACCEPT / DECLINE on
@@ -424,31 +422,3 @@ class _TypeBadge extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              Icons.notifications_none_outlined,
-              size: 48,
-              color: AppColors.goldOlive,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'You\'re all caught up.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

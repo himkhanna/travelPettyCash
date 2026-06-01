@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../app/theme.dart' show AppRadii, AppSpacing;
+import '../../../app/theme.dart' show AppRadii;
 import '../../../core/api/hydration_service.dart';
 import '../../../core/fake/demo_store.dart';
 import '../../../core/money/money.dart';
@@ -13,7 +13,6 @@ import '../../expenses/application/expenses_providers.dart';
 import '../../expenses/domain/expense.dart';
 import '../../missions/application/mission_providers.dart';
 import '../../missions/domain/mission.dart';
-import '../../trips/application/trips_providers.dart';
 import '../../trips/domain/trip.dart';
 import 'cms_dashboard.dart' show adminAllTripsProvider;
 import 'create_trip_dialog.dart';

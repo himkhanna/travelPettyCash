@@ -6,9 +6,10 @@ on:
   pull_request:
 
 env:
-  # 3.32.x is the May-2025 stable. Phase 0 code uses `Color.withValues`
-  # (Flutter 3.27+) and `CardThemeData` style cardTheme.
-  FLUTTER_VERSION: '3.32.0'
+  # Pinned to the stable the team develops against. Bumped from 3.32.0
+  # because the mobile code uses APIs newer than 3.32 — RadioGroup and
+  # DropdownButtonFormField.initialValue — which fail analyze on 3.32.
+  FLUTTER_VERSION: '3.41.9'
 
 jobs:
   mobile:

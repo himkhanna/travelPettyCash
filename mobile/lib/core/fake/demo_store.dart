@@ -67,7 +67,7 @@ class DemoStore {
   }
 
   /// Called by HydrationService after a successful API pull so subsequent
-  /// {@code ensureLoaded} calls short-circuit instead of loading the JSON
+  /// `ensureLoaded` calls short-circuit instead of loading the JSON
   /// assets on top of the API-sourced data.
   void markLoadedAfterApiHydration() {
     _loaded = true;
