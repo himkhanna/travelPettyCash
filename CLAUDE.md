@@ -648,17 +648,50 @@ so the failure surface is now small.
   one-time `code` query param, POSTs to `/auth/sso/exchange`, stows
   the JWTs via the existing `tokenStoreProvider`, invalidates
   `currentUserProvider`, and routes home.
-- **Still to wire (Slice C–G).** Real native deep-link handler (only
+- **Still to wire (Slice D–F).** Real native deep-link handler (only
   matters when we add the native build), `/auth/config` honouring of
   `localLogin.enabled` so the password form disappears in prod, real
-  PAdES-via-PKCS#11 hookup, slice + integration tests for the SSO
-  module, OIDC end_session_endpoint workaround using the SAML SLO URL
-  in the logout flow.
+  PAdES-via-PKCS#11 hookup, OIDC end_session_endpoint workaround using
+  the SAML SLO URL in the logout flow. (Slice G — tests — landed
+  2026-06-01; see below.)
 - **PWA-only for v1.** §15 records this. Native (iOS / Android) goes
   on the v2 roadmap; the existing Dart codebase compiles to both, so
   it's a release-engineering exercise (Apple Developer account, Mac,
   store reviews) rather than a code rewrite. Four triggers would
   flip the decision; see §15.
+
+### 2026-06-01 — SSO `/start` fix, dev mock IdP, and Slice G tests
+
+First end-to-end run of the Dubai-Gov flow with the in-hand demo
+credentials. Details + the DDA blocker are in
+`docs/architecture/ADR-001-dda-sso.md` → "Implementation log".
+
+- **`/start` 500 fixed.** `DubaiGovSsoService.startUrl()` used
+  `UriComponentsBuilder.build(true)` (values pre-encoded), but the
+  `scope` value has literal spaces (`openid profile email`) → invalid
+  encoded URI → 500. Switched to `.encode().build()`
+  (`scope=openid%20profile%20email`). Fixes the real-tenant path too.
+- **Demo tenant blocked on redirect-URI whitelist.** The IdP returns
+  `FBTOAU210E … redirection URI … invalid` *before* the credential
+  prompt — the pre-auth `redirect_uri` check. DDA still has to
+  whitelist `http://localhost:8080/api/v1/auth/sso/callback` (and the
+  staging/prod equivalents) against our client. Tracked in ADR-001
+  "Still to confirm with DDA" item 2.
+- **Dev mock IdP** — `MockIdpController` + `MockIdpReconfig`, gated by
+  `pdd.auth.dubaigov.mock-idp` (env `PDD_SMARTDUBAI_MOCK_IDP`, off by
+  default, never in staging/prod). When on, the authorize/token/
+  userinfo URIs are repointed at an in-process fake so the full flow
+  runs without DDA; `DubaiGovSsoService` is unchanged and the mobile
+  button is unchanged. The `/authorize` page renders a role picker in
+  lieu of a credential prompt. Set the flag false to use the real
+  demo tenant.
+- **Slice G tests landed** (closes the §13 gap for SSO):
+  `DubaiGovSsoServiceTest` (unit, incl. the scope-encoding regression
+  guard), `SsoControllerTest` + `AuthConfigControllerTest` (slice,
+  standalone MockMvc), and `DubaiGovSsoIT` (`@SpringBootTest` +
+  Testcontainers, real port, full mock-IdP flow per role + the V011
+  upsert). 13 unit/slice pass; the IT skips locally under the
+  repo-standard `@EnabledIf(dockerReachable)` guard and runs on CI.
 
 ### Identifier note
 

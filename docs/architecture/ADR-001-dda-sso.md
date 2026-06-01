@@ -278,3 +278,58 @@ When DDA credentials arrive, the implementer updates **Status** at the
 top of the file to "Accepted (YYYY-MM-DD)", references the kickoff PR,
 and §16 of CLAUDE.md flips this question from open to closed with a
 pointer here.
+
+## Implementation log
+
+### 2026-06-01 — demo-tenant smoke test, `/start` fix, mock IdP, tests
+
+First end-to-end attempt against the real demo tenant with the
+in-hand `client_id` / `client_secret`:
+
+- **`/start` was 500ing** — `DubaiGovSsoService.startUrl()` built the
+  authorize URL with `UriComponentsBuilder.build(true)` (= "values are
+  pre-encoded"), but the `scope` value carries literal spaces
+  (`openid profile email`), which are illegal in an encoded URI →
+  `IllegalArgumentException`. Fixed by switching to `.encode().build()`
+  so the builder encodes the values (`scope=openid%20profile%20email`).
+  This benefits the real-tenant path, not just the mock. Regression
+  guard: `DubaiGovSsoServiceTest.startUrlPercentEncodesTheScopeSpaces`.
+- **Demo tenant rejects our redirect URI** —
+  `FBTOAU210E … redirection URI … invalid`. This is the
+  pre-authentication `redirect_uri`-vs-registered-client check (item 2
+  of "Still to confirm with DDA" above): the demo tenant has **not**
+  whitelisted `http://localhost:8080/api/v1/auth/sso/callback` for our
+  client, so the IdP refuses before ever prompting for credentials.
+  Still blocked on DDA registering our dev/staging/prod callback URIs.
+
+- **Interim dev mock IdP (replaces the planned WireMock / Spring
+  Authorization Server in the slice plan).** Rather than stand up an
+  external fake, `MockIdpController` + `MockIdpReconfig` implement an
+  in-process Authorization-Code provider, gated behind
+  `pdd.auth.dubaigov.mock-idp=true` (off by default, never in
+  staging/prod). When on, the authorize/token/userinfo URIs are
+  repointed at the local controller, so `DubaiGovSsoService` runs its
+  **real** code path against the fake — the only thing faked is the
+  IdP's HTTP responses. The `/authorize` endpoint renders a role
+  picker (standing in for the credential prompt) so the full
+  start → authorize → approve → callback → exchange → `/me` sequence
+  works without DDA. Switch back to the real tenant with
+  `PDD_SMARTDUBAI_MOCK_IDP=false`.
+
+- **Slice G (tests) — done.** Closes the §13 gap for this module:
+  - `DubaiGovSsoServiceTest` (unit) — authorize-URL construction +
+    PKCE, scope-encoding regression, enabled/disabled gate, unknown
+    state / exchange-code rejection.
+  - `SsoControllerTest` + `AuthConfigControllerTest` (slice,
+    standalone MockMvc) — audience mapping, redirects, exchange/JSON
+    bodies, problem-detail on disabled, the boot-probe flags.
+  - `DubaiGovSsoIT` (`@SpringBootTest` + Testcontainers, real port)
+    — full flow through the mock IdP per role, real token/userinfo
+    HTTP legs, V011 `external_id` upsert (incl. no-duplicate on
+    re-login), and the minted JWT authorizing `/me`. Skips locally
+    under the repo-standard `@EnabledIf(dockerReachable)` guard; runs
+    on CI.
+
+Still open before prod: items 1–6 of "Still to confirm with DDA"
+(especially the redirect-URI whitelist and the real role-claim
+contract), plus Slices D/E/F.

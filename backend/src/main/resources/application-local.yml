@@ -40,6 +40,11 @@ pdd:
     # point at the demo tenant. See docs/architecture/ADR-001-dda-sso.md.
     dubaigov:
       enabled: ${PDD_SMARTDUBAI_ENABLED:false}
+      # DEV-ONLY in-process fake IdP. When true, the authorize/token/
+      # userinfo URIs below are repointed at MockIdpController so the
+      # full flow runs without a redirect URI registered on the real
+      # demo tenant. Never set this outside local dev.
+      mock-idp: ${PDD_SMARTDUBAI_MOCK_IDP:false}
       client-id: ${PDD_SMARTDUBAI_CLIENT_ID:}
       client-secret: ${PDD_SMARTDUBAI_CLIENT_SECRET:}
       redirect-uri: http://localhost:8080/api/v1/auth/sso/callback

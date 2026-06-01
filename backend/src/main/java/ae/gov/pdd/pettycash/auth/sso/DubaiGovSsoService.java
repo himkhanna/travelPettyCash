@@ -121,7 +121,11 @@ public class DubaiGovSsoService {
             .queryParam("state", state)
             .queryParam("code_challenge", challenge)
             .queryParam("code_challenge_method", "S256")
-            .build(true)
+            // encode (not build(true)) — the `scope` value carries
+            // literal spaces ("openid profile email"), which are illegal
+            // in an already-encoded URI and make build(true) throw.
+            .encode()
+            .build()
             .toUriString();
     }
 
