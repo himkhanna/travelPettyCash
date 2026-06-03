@@ -15,6 +15,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      *  See docs/architecture/ADR-001-dda-sso.md. */
     Optional<User> findByExternalId(String externalId);
 
+    /** Lookup by email for account-linking: when an SSO identity has no
+     *  external_id match yet, we link it to a pre-existing local account
+     *  whose email matches the IdP-asserted email. ADR-001 §"Still to
+     *  confirm with DDA" item 5. */
+    Optional<User> findByEmailIgnoreCase(String email);
+
+    /** Lookup by Emirates ID ("idn") — the primary link key for UAE Pass
+     *  federation, preferred over email. See ADR-002. */
+    Optional<User> findByEmiratesId(String emiratesId);
+
     /** Case-insensitive search across name + handle for global search. */
     @Query("""
         SELECT u FROM User u

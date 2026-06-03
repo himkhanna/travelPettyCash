@@ -47,6 +47,12 @@ public class User {
     @Column(name = "external_id", length = 255)
     private String externalId;
 
+    /** Emirates ID ("idn") from UAE Pass. Null for accounts not federated
+     *  via UAE Pass and for visitor identities. Unique-indexed where NOT
+     *  NULL. See docs/architecture/ADR-002-uaepass-sso.md. */
+    @Column(name = "emirates_id", length = 32)
+    private String emiratesId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -81,10 +87,15 @@ public class User {
     public UserRole getRole() { return role; }
     public boolean isActive() { return active; }
     public String getExternalId() { return externalId; }
+    public String getEmiratesId() { return emiratesId; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setExternalId(String externalId) {
         this.externalId = externalId;
+    }
+
+    public void setEmiratesId(String emiratesId) {
+        this.emiratesId = emiratesId;
     }
 
     public void setPasswordHash(String passwordHash) {

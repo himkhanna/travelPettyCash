@@ -47,10 +47,24 @@ class TripsHomeScreen extends ConsumerWidget {
     // Trigger hydration on page-reload-with-stored-token as a side effect.
     ref.watch(authenticatedHydrationProvider);
 
+    // Auth guard — once currentUser settles to null (signed out), leave the
+    // mobile shell for the login screen. Mirrors the CMS dashboard's own
+    // me==null guard. The router-level gate is supposed to cover this too,
+    // but a direct widget rebuild on the watched provider is more reliable
+    // than the refresh-listenable path, which was leaving sign-out stranded
+    // on /m/trips. `hasValue` distinguishes "settled to null" (logged out)
+    // from the initial loading frame (don't redirect before /me resolves).
+    if (me == null) {
+      if (userAsync.hasValue) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) context.go('/app');
+        });
+      }
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     // Portal guard — admin/super-admin tokens land on the wrong portal.
-    if (me != null &&
-        me.role != UserRole.member &&
-        me.role != UserRole.leader) {
+    if (me.role != UserRole.member && me.role != UserRole.leader) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
           context.go('/wrong-portal?expected=webAdmin');
@@ -108,7 +122,7 @@ class TripsHomeScreen extends ConsumerWidget {
                   PddTopBar(
                     user: me,
                     subtitle: _greeting(me),
-                    title: me?.displayName.split(' ').first ?? 'Welcome',
+                    title: me.displayName.split(' ').first,
                     onNotifs: () => context.go('/m/notifications'),
                     hasNotif: hasUnread,
                     actions: <Widget>[
@@ -122,20 +136,17 @@ class TripsHomeScreen extends ConsumerWidget {
                   // Hero summary card — role-aware. Member sees their
                   // combined wallet across active trips; Leader sees the
                   // team-wide trip totals they're responsible for.
-                  if (me != null && active.isNotEmpty)
-                    _HeroSummary(me: me, activeTrips: active),
+                  if (active.isNotEmpty) _HeroSummary(me: me, activeTrips: active),
                   // Quick-stats strip — at-a-glance counters.
-                  if (me != null)
-                    _QuickStatsStrip(
-                      activeCount: active.length,
-                      meId: me.id,
-                      activeTrips: active,
-                    ),
+                  _QuickStatsStrip(
+                    activeCount: active.length,
+                    meId: me.id,
+                    activeTrips: active,
+                  ),
                   // Pending-funds banner — surfaces every pending allocation
                   // / transfer addressed to this user across all trips so
                   // they don't have to drill into each one.
-                  if (me != null)
-                    _GlobalPendingBanner(meId: me.id, trips: active),
+                  _GlobalPendingBanner(meId: me.id, trips: active),
                   // Quick-add expense — the single most common action on
                   // Home. Auto-routes into Add Expense scoped to the most
                   // recent active trip; falls back to the trip picker if

@@ -25,8 +25,17 @@ import 'login_screen.dart';
 /// Mounted at `/app/auth/callback` (mobile audience) and
 /// `/portal/auth/callback` (admin audience). See ADR-001.
 class SsoCallbackScreen extends ConsumerStatefulWidget {
-  const SsoCallbackScreen({super.key, required this.audience});
+  const SsoCallbackScreen({
+    super.key,
+    required this.audience,
+    this.exchangePath = '/api/v1/auth/sso/exchange',
+  });
   final PortalAudience audience;
+
+  /// Backend endpoint that swaps the one-time `code` for the JWT pair.
+  /// Defaults to the Dubai-Gov flow; the UAE Pass routes pass
+  /// `/api/v1/auth/sso/uaepass/exchange`. See ADR-002.
+  final String exchangePath;
 
   @override
   ConsumerState<SsoCallbackScreen> createState() =>
@@ -51,7 +60,7 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
     try {
       final Dio dio = ref.read(dioProvider);
       final Response<dynamic> resp = await dio.post<dynamic>(
-        '/api/v1/auth/sso/exchange',
+        widget.exchangePath,
         data: <String, dynamic>{'code': code},
       );
       final Map<String, dynamic> body =
@@ -70,8 +79,17 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
       ));
 
       // Refresh /me-derived providers so downstream watchers see the
-      // freshly minted session.
+      // freshly minted session, then WAIT for /me to resolve before
+      // navigating. Otherwise the destination (CMS account chip +
+      // greeting, trips home) renders a frame before currentUser is
+      // populated and shows a blank name / 'Welcome' placeholder.
       ref.invalidate(currentUserProvider);
+      try {
+        await ref.read(currentUserProvider.future);
+      } catch (_) {
+        // /me failed; proceed anyway — the router's auth gate bounces
+        // back to login if there's genuinely no session.
+      }
 
       // Land the user on the right home for their portal. Honour the
       // wrong-portal guard: if a Member tries to land at /portal we

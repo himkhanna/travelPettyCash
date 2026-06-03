@@ -29,6 +29,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -121,7 +122,11 @@ public class DubaiGovSsoService {
             .queryParam("state", state)
             .queryParam("code_challenge", challenge)
             .queryParam("code_challenge_method", "S256")
-            .build(true)
+            // encode (not build(true)) — the `scope` value carries
+            // literal spaces ("openid profile email"), which are illegal
+            // in an already-encoded URI and make build(true) throw.
+            .encode()
+            .build()
             .toUriString();
     }
 
@@ -285,47 +290,65 @@ public class DubaiGovSsoService {
             );
         }
         final UserRole role = mapRole(claims);
+        final String claimEmail = stringClaim(claims, "email");
 
-        return users.findByExternalId(sub)
-            .map(existing -> {
-                // Reflect upstream changes that affect what the user sees.
+        // 1. Already federated on a previous SSO login — update what the
+        //    IdP owns (role / name / email) and return.
+        Optional<User> bySub = users.findByExternalId(sub);
+        if (bySub.isPresent()) {
+            User existing = bySub.get();
+            existing.setRole(role);
+            final String name = stringClaim(claims, "name");
+            if (name != null && !name.isBlank()) {
+                existing.setDisplayName(name);
+            }
+            if (claimEmail != null && !claimEmail.isBlank()) {
+                existing.setEmail(claimEmail);
+            }
+            return existing;
+        }
+
+        // 2. First SSO login for this `sub`: link it to a pre-existing
+        //    local account whose email matches the IdP-asserted email.
+        //    This is how an existing password user (e.g. a seeded demo
+        //    persona) becomes federated rather than spawning a duplicate.
+        //    ADR-001 §"Still to confirm with DDA" item 5 — the email
+        //    must be one the IdP has verified.
+        if (claimEmail != null && !claimEmail.isBlank()) {
+            Optional<User> byEmail = users.findByEmailIgnoreCase(claimEmail);
+            if (byEmail.isPresent()) {
+                User existing = byEmail.get();
+                existing.setExternalId(sub);
                 existing.setRole(role);
-                final String name = stringClaim(claims, "name");
-                if (name != null && !name.isBlank()) {
-                    existing.setDisplayName(name);
-                }
-                final String email = stringClaim(claims, "email");
-                if (email != null && !email.isBlank()) {
-                    existing.setEmail(email);
-                }
-                return existing;
-            })
-            .orElseGet(() -> {
-                final String display = firstNonBlank(
-                    stringClaim(claims, "name"),
-                    stringClaim(claims, "preferred_username"),
-                    "User"
-                );
-                final String email = firstNonBlank(
-                    stringClaim(claims, "email"),
-                    sub + "@dubaigov.local"
-                );
-                // username is unique in the schema; sub is globally unique.
-                final String synthUsername = "dgov:" + sub;
-                User u = new User(
-                    UUID.randomUUID(),
-                    synthUsername,
-                    display,
-                    display, // displayNameAr — IdP doesn't give us Arabic
-                    email,
-                    // No local password; passwordHash NOT NULL on the
-                    // schema, so we stash an unreachable sentinel.
-                    "!sso:" + UUID.randomUUID(),
-                    role
-                );
-                u.setExternalId(sub);
-                return users.save(u);
-            });
+                return existing; // managed entity; flushed by @Transactional
+            }
+        }
+
+        // 3. Genuinely new federated user — create one.
+        final String display = firstNonBlank(
+            stringClaim(claims, "name"),
+            stringClaim(claims, "preferred_username"),
+            "User"
+        );
+        final String email = firstNonBlank(
+            claimEmail,
+            sub + "@dubaigov.local"
+        );
+        // username is unique in the schema; sub is globally unique.
+        final String synthUsername = "dgov:" + sub;
+        User u = new User(
+            UUID.randomUUID(),
+            synthUsername,
+            display,
+            display, // displayNameAr — IdP doesn't give us Arabic
+            email,
+            // No local password; passwordHash NOT NULL on the
+            // schema, so we stash an unreachable sentinel.
+            "!sso:" + UUID.randomUUID(),
+            role
+        );
+        u.setExternalId(sub);
+        return users.save(u);
     }
 
     /** Walk the configured role-claim list. First matching mapping wins.

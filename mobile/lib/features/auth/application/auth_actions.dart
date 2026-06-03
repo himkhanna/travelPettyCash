@@ -55,15 +55,19 @@ Future<bool?> confirmAndSignOut(
     // signing out locally regardless. Surfacing the error would
     // require keeping the user on the screen — that's worse UX.
   }
+  // Clear the cached user FIRST, while this widget's ref is still alive.
+  // The previous version deferred this to a post-frame callback that ran
+  // after navigation — but by then the calling widget (and its ref) was
+  // often already disposed, so the invalidate silently no-op'd and
+  // currentUserProvider stayed cached as the signed-out user. With the
+  // user cleared here, the router's auth gate redirects any /m/* route to
+  // /app, so logout lands on the login screen even if the context.go
+  // below is skipped on an unmounted context (the bug that left the user
+  // stranded on a stale /m/trips). Home screens read the user null-safely,
+  // so an extra null frame before navigation is harmless.
+  ref.invalidate(currentUserProvider);
   if (context.mounted) {
     GoRouter.of(context).go(redirect);
   }
-  // Defer invalidate to a post-frame callback so it only fires after
-  // the new route (LoginScreen at /app) has rendered. Otherwise
-  // Riverpod's rebuild can race the GoRouter unmount and the home
-  // screen re-renders with a null user.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    ref.invalidate(currentUserProvider);
-  });
   return true;
 }

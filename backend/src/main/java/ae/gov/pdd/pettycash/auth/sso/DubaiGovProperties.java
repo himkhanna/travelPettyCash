@@ -25,6 +25,15 @@ public class DubaiGovProperties {
      */
     private boolean enabled = false;
 
+    /**
+     * DEV-ONLY. When true, an in-process fake IdP ({@code MockIdpController})
+     * is mounted and the authorize/token/userinfo URIs are repointed at it
+     * so the full SSO flow can be exercised without a redirect URI
+     * registered on the real demo tenant. Off by default; must never be
+     * set in staging or prod. See docs/architecture/ADR-001-dda-sso.md.
+     */
+    private boolean mockIdp = false;
+
     /** OAuth client id (mirrors Spring's registration; kept here for
      *  logging + the start-URL builder which doesn't go through
      *  Spring's OAuth2 client filter). */
@@ -79,6 +88,9 @@ public class DubaiGovProperties {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+    public boolean isMockIdp() { return mockIdp; }
+    public void setMockIdp(boolean mockIdp) { this.mockIdp = mockIdp; }
 
     public String getClientId() { return clientId; }
     public void setClientId(String v) { this.clientId = v; }
