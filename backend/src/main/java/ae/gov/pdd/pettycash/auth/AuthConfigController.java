@@ -1,6 +1,7 @@
 package ae.gov.pdd.pettycash.auth;
 
 import ae.gov.pdd.pettycash.auth.sso.DubaiGovProperties;
+import ae.gov.pdd.pettycash.auth.sso.UaePassProperties;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthConfigController {
 
     private final DubaiGovProperties dubaigov;
+    private final UaePassProperties uaepass;
 
-    public AuthConfigController(DubaiGovProperties dubaigov) {
+    public AuthConfigController(DubaiGovProperties dubaigov, UaePassProperties uaepass) {
         this.dubaigov = dubaigov;
+        this.uaepass = uaepass;
     }
 
     @GetMapping("/config")
@@ -38,7 +41,8 @@ public class AuthConfigController {
             // keep working.
             new LocalLoginConfig(true),
             new SsoConfig(
-                new DubaiGovSsoConfig(dubaigov.isEnabled())
+                new ProviderConfig(dubaigov.isEnabled()),
+                new ProviderConfig(uaepass.isEnabled())
             )
         );
     }
@@ -50,7 +54,7 @@ public class AuthConfigController {
 
     public record LocalLoginConfig(boolean enabled) {}
 
-    public record SsoConfig(DubaiGovSsoConfig dubaigov) {}
+    public record SsoConfig(ProviderConfig dubaigov, ProviderConfig uaepass) {}
 
-    public record DubaiGovSsoConfig(boolean enabled) {}
+    public record ProviderConfig(boolean enabled) {}
 }

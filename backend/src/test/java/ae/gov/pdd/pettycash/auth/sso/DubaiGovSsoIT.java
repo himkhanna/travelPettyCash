@@ -1,5 +1,6 @@
 package ae.gov.pdd.pettycash.auth.sso;
 
+import ae.gov.pdd.pettycash.config.DemoPersonas;
 import ae.gov.pdd.pettycash.user.UserRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -101,12 +102,17 @@ class DubaiGovSsoIT {
     }
 
     @Test
-    void adminSignInMapsToAdminRoleAndMintsAUsableToken() throws Exception {
-        JsonNode exchanged = runFullFlow("ADMIN");
+    void adminSignInLinksTheExistingAccountAndMintsAUsableToken() throws Exception {
+        JsonNode exchanged = runFullFlow(DemoPersonas.KHALID.id().toString());
 
+        // Federated onto the EXISTING khalid account, not a new synthetic
+        // user — same username/email, role preserved.
         assertThat(exchanged.path("user").path("role").asText()).isEqualTo("ADMIN");
-        assertThat(exchanged.path("user").path("username").asText()).isEqualTo("dgov:mock|ADMIN");
-        assertThat(exchanged.path("user").path("email").asText()).isEqualTo("admin@mock.dubai.gov.ae");
+        assertThat(exchanged.path("user").path("username").asText()).isEqualTo("khalid");
+        assertThat(exchanged.path("user").path("email").asText())
+            .isEqualTo("khalid@protocol.gov.ae");
+        assertThat(exchanged.path("user").path("id").asText())
+            .isEqualTo(DemoPersonas.KHALID.id().toString());
 
         // The minted access token actually works against a protected route.
         String access = exchanged.path("tokens").path("accessToken").asText();
@@ -115,28 +121,33 @@ class DubaiGovSsoIT {
                 .header("Authorization", "Bearer " + access).GET().build(),
             HttpResponse.BodyHandlers.ofString());
         assertThat(me.statusCode()).isEqualTo(200);
-        assertThat(json.readTree(me.body()).path("role").asText()).isEqualTo("ADMIN");
+        assertThat(json.readTree(me.body()).path("username").asText()).isEqualTo("khalid");
     }
 
     @Test
-    void memberSignInMapsToMemberRole() throws Exception {
-        JsonNode exchanged = runFullFlow("MEMBER");
+    void memberSignInLinksTheExistingMemberAccount() throws Exception {
+        JsonNode exchanged = runFullFlow(DemoPersonas.AHMED.id().toString());
         assertThat(exchanged.path("user").path("role").asText()).isEqualTo("MEMBER");
+        assertThat(exchanged.path("user").path("username").asText()).isEqualTo("ahmed");
     }
 
     @Test
-    void superAdminSignInMapsToSuperAdminRole() throws Exception {
-        JsonNode exchanged = runFullFlow("SUPER_ADMIN");
+    void superAdminSignInLinksTheExistingSuperAdminAccount() throws Exception {
+        JsonNode exchanged = runFullFlow(DemoPersonas.NOURA.id().toString());
         assertThat(exchanged.path("user").path("role").asText()).isEqualTo("SUPER_ADMIN");
+        assertThat(exchanged.path("user").path("username").asText()).isEqualTo("noura");
     }
 
     @Test
     void signingInTwiceReusesTheSameFederatedUser() throws Exception {
-        String firstId = runFullFlow("LEADER").path("user").path("id").asText();
-        String secondId = runFullFlow("LEADER").path("user").path("id").asText();
+        String firstId = runFullFlow(DemoPersonas.FATIMA.id().toString())
+            .path("user").path("id").asText();
+        String secondId = runFullFlow(DemoPersonas.FATIMA.id().toString())
+            .path("user").path("id").asText();
 
-        // findByExternalId(sub) upserts rather than creating a duplicate.
-        assertThat(firstId).isNotBlank();
+        // First login links by email + sets external_id; the second finds
+        // the same account by external_id. No duplicate, same row.
+        assertThat(firstId).isEqualTo(DemoPersonas.FATIMA.id().toString());
         assertThat(secondId).isEqualTo(firstId);
     }
 
@@ -153,9 +164,9 @@ class DubaiGovSsoIT {
 
     // ---- flow driver --------------------------------------------------
 
-    /** Drives start → authorize → approve → callback → exchange and returns
-     *  the parsed exchange response (user + tokens). */
-    private JsonNode runFullFlow(String role) throws Exception {
+    /** Drives start → authorize → approve → callback → exchange for the
+     *  given local account and returns the parsed exchange response. */
+    private JsonNode runFullFlow(String userId) throws Exception {
         // 1) /start — 302 to the (mock) authorize URL, carrying our state.
         HttpResponse<String> start = get(base + "/api/v1/auth/sso/start?audience=mobileWeb");
         assertThat(start.statusCode()).isEqualTo(302);
@@ -164,15 +175,15 @@ class DubaiGovSsoIT {
         String state = queryParam(authorizeUrl, "state");
         assertThat(state).isNotBlank();
 
-        // 2) the mock "login page" renders a role picker.
+        // 2) the mock "login page" lists the local accounts to sign in as.
         HttpResponse<String> page = get(authorizeUrl);
         assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("Sign in as");
+        assertThat(page.body()).contains("Mock Dubai-Gov sign-in");
 
-        // 3) approve as the chosen role — 302 back to our real /callback.
+        // 3) approve as the chosen account — 302 back to our real /callback.
         String callback = base + "/api/v1/auth/sso/callback";
         HttpResponse<String> approve = get(base + "/api/v1/auth/sso/mock/approve"
-            + "?role=" + role
+            + "?userId=" + enc(userId)
             + "&redirect_uri=" + enc(callback)
             + "&state=" + enc(state));
         assertThat(approve.statusCode()).isEqualTo(302);

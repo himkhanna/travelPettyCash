@@ -151,6 +151,24 @@ GoRouter buildAppRouter(WidgetRef ref) {
         builder: (BuildContext context, GoRouterState state) =>
             const SsoCallbackScreen(audience: PortalAudience.webAdmin),
       ),
+      // UAE Pass callbacks (ADR-002) — same screen, but the exchange hits
+      // the UAE-Pass-specific endpoint.
+      GoRoute(
+        path: '/app/auth/uaepass/callback',
+        builder: (BuildContext context, GoRouterState state) =>
+            const SsoCallbackScreen(
+          audience: PortalAudience.mobileApp,
+          exchangePath: '/api/v1/auth/sso/uaepass/exchange',
+        ),
+      ),
+      GoRoute(
+        path: '/portal/auth/uaepass/callback',
+        builder: (BuildContext context, GoRouterState state) =>
+            const SsoCallbackScreen(
+          audience: PortalAudience.webAdmin,
+          exchangePath: '/api/v1/auth/sso/uaepass/exchange',
+        ),
+      ),
       // Back-compat: the old single /login URL bounces to /portal (the more
       // common reason to hit this route directly is bookmarked admin links).
       GoRoute(

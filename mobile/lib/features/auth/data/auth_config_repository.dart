@@ -11,10 +11,12 @@ class AuthConfig {
   const AuthConfig({
     required this.localLoginEnabled,
     required this.dubaiGovSsoEnabled,
+    required this.uaePassSsoEnabled,
   });
 
   final bool localLoginEnabled;
   final bool dubaiGovSsoEnabled;
+  final bool uaePassSsoEnabled;
 
   factory AuthConfig.fromJson(Map<String, dynamic> j) {
     final Map<String, dynamic>? local =
@@ -22,9 +24,12 @@ class AuthConfig {
     final Map<String, dynamic>? sso = j['sso'] as Map<String, dynamic>?;
     final Map<String, dynamic>? dgov =
         sso == null ? null : sso['dubaigov'] as Map<String, dynamic>?;
+    final Map<String, dynamic>? uaepass =
+        sso == null ? null : sso['uaepass'] as Map<String, dynamic>?;
     return AuthConfig(
       localLoginEnabled: (local?['enabled'] as bool?) ?? true,
       dubaiGovSsoEnabled: (dgov?['enabled'] as bool?) ?? false,
+      uaePassSsoEnabled: (uaepass?['enabled'] as bool?) ?? false,
     );
   }
 
@@ -33,6 +38,7 @@ class AuthConfig {
   static const AuthConfig fallback = AuthConfig(
     localLoginEnabled: true,
     dubaiGovSsoEnabled: false,
+    uaePassSsoEnabled: false,
   );
 }
 

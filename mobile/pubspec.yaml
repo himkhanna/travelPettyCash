@@ -20,6 +20,10 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  # Ships with the Flutter SDK; provides usePathUrlStrategy() so web URLs
+  # are path-based (no `#`) and the path-style OIDC callbacks resolve.
+  flutter_web_plugins:
+    sdk: flutter
   flutter_riverpod: ^2.6.1
   flutter_secure_storage: ^9.2.2
   go_router: ^14.6.2
@@ -44,3 +48,4 @@ flutter:
     - assets/demo/
     - assets/demo/receipts/
     - assets/icons/
+    - assets/uaepass/

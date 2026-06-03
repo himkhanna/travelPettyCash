@@ -425,6 +425,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 audience: widget.audience,
                                 disabled: _submitting,
                               ),
+                              _UaePassSsoButton(
+                                audience: widget.audience,
+                                disabled: _submitting,
+                              ),
                               const SizedBox(height: AppSpacing.sm),
                               TextButton(
                                 onPressed: _submitting
@@ -521,3 +525,67 @@ class _DubaiGovSsoButton extends ConsumerWidget {
     html.window.location.href = url;
   }
 }
+
+/// "Sign in with UAE Pass" button. Same shape as [_DubaiGovSsoButton] but
+/// probes [authConfigProvider].uaePassSsoEnabled and starts the UAE Pass
+/// flow at `/auth/sso/uaepass/start`. See ADR-002.
+class _UaePassSsoButton extends ConsumerWidget {
+  const _UaePassSsoButton({
+    required this.audience,
+    required this.disabled,
+  });
+  final PortalAudience audience;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<AuthConfig> cfg = ref.watch(authConfigProvider);
+    final bool show = cfg.maybeWhen(
+      data: (AuthConfig c) => c.uaePassSsoEnabled,
+      orElse: () => false,
+    );
+    if (!show) return const SizedBox.shrink();
+
+    final String audienceParam = switch (audience) {
+      PortalAudience.mobileApp => 'mobileWeb',
+      PortalAudience.webAdmin => 'portal',
+    };
+    // Official UAE PASS sign-in button — the exact "Outline Pill" artwork
+    // used on sso.dubai.gov.ae (TDRA brand asset). Rendering the official
+    // image guarantees brand compliance. AR variant swaps in for Arabic.
+    final bool isArabic = Directionality.of(context) == TextDirection.rtl;
+    final String asset = isArabic
+        ? 'assets/uaepass/uaepass_signin_ar.png'
+        : 'assets/uaepass/uaepass_signin.png';
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Center(
+        child: Semantics(
+          button: true,
+          label: 'Sign in with UAE PASS',
+          child: Opacity(
+            opacity: disabled ? 0.5 : 1.0,
+            child: InkWell(
+              onTap:
+                  disabled ? null : () => _navigateToStart(ref, audienceParam),
+              borderRadius: BorderRadius.circular(27),
+              child: Image.asset(
+                asset,
+                height: 48,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToStart(WidgetRef ref, String audienceParam) {
+    final String base = ref.read(apiConfigProvider).baseUrl;
+    final String url =
+        '$base/api/v1/auth/sso/uaepass/start?audience=$audienceParam';
+    html.window.location.href = url;
+  }
+}
+

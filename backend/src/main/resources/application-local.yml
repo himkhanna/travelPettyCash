@@ -64,3 +64,21 @@ pdd:
         pdd.delegation-expenses.leader: LEADER
         pdd.delegation-expenses.member: MEMBER
       default-role: MEMBER
+    # UAE Pass (TDRA national digital ID). Off by default; flip enabled
+    # to true to light up the "Sign in with UAE Pass" button. Defaults
+    # target the public staging sandbox (sandbox_stage credentials). UAE
+    # Pass returns identity only — role comes from the linked local
+    # account. See docs/architecture/ADR-002-uaepass-sso.md.
+    uaepass:
+      enabled: ${PDD_UAEPASS_ENABLED:false}
+      client-id: ${PDD_UAEPASS_CLIENT_ID:sandbox_stage}
+      client-secret: ${PDD_UAEPASS_CLIENT_SECRET:sandbox_stage}
+      redirect-uri: http://localhost:8080/api/v1/auth/sso/uaepass/callback
+      authorization-uri: https://stg-id.uaepass.ae/idshub/authorize
+      token-uri: https://stg-id.uaepass.ae/idshub/token
+      user-info-uri: https://stg-id.uaepass.ae/idshub/userinfo
+      logout-uri: https://stg-id.uaepass.ae/idshub/logout
+      web-mobile-callback: http://localhost:5173/app/auth/uaepass/callback
+      web-portal-callback: http://localhost:5173/portal/auth/uaepass/callback
+      scope: urn:uae:digitalid:profile:general
+      acr-values: urn:safelayer:tws:policies:authentication:level:low
