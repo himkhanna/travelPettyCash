@@ -6,6 +6,9 @@ import ae.gov.pdd.pettycash.expense.ExpenseCategory;
 import ae.gov.pdd.pettycash.expense.ExpenseCategoryRepository;
 import ae.gov.pdd.pettycash.expense.ExpenseService;
 import ae.gov.pdd.pettycash.expense.dto.ExpenseDto;
+import ae.gov.pdd.pettycash.fund.Allocation;
+import ae.gov.pdd.pettycash.fund.AllocationRepository;
+import ae.gov.pdd.pettycash.fund.FundsStatus;
 import ae.gov.pdd.pettycash.fund.Source;
 import ae.gov.pdd.pettycash.fund.SourceRepository;
 import ae.gov.pdd.pettycash.mission.Mission;
@@ -45,6 +48,7 @@ public class ReportService {
     private final SourceRepository sources;
     private final ExpenseCategoryRepository categories;
     private final MissionRepository missions;
+    private final AllocationRepository allocations;
     private final PdfReportRenderer pdfRenderer;
     private final XlsxReportRenderer xlsxRenderer;
 
@@ -55,6 +59,7 @@ public class ReportService {
         SourceRepository sources,
         ExpenseCategoryRepository categories,
         MissionRepository missions,
+        AllocationRepository allocations,
         PdfReportRenderer pdfRenderer,
         XlsxReportRenderer xlsxRenderer
     ) {
@@ -64,6 +69,7 @@ public class ReportService {
         this.sources = sources;
         this.categories = categories;
         this.missions = missions;
+        this.allocations = allocations;
         this.pdfRenderer = pdfRenderer;
         this.xlsxRenderer = xlsxRenderer;
     }
@@ -248,7 +254,7 @@ public class ReportService {
             catByCode.put(c.getCode(), c);
         }
         ReportContext ctx = new ReportContext(
-            syntheticTrip, allExp, userById, sourceById, catByCode
+            syntheticTrip, allExp, userById, sourceById, catByCode, Map.of()
         );
         String fname = "mission-" + slug(m.getName())
             + (date == null ? "" : "-" + date.toString());
@@ -279,7 +285,22 @@ public class ReportService {
         for (Source s : sources.findAll()) sourceById.put(s.getId(), s);
         Map<String, ExpenseCategory> catByCode = new HashMap<>();
         for (ExpenseCategory c : categories.findAll()) catByCode.put(c.getCode(), c);
-        return new ReportContext(trip, all, userById, sourceById, catByCode);
+        return new ReportContext(
+            trip, all, userById, sourceById, catByCode, allocatedBySource(tripId));
+    }
+
+    /** Funds allocated into the trip from each source = accepted admin-pool
+     *  allocations (fromUserId == null) grouped by source. Leader→member
+     *  allocations are re-distributions of already-sourced funds, so they're
+     *  excluded to avoid double-counting. Used for the finance letter's
+     *  ALLOCATED column (BRD §2.6). */
+    private Map<UUID, Long> allocatedBySource(UUID tripId) {
+        Map<UUID, Long> out = new HashMap<>();
+        for (Allocation a : allocations.findByTripIdOrderByCreatedAtAsc(tripId)) {
+            if (a.getFromUserId() != null || a.getStatus() != FundsStatus.ACCEPTED) continue;
+            out.merge(a.getSourceId(), a.getAmountMinor(), Long::sum);
+        }
+        return out;
     }
 
     private static ApiException forbidden() {
@@ -308,19 +329,25 @@ public class ReportService {
         final Map<UUID, User> userById;
         final Map<UUID, Source> sourceById;
         final Map<String, ExpenseCategory> catByCode;
+        /** Funds allocated into the trip per source (minor units). See
+         *  ReportService.allocatedBySource. Empty when not computed. */
+        final Map<UUID, Long> allocatedBySource;
 
         ReportContext(
             TripDto trip,
             List<ExpenseDto> expenses,
             Map<UUID, User> userById,
             Map<UUID, Source> sourceById,
-            Map<String, ExpenseCategory> catByCode
+            Map<String, ExpenseCategory> catByCode,
+            Map<UUID, Long> allocatedBySource
         ) {
             this.trip = trip;
             this.expenses = Collections.unmodifiableList(expenses);
             this.userById = Collections.unmodifiableMap(userById);
             this.sourceById = Collections.unmodifiableMap(sourceById);
             this.catByCode = Collections.unmodifiableMap(catByCode);
+            this.allocatedBySource =
+                Collections.unmodifiableMap(allocatedBySource);
         }
 
         ReportData forUser(UUID userId) {
@@ -341,7 +368,7 @@ public class ReportService {
                     .atZone(ZoneOffset.UTC).toLocalDate().equals(day))
                 .toList();
             return new ReportContext(
-                trip, filtered, userById, sourceById, catByCode
+                trip, filtered, userById, sourceById, catByCode, allocatedBySource
             );
         }
     }

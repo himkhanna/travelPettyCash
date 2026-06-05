@@ -126,13 +126,16 @@ public class PdfReportRenderer {
                 long spent = ctx.expenses.stream()
                     .filter(e -> e.sourceId().equals(s.getId()))
                     .mapToLong(e -> e.amount().amount()).sum();
-                if (spent == 0) continue;
-                // Allocated per source isn't tracked separately on the trip
-                // entity yet (we only have totalBudget). Show spent/returned
-                // and a dash for allocated until that detail is exposed.
-                tableRow(t, s.getName(), "—",
-                    formatMoney(currency, spent),
-                    "—");
+                long allocated = ctx.allocatedBySource.getOrDefault(s.getId(), 0L);
+                if (spent == 0 && allocated == 0) continue;
+                // Allocated = accepted admin-pool allocations from this source;
+                // returned = allocated − spent (BRD §2.6). Falls back to "—"
+                // when allocation data isn't available (e.g. mission rollup).
+                String allocatedCell = allocated > 0 ? formatMoney(currency, allocated) : "—";
+                String returnedCell = allocated > 0
+                    ? formatMoney(currency, allocated - spent) : "—";
+                tableRow(t, s.getName(), allocatedCell,
+                    formatMoney(currency, spent), returnedCell);
             }
             doc.add(t);
             doc.add(Chunk.NEWLINE);
