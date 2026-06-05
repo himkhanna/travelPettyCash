@@ -63,7 +63,7 @@ When in doubt, **ask the product owner**. Do not silently invent features or cha
 - **Framework:** Spring Boot 3.x (Web, Security, Data JPA, Validation, Actuator).
 - **Build:** Gradle (Kotlin DSL) or Maven — pick one in the first commit. Default: **Gradle KTS**.
 - **Database:** PostgreSQL 15+. Migrations via **Flyway**. No Hibernate auto-DDL in any environment.
-- **Auth:** OAuth2 / OIDC. Initial implementation: Spring Authorization Server self-hosted, or integration with UAE Pass if PDD mandates it. JWT access tokens (short TTL, 15 min) + opaque refresh tokens.
+- **Auth:** OAuth2 / OIDC. **Implemented:** two government IdPs — **Dubai-Gov / Smart Dubai** (ADR-001) and **UAE Pass / TDRA** (ADR-002), both feature-flagged, plus local username/password. JWT access tokens (short TTL, 15 min) + opaque refresh tokens. UAE Pass returns identity only (Emirates ID via `users.emirates_id`, V012) — role comes from the linked local account.
 - **API style:** REST + JSON, versioned at `/api/v1/...`. OpenAPI 3 spec generated via springdoc; spec file checked into repo at `backend/openapi/openapi.yaml`.
 - **File storage:** S3-compatible object store (MinIO on-prem). Receipts and signed PDF reports go here; **never** stored in the relational DB as BLOBs.
 - **Reports:** server-side generation. Excel via **Apache POI**, PDF via **OpenPDF** or **iText 7 Community** (license-check before use). Digital signature via PKCS#11 / PAdES.
@@ -188,7 +188,7 @@ These are the core entities. Names are normative — use them exactly.
 
 1. **All monetary amounts are stored as `BIGINT` minor units** (e.g. fils for AED, halalas for SAR). Never as `DOUBLE` or `FLOAT`. In Java, wrap in a `Money` value object backed by `long` + `Currency`. In Dart, wrap in a `Money` class backed by `int` + `currencyCode`.
 2. **All arithmetic operations on money go through the `Money` type.** No raw `+`, `-`, `*` on amount fields in business code.
-3. **Currency conversion is out of scope.** A trip is single-currency. If a future requirement asks for FX, raise it as a new design item — do not improvise.
+3. **Currency conversion — implemented as a record-only, manual-rate model (ADR-003).** A trip stays single-currency = the **base**. An expense MAY optionally record a foreign-currency original: `original_currency` + `original_amount_minor` + `exchange_rate` (V013). The canonical `amount` stays in the trip (base) currency = foreign × rate, rounded once; balances/this section's rules are unchanged. The rate is entered manually (no auto FX feed). Do not put FX math in balance logic.
 4. **Negative balances are permitted** but flagged. Track `balance` per `(userId, tripId, sourceId)` tuple. Recompute from event log on demand; do not trust cached balances for reports.
 5. **Rounding:** none, because we use minor units. If display-time conversion to major units is needed, round half-up to currency-defined decimals.
 
@@ -375,7 +375,7 @@ Field staff in foreign countries with patchy connectivity is the norm.
 
 ## 15. Out of scope (don't build this unless asked)
 
-- FX / multi-currency within a single trip.
+- FX / multi-currency *balances* within a single trip. (Note: an expense may now **record** a foreign-currency original with a manual rate — see §6 / ADR-003 — but balances, allocations, and reports stay in the single trip base currency. Live/auto FX feeds remain out of scope.)
 - OCR of receipt photos (deferred enhancement). *Shipped in slice 9 ahead of the original plan — Tesseract via tess4j.*
 - Real-time presence / typing indicators in chat.
 - Push notifications via Firebase (sovereignty review pending).
@@ -386,7 +386,7 @@ Field staff in foreign countries with patchy connectivity is the norm.
 
 ## 16. Open questions (track here until resolved)
 
-- [ ] UAE Pass integration: required for v1, or post-launch? **Owner:** PM.
+- [x] UAE Pass integration — **resolved 2026-06-05 (directed in)**: built against the TDRA staging sandbox, feature-flagged. Link-to-existing-or-reject (by Emirates ID then email; no auto-provision). Architecture in `docs/architecture/ADR-002-uaepass-sso.md`. Real-tenant go-live still needs TDRA prod credentials + redirect-URI registration.
 - [x] Production identity provider — **resolved 2026-05-31**: Smart Dubai's `smartdubaioidcp` OIDC provider (the Dubai-Gov shared IdP, internally called "DDA SSO"). Architecture in `docs/architecture/ADR-001-dda-sso.md`; Slice A (backend) and Slice B (mobile UI) shipped feature-flagged off. Demo-tenant credentials in hand; prod tenant URL + role-claim contract still to confirm with DDA.
 - [ ] Signature key custody: PDD HSM, Moro Hub HSM, or software keystore for pilot? **Owner:** Security.
 - [x] Final Arabic product name — **resolved 2026-05-17**: *صرفيات الوفود الرسمية* (PDD Delegation Expenses). Internal IDs (`pdd_petty_cash` package / DB / Java root) retained as opaque codes; planned rename migration tracked separately (§17).
@@ -693,6 +693,41 @@ credentials. Details + the DDA blocker are in
   upsert). 13 unit/slice pass; the IT skips locally under the
   repo-standard `@EnabledIf(dockerReachable)` guard and runs on CI.
 
+### 2026-06-05 — UAE Pass SSO + Business-Case gap closure
+
+- **UAE Pass (TDRA) OIDC** (ADR-002, merged PR #5). Real staging sandbox
+  (`stg-id.uaepass.ae`, `sandbox_stage`), feature-flagged
+  (`PDD_UAEPASS_ENABLED`). `auth/sso` gains `UaePassProperties` /
+  `UaePassSsoService` (Auth-Code + HTTP-Basic token; **link-to-existing-
+  or-reject** — match `external_id`→Emirates ID→email, never auto-
+  provision) / `UaePassController`. `/auth/config` reports
+  `sso.uaepass.enabled`; the login screen shows the **official TDRA
+  "Sign in with UAE PASS" button** (`mobile/assets/uaepass`, EN + AR).
+- **Emirates ID** on the user module — `V012` adds `users.emirates_id`
+  (+ partial unique index); UAE Pass links by it first.
+- **Business-Case gaps closed** (`docs/business-case-gap-analysis.md`,
+  merged PR #6):
+  - **Receipt now optional** (BRD §2.3) — Add-Expense no longer blocks
+    submit on a photo.
+  - **Currency conversion, manual rate** (BRD §2.4, ADR-003, `V013`) —
+    see §6. Foreign amount + rate stored alongside the trip-currency base.
+  - **Allocation-vs-utilization** (BRD §2.6) — the finance-letter PDF's
+    ALLOCATED/RETURNED columns now compute from accepted admin-pool
+    allocations per source.
+  - **Mission-level budget** (BRD §2.2, `V014`) — `missions.budget_minor`
+    + `budget_currency`; `PATCH /api/v1/missions/{id}/budget` (admin);
+    CMS mission-detail set/edit-budget dialog.
+  - **WhatsApp report sharing** (BRD §2.6) — `save_to_disk.shareBytes`
+    uses the Web Share API (device share sheet → WhatsApp) with a
+    download fallback; a "Share" button on the Reports dashboard.
+- **Run note:** on a heavily-loaded machine the debug `flutter run` web
+  server can stall serving DDC modules (blank page). The reliable fallback
+  is a **release build** served statically: `flutter build web --release
+  --dart-define=PDD_API_BASE=<host:8080>` then `node mobile/serve_release.js`
+  (SPA fallback). For on-phone LAN testing, build with the LAN IP as the
+  API base, add it to CORS + the UAE Pass redirect/callback URIs in
+  `application-local.yml` (kept local, uncommitted), and open the firewall.
+
 ### Identifier note
 
 Internal IDs remain opaque: Dart package `pdd_petty_cash`, Java root `ae.gov.pdd.pettycash`, DB `pdd_petty_cash`. Rename is tracked separately (see "Still pending" → Identifier migration).
@@ -726,4 +761,4 @@ All four roles use `demo1234` as the password.
 
 ---
 
-*Last updated: 2026-05-31. Update this file in the same PR as any architectural change.*
+*Last updated: 2026-06-05. Update this file in the same PR as any architectural change.*

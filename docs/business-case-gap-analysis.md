@@ -3,6 +3,11 @@
 **Source:** *Business Case & High-Level Requirements — Mission Expenses App* (v1, 18-05-2026, S. Jain).
 **Assessed against:** the developed PDD Delegation Expenses app (backend + Flutter), verified in code on 2026-06-05.
 
+> **Update 2026-06-05:** all five confirmed gaps below have since been **built and merged**
+> (PR #6 + follow-ups). The original assessment is preserved for the record; the
+> "Confirmed gaps" table now carries a ✅ Resolved status column. See CLAUDE.md §17
+> (2026-06-05 entry) and ADR-003 for the as-built detail.
+
 **Legend:** ✅ Built · 🟡 Partial · ❌ Gap · ⚠️ Divergence (decision needed)
 
 ## 1. Status by requirement
@@ -25,13 +30,13 @@
 
 ## 2. Confirmed gaps to develop
 
-| # | Item | BRD § | Type | Rough effort | Notes / dependencies |
-|---|---|---|---|:--:|---|
-| 1 | **Currency conversion (FX)** | 2.4 | ❌ Gap | **L** | Add `originalCurrency`, `originalAmount`, `exchangeRate`, `baseAmount` to Expense (+ migration, API, form input, reports show both). Needs an FX-rate source decision (manual entry vs on-prem/approved rate API — sovereignty per CLAUDE.md §3). Reverses the current "FX out of scope" design → warrants a short ADR. |
-| 2 | **Mission-level budget** | 2.2 | ❌ Gap | **M** | Add budget to `Mission` + assign/increase endpoint + rollup vs child trips + Admin UI. |
-| 3 | **Allocation-vs-utilization completeness** | 2.6 | 🟡 Partial | **S–M** | Aggregate existing Allocation data per source/trip and fill the finance-letter "ALLOCATED" column + report views (data exists; needs wiring). |
-| 4 | **WhatsApp report sharing** | 2.6 | ❌ Gap | **S** | Add share alongside email/download (Web Share API on PWA / `wa.me` link with the generated report). |
-| 5 | **Receipt optional vs mandatory** | 2.3 | ⚠️ Decision | **XS** | If PM agrees to BRD (optional): relax the mobile submit-guard. Else keep + note as intentional. |
+| # | Item | BRD § | Type | Rough effort | Status | Notes / dependencies |
+|---|---|---|---|:--:|:--:|---|
+| 1 | **Currency conversion (FX)** | 2.4 | ❌ Gap | **L** | ✅ Resolved | Manual-rate, record-only model — ADR-003. `V013` adds `original_currency` / `original_amount_minor` / `exchange_rate`; base (trip-ccy) amount stays canonical. Mobile "spent in another currency?" toggle + live preview. |
+| 2 | **Mission-level budget** | 2.2 | ❌ Gap | **M** | ✅ Resolved | `V014` adds `missions.budget_minor` + `budget_currency`; `PATCH /api/v1/missions/{id}/budget` (admin, assign/increase); CMS mission-detail set/edit dialog. |
+| 3 | **Allocation-vs-utilization completeness** | 2.6 | 🟡 Partial | **S–M** | ✅ Resolved | `ReportService.allocatedBySource` aggregates accepted admin-pool allocations; finance-letter PDF ALLOCATED/RETURNED columns now computed. |
+| 4 | **WhatsApp report sharing** | 2.6 | ❌ Gap | **S** | ✅ Resolved | `save_to_disk.shareBytes` via Web Share API (device share sheet → WhatsApp) with download fallback; Share button on the Reports dashboard. |
+| 5 | **Receipt optional vs mandatory** | 2.3 | ⚠️ Decision | **XS** | ✅ Resolved | PM confirmed BRD (optional); mobile submit-guard relaxed — receipt no longer required to post. |
 
 ## 3. Decisions needed from the product owner
 
