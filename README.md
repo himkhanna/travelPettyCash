@@ -5,23 +5,34 @@
 Mobile-first, multi-currency travel funds allocation and expense submission for
 the Protocol Department, Government of Dubai.
 
-> **Demo-week build (2026-05-25).** End-to-end stack is live: Spring Boot
+> **Current build (2026-06-05).** End-to-end stack is live: Spring Boot
 > backend on Postgres + MinIO, Flutter mobile app (`/app`), Flutter Web
-> admin portal (`/portal`), and a wired chat / notifications / reports
-> pipeline. See `CLAUDE.md` for the full project contract and §17 for the
-> current sprint status.
+> admin portal (`/portal`), a wired chat / notifications / reports
+> pipeline, **two government SSO providers (Dubai-Gov + UAE Pass)**,
+> **manual-rate currency conversion**, and **mission-level budgets**.
+> See `CLAUDE.md` for the full project contract and §17 for the current
+> sprint status.
 
 ## What's running
 
 - **Mobile (`/app`)** — Member + Leader flows: trips list with Active /
   Upcoming / Archived sections, trip dashboard, expense list, **Add
-  Expense** with required invoice photo and multi-line items + Tesseract
-  OCR auto-fill, peer transfers, allocation accept/decline, **inbox** (in
-  trip + global), **chat** (global from Profile menu), notifications that
-  deep-link into the right surface.
+  Expense** with optional invoice photo and multi-line items + Tesseract
+  OCR auto-fill, an optional **"spent in another currency?"** toggle
+  (foreign amount + manual rate → live trip-currency preview), peer
+  transfers, allocation accept/decline, **inbox** (in trip + global),
+  **chat** (global from Profile menu), notifications that deep-link into
+  the right surface.
+- **Sign-in** — local username/password, plus two feature-flagged
+  government IdPs: **Dubai-Gov / Smart Dubai** (OIDC + PKCE) and
+  **UAE Pass / TDRA** (OIDC, official "Sign in with UAE PASS" button).
+  UAE Pass links to an existing account by Emirates ID then email and
+  rejects unknown identities. See `docs/architecture/ADR-001` /
+  `ADR-002`.
 - **Admin portal (`/portal`)** — Dashboard with KPI strip and
   "Needs-attention" alerts, **Trips** screen with filters, **Missions**
-  list + detail at `/cms/missions/:id`, **Expenses** screen with
+  list + detail at `/cms/missions/:id` with **set/edit mission budget**,
+  **Expenses** screen with
   missing-receipt filter chip, **Expense detail** at
   `/cms/expenses/:id` (invoice viewer, breakdown, conversation thread,
   @-mention), **Reports** module (pie-chart dashboard +
@@ -32,8 +43,13 @@ the Protocol Department, Government of Dubai.
   refresh), RFC-7807 problem details on every error, idempotency keys on
   every write, MinIO presigned URLs for receipts, server-rendered PDF
   (OpenPDF) + XLSX (Apache POI) reports, scheduled report cron
-  (`@Scheduled` 5-min poll), Tesseract OCR module (tess4j). Flyway
-  migrations through `V010__notifications_chat_and_report_types.sql`.
+  (`@Scheduled` 5-min poll), Tesseract OCR module (tess4j), Dubai-Gov +
+  UAE Pass OIDC under `auth/sso` (feature-flagged), mission-budget
+  endpoint (`PATCH /missions/{id}/budget`), and finance-letter
+  allocation-vs-utilization columns computed from accepted allocations.
+  Flyway migrations through
+  `V014__missions_budget.sql` (V011 SSO `external_id`, V012
+  `users.emirates_id`, V013 expense currency-conversion fields).
 
 ## Repository layout
 
@@ -50,7 +66,7 @@ the Protocol Department, Government of Dubai.
 │   ├── build.gradle.kts
 │   └── src/main/java/ae/gov/pdd/pettycash/
 │       ├── PettyCashApplication.java
-│       ├── auth/                   # JWT, login, refresh
+│       ├── auth/                   # JWT, login, refresh, sso/ (Dubai-Gov + UAE Pass OIDC)
 │       ├── trip/                   # Trips + mission link
 │       ├── mission/                # Missions (nestable via parent_mission_id)
 │       ├── fund/                   # Sources, allocations, transfers
@@ -62,7 +78,7 @@ the Protocol Department, Government of Dubai.
 │       ├── search/                 # Global search endpoint
 │       ├── audit/                  # /api/v1/audit feed
 │       └── common/                 # Money, error envelope, …
-│   └── src/main/resources/db/migration/   # Flyway V001..V009
+│   └── src/main/resources/db/migration/   # Flyway V001..V014
 ├── mobile/                         # Flutter (mobile + Flutter Web CMS)
 │   ├── pubspec.yaml
 │   ├── lib/
@@ -75,7 +91,7 @@ the Protocol Department, Government of Dubai.
 │   │   │   └── sync/               # Offline queue + sync coordinator
 │   │   ├── l10n/                   # intl_en.arb, intl_ar.arb
 │   │   ├── features/
-│   │   │   ├── auth/               # Login, role guard, signout
+│   │   │   ├── auth/               # Login, SSO buttons + callback, role guard, signout
 │   │   │   ├── trips/              # List, dashboard, /m/all-trips
 │   │   │   ├── expenses/           # Add (multi-line), detail, comments
 │   │   │   ├── funds/              # Allocate, transfer, manage
@@ -135,7 +151,7 @@ Manual equivalents:
 # Postgres + MinIO
 docker compose -f ops/docker-compose.yml up -d postgres minio
 
-# Backend (Flyway V001..V010 runs on boot; seeders auto-populate demo data)
+# Backend (Flyway V001..V014 runs on boot; seeders auto-populate demo data)
 cd backend
 gradle bootRun
 
@@ -144,6 +160,17 @@ cd ../mobile
 flutter pub get
 flutter run -d web-server --web-port 5173 --web-hostname 127.0.0.1
 ```
+
+> **If the debug dev server serves blank pages** (it can stall delivering
+> the hundreds of DDC module scripts on a heavily-loaded machine), build a
+> release bundle and serve it statically instead — this is the reliable
+> path for demos and on-phone testing:
+>
+> ```powershell
+> cd mobile
+> flutter build web --release --dart-define=PDD_API_BASE=http://localhost:8080
+> node serve_release.js          # static server on :5173 with SPA fallback
+> ```
 
 - **Mobile app**: <http://127.0.0.1:5173/app>
 - **Admin portal**: <http://127.0.0.1:5173/portal>
@@ -211,9 +238,10 @@ Notes:
    - Admin (`khalid`) creates a trip under an existing mission → assigns
      funds from a source.
    - Leader (`fatima`) accepts → allocates to member.
-   - Member (`layla` / `ahmed`) accepts → opens **Add Expense**, attaches
-     an invoice photo (required), adds one or more line items, optionally
-     lets OCR auto-fill the first line.
+   - Member (`layla` / `ahmed`) accepts → opens **Add Expense**, optionally
+     attaches an invoice photo, adds one or more line items (optionally in
+     a foreign currency with a manual rate), optionally lets OCR auto-fill
+     the first line.
    - Admin opens the expense from `/cms/expenses/:id` → 💬 → @-mentions
      the member → posts comment.
    - Member opens **Inbox** → taps the EXPENSE_QUERY notification → lands
