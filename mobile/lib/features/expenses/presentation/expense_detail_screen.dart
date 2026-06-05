@@ -129,6 +129,16 @@ class ExpenseDetailScreen extends ConsumerWidget {
                           mono: true,
                           emphasis: true,
                         ),
+                        // ADR-003: foreign original + manual rate, when present.
+                        if (e.originalAmount != null)
+                          _DetailKV(
+                            k: 'Original',
+                            v: e.exchangeRate == null
+                                ? e.originalAmount!.format()
+                                : '${e.originalAmount!.format()} '
+                                    '@ ${e.exchangeRate}',
+                            mono: true,
+                          ),
                         _DetailKV(k: 'Source', v: sourceName),
                         _DetailKV(k: 'Added by', v: authorName),
                         _DetailKV(

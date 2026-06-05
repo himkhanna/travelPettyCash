@@ -222,6 +222,22 @@ class _HeaderCard extends StatelessWidget {
               letterSpacing: -0.4,
             ),
           ),
+          // ADR-003: foreign original + manual rate, when present.
+          if (expense.originalAmount != null) ...<Widget>[
+            const SizedBox(height: 2),
+            Text(
+              expense.exchangeRate == null
+                  ? expense.originalAmount!.format()
+                  : '${expense.originalAmount!.format()} '
+                      '@ ${expense.exchangeRate}',
+              style: const TextStyle(
+                color: CmsColors.textSecondary,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -185,6 +185,25 @@ public class ExpenseService {
             throw badRequest("expenses/unknown-source", "Unknown source: " + req.sourceId());
         }
 
+        // Currency conversion (ADR-003): all-or-none; rate > 0; foreign ≠ base.
+        final boolean anyFx = req.originalCurrency() != null
+            || req.originalAmountMinor() != null || req.exchangeRate() != null;
+        final boolean allFx = req.originalCurrency() != null
+            && req.originalAmountMinor() != null && req.exchangeRate() != null;
+        if (anyFx && !allFx) {
+            throw badRequest("expenses/fx-incomplete",
+                "originalCurrency, originalAmountMinor and exchangeRate must be set together.");
+        }
+        if (allFx) {
+            if (req.exchangeRate().signum() <= 0) {
+                throw badRequest("expenses/fx-bad-rate", "exchangeRate must be > 0");
+            }
+            if (req.originalCurrency().equals(trip.getCurrency())) {
+                throw badRequest("expenses/fx-same-currency",
+                    "originalCurrency must differ from the trip currency for a conversion.");
+            }
+        }
+
         Expense row = new Expense(
             req.id(),
             trip.getId(),
@@ -198,6 +217,10 @@ public class ExpenseService {
             req.occurredAt(),
             req.receiptObjectKey()
         );
+        if (allFx) {
+            row.recordConversion(
+                req.originalCurrency(), req.originalAmountMinor(), req.exchangeRate());
+        }
         expenses.save(row);
         return ExpenseDto.from(row);
     }

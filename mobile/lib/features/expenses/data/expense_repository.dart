@@ -32,6 +32,11 @@ abstract class ExpenseRepository {
     int quantity = 1,
     String? receiptObjectKey,
     required String idempotencyKey,
+    // ADR-003: foreign-currency original (all-three-or-none; null = entered
+    // directly in the trip currency). `amount` is always the trip-ccy base.
+    String? originalCurrency,
+    int? originalAmountMinor,
+    double? exchangeRate,
   });
 
   Future<Expense> update(String expenseId, ExpensePatch patch);

@@ -90,8 +90,18 @@ class FakeExpenseRepository implements ExpenseRepository {
     int quantity = 1,
     String? receiptObjectKey,
     required String idempotencyKey,
+    String? originalCurrency,
+    int? originalAmountMinor,
+    double? exchangeRate,
   }) async {
     await _store.ensureLoaded();
+
+    // ADR-003: reconstruct the foreign-currency original so the UI reflects
+    // it. Null when the expense was entered directly in the trip currency.
+    final Money? originalAmount =
+        originalCurrency != null && originalAmountMinor != null
+            ? Money(originalAmountMinor, originalCurrency)
+            : null;
 
     // Idempotency: if a row already exists with this id (in pending OR
     // accepted), return it. CLAUDE.md §11 — client UUID is canonical.
@@ -120,6 +130,8 @@ class FakeExpenseRepository implements ExpenseRepository {
         createdAt: _cfg.now(),
         receiptObjectKey: receiptObjectKey,
         pendingSync: true,
+        originalAmount: originalAmount,
+        exchangeRate: exchangeRate,
       );
       _store.pendingExpenses.add(pending);
       _store.emit(DemoStoreEvent.pendingExpensesChanged);
@@ -141,6 +153,8 @@ class FakeExpenseRepository implements ExpenseRepository {
       occurredAt: occurredAt,
       createdAt: _cfg.now(),
       receiptObjectKey: receiptObjectKey,
+      originalAmount: originalAmount,
+      exchangeRate: exchangeRate,
     );
     _store.expenses.add(e);
     _store.emit(DemoStoreEvent.expensesChanged);
@@ -168,6 +182,8 @@ class FakeExpenseRepository implements ExpenseRepository {
       createdAt: old.createdAt,
       receiptObjectKey: old.receiptObjectKey,
       updatedAt: _cfg.now(),
+      originalAmount: old.originalAmount,
+      exchangeRate: old.exchangeRate,
     );
     _store.expenses[i] = updated;
     _store.emit(DemoStoreEvent.expensesChanged);
@@ -210,6 +226,8 @@ class FakeExpenseRepository implements ExpenseRepository {
         createdAt: old.createdAt,
         receiptObjectKey: objectKey,
         updatedAt: _cfg.now(),
+        originalAmount: old.originalAmount,
+        exchangeRate: old.exchangeRate,
       );
       _store.emit(DemoStoreEvent.expensesChanged);
     }

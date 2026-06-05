@@ -77,6 +77,9 @@ class ApiExpenseRepository implements ExpenseRepository {
     int quantity = 1,
     String? receiptObjectKey,
     required String idempotencyKey,
+    String? originalCurrency,
+    int? originalAmountMinor,
+    double? exchangeRate,
   }) async {
     try {
       final Response<dynamic> resp = await _dio.post<dynamic>(
@@ -93,6 +96,12 @@ class ApiExpenseRepository implements ExpenseRepository {
           'details': details,
           'occurredAt': occurredAt.toUtc().toIso8601String(),
           if (receiptObjectKey != null) 'receiptObjectKey': receiptObjectKey,
+          // ADR-003: foreign-currency original (all-three-or-none). The
+          // canonical `amount` above stays in the trip (base) currency.
+          if (originalCurrency != null) 'originalCurrency': originalCurrency,
+          if (originalCurrency != null)
+            'originalAmountMinor': originalAmountMinor,
+          if (originalCurrency != null) 'exchangeRate': exchangeRate,
         },
         options: Options(headers: <String, dynamic>{
           'Idempotency-Key': idempotencyKey,
@@ -227,6 +236,8 @@ class ApiExpenseRepository implements ExpenseRepository {
 
   Expense _expenseFromJson(Map<String, dynamic> j) {
     final Map<String, dynamic> amount = j['amount'] as Map<String, dynamic>;
+    final Map<String, dynamic>? original =
+        j['originalAmount'] as Map<String, dynamic>?;
     return Expense(
       id: j['id'] as String,
       tripId: j['tripId'] as String,
@@ -242,6 +253,10 @@ class ApiExpenseRepository implements ExpenseRepository {
       updatedAt: j['updatedAt'] == null
           ? null
           : DateTime.parse(j['updatedAt'] as String),
+      originalAmount: original == null
+          ? null
+          : Money(original['amount'] as int, original['currency'] as String),
+      exchangeRate: (j['exchangeRate'] as num?)?.toDouble(),
     );
   }
 

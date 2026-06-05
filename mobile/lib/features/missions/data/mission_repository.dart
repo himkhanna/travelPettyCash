@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../core/api/api_error.dart';
+import '../../../core/money/money.dart';
 import '../domain/mission.dart';
 
 class MissionRepository {
@@ -74,6 +75,28 @@ class MissionRepository {
     }
   }
 
+  /// Admin only on the server. Sets the mission-level budget (BRD §2.2)
+  /// and returns the updated mission. [amountMinor] is in integer minor
+  /// units (e.g. fils/halalas); [currency] is the ISO 4217 code.
+  Future<Mission> setBudget(
+    String missionId,
+    int amountMinor,
+    String currency,
+  ) async {
+    try {
+      final Response<dynamic> resp = await _dio.patch<dynamic>(
+        '/api/v1/missions/$missionId/budget',
+        data: <String, dynamic>{
+          'amount': amountMinor,
+          'currency': currency,
+        },
+      );
+      return _fromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiError.fromResponse(e.response, cause: e);
+    }
+  }
+
   /// Server rejects (409) when the mission still has trips attached or any
   /// child missions. The CMS screen surfaces the detail string from the
   /// 7807 envelope so the admin knows what to clean up first.
@@ -98,5 +121,11 @@ class MissionRepository {
         closedAt: j['closedAt'] == null
             ? null
             : DateTime.parse(j['closedAt'] as String),
+        budget: j['budget'] == null
+            ? null
+            : _moneyFromJson(j['budget'] as Map<String, dynamic>),
       );
+
+  Money _moneyFromJson(Map<String, dynamic> j) =>
+      Money(j['amount'] as int, j['currency'] as String);
 }

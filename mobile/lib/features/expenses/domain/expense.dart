@@ -18,6 +18,8 @@ class Expense {
     this.updatedAt,
     this.deletedAt,
     this.pendingSync = false,
+    this.originalAmount,
+    this.exchangeRate,
   });
 
   final String id;
@@ -37,6 +39,15 @@ class Expense {
   /// Client-side flag: this expense lives in the local Drift queue and has not
   /// yet been accepted by the server. Drives the "Pending sync" chip in UI.
   final bool pendingSync;
+
+  /// Foreign-currency original (ADR-003). Null when the expense was entered
+  /// directly in the trip (base) currency — the common case. When set, this
+  /// is the amount in its own currency; [amount] stays in the trip currency.
+  final Money? originalAmount;
+
+  /// Manual exchange rate, foreign → trip (ADR-003). Null unless
+  /// [originalAmount] is set. Recorded fact, never used in balance arithmetic.
+  final double? exchangeRate;
 }
 
 class ExpenseCategory {

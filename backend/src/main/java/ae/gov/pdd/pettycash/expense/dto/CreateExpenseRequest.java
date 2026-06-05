@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -24,5 +25,11 @@ public record CreateExpenseRequest(
     @Min(1) int quantity,
     @Size(max = 500) String details,
     @NotNull Instant occurredAt,
-    @Size(max = 256) String receiptObjectKey
+    @Size(max = 256) String receiptObjectKey,
+    // Currency conversion (ADR-003) — all optional, all-or-none. When set,
+    // `amount` above is the trip-currency (base) value; these record the
+    // original foreign amount + the manually-entered rate (foreign → trip).
+    @Pattern(regexp = "[A-Z]{3}") String originalCurrency,
+    @Min(1) Long originalAmountMinor,
+    BigDecimal exchangeRate
 ) {}
