@@ -135,6 +135,64 @@ class ExpensesIT {
     }
 
     @Test
+    void foreignCurrencyExpenseRecordsOriginalAndRate() throws Exception {
+        String tok = token("ahmed");
+        String tripId = pickKsa(tok);
+        String zabeel = pickZabeel(tok);
+        // SAR trip; spent EUR 100.00 @ 4.10 → SAR 410.00 base (ADR-003).
+        mvc.perform(post("/api/v1/trips/" + tripId + "/expenses")
+                .header("Authorization", "Bearer " + tok)
+                .header("Idempotency-Key", "fx-key-1")
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {
+                      "id": "%s",
+                      "sourceId": "%s",
+                      "categoryCode": "FOOD",
+                      "amount": { "amount": 41000, "currency": "SAR" },
+                      "quantity": 1,
+                      "details": "Dinner in Paris",
+                      "occurredAt": "2026-05-16T10:00:00Z",
+                      "originalCurrency": "EUR",
+                      "originalAmountMinor": 10000,
+                      "exchangeRate": 4.10
+                    }
+                    """.formatted(UUID.randomUUID(), zabeel)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.amount.currency").value("SAR"))
+            .andExpect(jsonPath("$.amount.amount").value(41000))
+            .andExpect(jsonPath("$.originalAmount.currency").value("EUR"))
+            .andExpect(jsonPath("$.originalAmount.amount").value(10000))
+            .andExpect(jsonPath("$.exchangeRate").exists());
+    }
+
+    @Test
+    void incompleteCurrencyConversionIs400() throws Exception {
+        String tok = token("ahmed");
+        String tripId = pickKsa(tok);
+        String zabeel = pickZabeel(tok);
+        // originalCurrency without amount/rate → all-or-none violation.
+        mvc.perform(post("/api/v1/trips/" + tripId + "/expenses")
+                .header("Authorization", "Bearer " + tok)
+                .header("Idempotency-Key", "fx-bad-1")
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {
+                      "id": "%s",
+                      "sourceId": "%s",
+                      "categoryCode": "FOOD",
+                      "amount": { "amount": 41000, "currency": "SAR" },
+                      "quantity": 1,
+                      "details": "x",
+                      "occurredAt": "2026-05-16T10:00:00Z",
+                      "originalCurrency": "EUR"
+                    }
+                    """.formatted(UUID.randomUUID(), zabeel)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("expenses/fx-incomplete"));
+    }
+
+    @Test
     void missingIdempotencyKeyIs400() throws Exception {
         String tok = token("ahmed");
         String tripId = pickKsa(tok);

@@ -70,12 +70,24 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final List<_LineItem> _lines = <_LineItem>[_LineItem()];
   static const Uuid _uuid = Uuid();
 
+  /// ADR-003: curated foreign-currency list for the manual-rate toggle.
+  static const List<String> _fxCurrencies = <String>[
+    'EUR', 'USD', 'GBP', 'AED', 'SAR', 'QAR',
+    'EGP', 'KWD', 'BHD', 'OMR', 'JOD', 'TRY',
+  ];
+
   String? _sourceId;
   String? _categoryCode = 'FOOD';
   DateTime _occurredAt = DateTime.now();
   bool _submitting = false;
   XFile? _receiptFile;
   bool _ocrBusy = false;
+
+  // ADR-003: foreign-currency original. When off, the entered amount is the
+  // trip (base) currency — the existing path is untouched.
+  bool _foreignCurrency = false;
+  String? _foreignCode;
+  final TextEditingController _rateCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -92,10 +104,18 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   void dispose() {
     _vendorCtrl.dispose();
     _noteCtrl.dispose();
+    _rateCtrl.dispose();
     for (final _LineItem li in _lines) {
       li.dispose();
     }
     super.dispose();
+  }
+
+  /// Parsed manual rate (foreign → trip), or null when blank/invalid.
+  double? get _parsedRate {
+    final double? r =
+        double.tryParse(_rateCtrl.text.replaceAll(',', '').trim());
+    return (r != null && r > 0) ? r : null;
   }
 
   @override
@@ -142,7 +162,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       children: <Widget>[
                       _BalancePreview(
                         trip: trip,
-                        total: _total(trip.currency),
+                        // Balance math is always in the trip (base) currency
+                        // (ADR-003) — convert the foreign total at the manual
+                        // rate before previewing the post-expense balance.
+                        total: _baseAmount(trip.currency),
                         balancesAsync: balancesAsync,
                       ),
                       const SizedBox(height: 12),
@@ -228,9 +251,83 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                       const SizedBox(height: 6),
                       _GrandTotal(
-                        total: _total(trip.currency),
-                        currency: trip.currency,
+                        total: _foreignCurrency && _foreignCode != null
+                            ? _total(_foreignCode!)
+                            : _total(trip.currency),
+                        currency: _foreignCurrency && _foreignCode != null
+                            ? _foreignCode!
+                            : trip.currency,
                       ),
+                      const SizedBox(height: 14),
+                      _SectionLabel(label: 'Currency'),
+                      const SizedBox(height: 4),
+                      _ForeignToggle(
+                        value: _foreignCurrency,
+                        onChanged: (bool v) => setState(() {
+                          _foreignCurrency = v;
+                          if (!v) {
+                            _foreignCode = null;
+                            _rateCtrl.clear();
+                          }
+                        }),
+                      ),
+                      if (_foreignCurrency) ...<Widget>[
+                        const SizedBox(height: 10),
+                        _Field(
+                          label: 'Foreign currency',
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _foreignCode,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              hintText: 'Select currency',
+                            ),
+                            items: <DropdownMenuItem<String>>[
+                              for (final String code in _fxCurrencies)
+                                if (code != trip.currency)
+                                  DropdownMenuItem<String>(
+                                    value: code,
+                                    child: Text(code),
+                                  ),
+                            ],
+                            onChanged: (String? v) =>
+                                setState(() => _foreignCode = v),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _Field(
+                          label: _foreignCode == null
+                              ? 'Exchange rate'
+                              : '1 $_foreignCode = ? ${trip.currency}',
+                          child: TextField(
+                            controller: _rateCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: <TextInputFormatter>[
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9.,]'),
+                              ),
+                            ],
+                            onChanged: (_) => setState(() {}),
+                            decoration: const InputDecoration(
+                              hintText: '0.000000',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        if (_foreignCode != null && _parsedRate != null) ...<Widget>[
+                          const SizedBox(height: 8),
+                          _ConvertedPreview(
+                            base: Money.fromMajor(
+                              _total(_foreignCode!).majorValue * _parsedRate!,
+                              trip.currency,
+                            ),
+                          ),
+                        ],
+                      ],
                       const SizedBox(height: 14),
                       _SectionLabel(label: 'Deduct from source'),
                       const SizedBox(height: 6),
@@ -268,9 +365,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               // long the form gets.
               _StickyActionBar(
                 child: _SubmitButton(
+                  // Receipt is optional (BRD §2.3) — do not gate submit on it.
                   enabled: !_submitting &&
                       _vendorCtrl.text.trim().isNotEmpty &&
-                      _receiptFile != null &&
                       _lines.any((_LineItem li) => li.totalMajor() > 0),
                   submitting: _submitting,
                   onTap: () => _submit(trip),
@@ -291,14 +388,22 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Money.fromMajor(total, currency);
   }
 
-  Future<void> _submit(Trip trip) async {
-    final Money amount = _total(trip.currency);
-    if (amount.isZero) {
-      showPddToast(context, 'Add at least one line item with qty + unit cost');
-      return;
+  /// The canonical trip-currency (base) amount. When a foreign currency +
+  /// valid rate are set, converts the line-item sum at the manual rate
+  /// (ADR-003); otherwise it's just the line-item sum in the trip currency.
+  Money _baseAmount(String tripCurrency) {
+    if (_foreignCurrency && _foreignCode != null && _parsedRate != null) {
+      return Money.fromMajor(
+        _total(_foreignCode!).majorValue * _parsedRate!,
+        tripCurrency,
+      );
     }
-    if (_receiptFile == null) {
-      showPddToast(context, 'Attach an invoice photo before submitting');
+    return _total(tripCurrency);
+  }
+
+  Future<void> _submit(Trip trip) async {
+    if (_total(trip.currency).isZero) {
+      showPddToast(context, 'Add at least one line item with qty + unit cost');
       return;
     }
     if (_sourceId == null) {
@@ -309,6 +414,26 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       showPddToast(context, 'Please select a category');
       return;
     }
+
+    // ADR-003: foreign currency requires both a currency and a positive rate.
+    if (_foreignCurrency) {
+      if (_foreignCode == null) {
+        showPddToast(context, 'Please select the foreign currency');
+        return;
+      }
+      if (_parsedRate == null) {
+        showPddToast(context, 'Please enter a valid exchange rate');
+        return;
+      }
+    }
+
+    // The canonical amount is always the trip (base) currency. When foreign,
+    // it's the converted line-item sum; otherwise the sum itself.
+    final Money amount = _baseAmount(trip.currency);
+    // Foreign original (all-three-or-none) — null on the common base path.
+    final Money? foreignTotal =
+        _foreignCurrency ? _total(_foreignCode!) : null;
+    final double? rate = _foreignCurrency ? _parsedRate : null;
 
     setState(() => _submitting = true);
     try {
@@ -354,6 +479,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             quantity: qty,
             receiptObjectKey: null,
             idempotencyKey: _uuid.v4(),
+            originalCurrency: _foreignCurrency ? _foreignCode : null,
+            originalAmountMinor: foreignTotal?.amountMinor,
+            exchangeRate: rate,
           );
 
       if (_receiptFile != null) {
@@ -384,6 +512,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           updatedAt: e.updatedAt,
           deletedAt: e.deletedAt,
           receiptObjectKey: objectKey,
+          originalAmount: e.originalAmount,
+          exchangeRate: e.exchangeRate,
         );
       }
 
@@ -908,6 +1038,88 @@ class _GrandTotal extends StatelessWidget {
   }
 }
 
+/// ADR-003 toggle row — "Spent in a foreign currency?". Styled as a card
+/// to match the rest of the form rather than a bare SwitchListTile.
+class _ForeignToggle extends StatelessWidget {
+  const _ForeignToggle({required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              'Spent in a foreign currency?',
+              style: AppTypography.geist(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.ink1,
+              ),
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: AppColors.brand,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ADR-003 live preview — shows the converted trip-currency base amount
+/// (`≈ <trip ccy> <base>`) below the rate field.
+class _ConvertedPreview extends StatelessWidget {
+  const _ConvertedPreview({required this.base});
+  final Money base;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.brandSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.brand.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.swap_horiz, size: 16, color: AppColors.brand),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Deducted from balance',
+              style: AppTypography.geist(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.brand,
+              ),
+            ),
+          ),
+          Text(
+            '≈ ${base.format()}',
+            style: AppTypography.geistMono(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.brand,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SourceSplit extends StatelessWidget {
   const _SourceSplit({
     required this.sources,
@@ -1023,10 +1235,9 @@ class _PhotoButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.bgCard,
             borderRadius: BorderRadius.circular(14),
-            // Red-tinted border to telegraph that the invoice is required
-            // before the form will let the user record the expense.
+            // Neutral border — the invoice is optional (BRD §2.3).
             border: Border.all(
-              color: AppColors.red.withValues(alpha: 0.55),
+              color: AppColors.ink3.withValues(alpha: 0.35),
               style: BorderStyle.solid,
             ),
           ),
@@ -1034,7 +1245,7 @@ class _PhotoButton extends StatelessWidget {
             children: <Widget>[
               const Icon(
                 Icons.photo_camera_outlined,
-                color: AppColors.red,
+                color: AppColors.ink2,
                 size: 20,
               ),
               const SizedBox(width: 10),
@@ -1053,14 +1264,14 @@ class _PhotoButton extends StatelessWidget {
                   horizontal: 6, vertical: 2,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.redSoft,
+                  color: AppColors.bgApp,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'REQUIRED',
+                  'OPTIONAL',
                   style: AppTypography.geist(
                     fontSize: 10,
-                    color: AppColors.red,
+                    color: AppColors.ink3,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.8,
                   ),

@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -45,6 +46,19 @@ public class Expense {
 
     @Column(name = "receipt_object_key", length = 256)
     private String receiptObjectKey;
+
+    // Currency conversion (ADR-003) — set only when the expense was spent in
+    // a currency other than the trip currency. `amountMinor`/`currency`
+    // remain the canonical trip-currency (base) values; these are the
+    // record of the original. All null for same-currency expenses.
+    @Column(name = "original_currency", length = 3)
+    private String originalCurrency;
+
+    @Column(name = "original_amount_minor")
+    private Long originalAmountMinor;
+
+    @Column(name = "exchange_rate", precision = 18, scale = 6)
+    private BigDecimal exchangeRate;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
@@ -96,7 +110,21 @@ public class Expense {
     public String getDetails() { return details; }
     public Instant getOccurredAt() { return occurredAt; }
     public String getReceiptObjectKey() { return receiptObjectKey; }
+    public String getOriginalCurrency() { return originalCurrency; }
+    public Long getOriginalAmountMinor() { return originalAmountMinor; }
+    public BigDecimal getExchangeRate() { return exchangeRate; }
     public Instant getCreatedAt() { return createdAt; }
+
+    /** Record that this expense was originally spent in a foreign currency.
+     *  The trip-currency base (amountMinor/currency) is already set; this
+     *  preserves the original amount + manual rate. ADR-003. */
+    public void recordConversion(
+        String originalCurrency, long originalAmountMinor, BigDecimal exchangeRate
+    ) {
+        this.originalCurrency = originalCurrency;
+        this.originalAmountMinor = originalAmountMinor;
+        this.exchangeRate = exchangeRate;
+    }
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getDeletedAt() { return deletedAt; }
 
