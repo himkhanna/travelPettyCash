@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -104,6 +105,28 @@ class CmsMissionDetailScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
               ),
             ),
+            // Whole screen is already gated to Admin/SuperAdmin above, so
+            // anyone reaching here can set the mission budget (BRD §2.2).
+            OutlinedButton.icon(
+              onPressed: () => _editBudget(context, ref, m),
+              icon: Icon(
+                m.budget == null ? Icons.add : Icons.edit_outlined,
+                size: 14,
+              ),
+              label: Text(m.budget == null ? 'Set budget' : 'Edit budget'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: CmsColors.surfaceCard,
+                side: const BorderSide(color: CmsColors.surfaceCard),
+                minimumSize: const Size(0, 34),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                textStyle: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
             ElevatedButton.icon(
               onPressed: () => _downloadRollup(context, ref, m.id),
               icon: const Icon(Icons.download, size: 14),
@@ -137,6 +160,23 @@ class CmsMissionDetailScreen extends ConsumerWidget {
         );
       },
     );
+  }
+
+  Future<void> _editBudget(
+    BuildContext context, WidgetRef ref, Mission mission,
+  ) async {
+    final bool? saved = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext _) => _SetMissionBudgetDialog(mission: mission),
+    );
+    if (saved == true) {
+      // Refetch so the header line + button label pick up the new budget.
+      ref.invalidate(missionsProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mission budget saved.')),
+      );
+    }
   }
 
   Future<void> _downloadRollup(
@@ -334,6 +374,19 @@ class _HeaderCard extends StatelessWidget {
                 ),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              mission.budget != null
+                  ? 'Budget: ${mission.budget!.format()}'
+                  : 'Budget: not set',
+              style: const TextStyle(
+                color: CmsColors.textBody,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -699,5 +752,159 @@ class _ScheduleRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Admin-only dialog to set/edit the mission-level budget (BRD §2.2).
+/// Amount is entered in major units; the curated currency list mirrors the
+/// CreateTripDialog. Returns `true` on a successful save, `null` on cancel.
+class _SetMissionBudgetDialog extends ConsumerStatefulWidget {
+  const _SetMissionBudgetDialog({required this.mission});
+  final Mission mission;
+
+  @override
+  ConsumerState<_SetMissionBudgetDialog> createState() =>
+      _SetMissionBudgetDialogState();
+}
+
+class _SetMissionBudgetDialogState
+    extends ConsumerState<_SetMissionBudgetDialog> {
+  static const List<String> _currencies = <String>[
+    'AED', 'SAR', 'USD', 'EUR', 'GBP', 'QAR', 'EGP',
+  ];
+
+  late final TextEditingController _amountCtrl;
+  late String _currency;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final Money? b = widget.mission.budget;
+    _amountCtrl = TextEditingController(
+      text: b == null ? '' : _trimZeros(b.majorValue),
+    );
+    _currency = b?.currencyCode ?? 'AED';
+  }
+
+  String _trimZeros(double v) {
+    final String s = v.toStringAsFixed(2);
+    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(AppRadii.card),
+      ),
+      title: Text(
+        widget.mission.budget == null ? 'Set budget' : 'Edit budget',
+      ),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            TextField(
+              controller: _amountCtrl,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                hintText: 'e.g. 100000',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _currency,
+              decoration: const InputDecoration(
+                labelText: 'Currency',
+                border: OutlineInputBorder(),
+              ),
+              items: <DropdownMenuItem<String>>[
+                for (final String c in _currencies)
+                  DropdownMenuItem<String>(value: c, child: Text(c)),
+              ],
+              onChanged: (String? v) {
+                if (v != null) setState(() => _currency = v);
+              },
+            ),
+            if (_error != null) ...<Widget>[
+              const SizedBox(height: 10),
+              Text(_error!, style: const TextStyle(color: CmsColors.outflow)),
+            ],
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          child: const Text('CANCEL'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: CmsColors.accent,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+          ),
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('SAVE'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    final String cleaned = _amountCtrl.text.replaceAll(',', '').trim();
+    final double? major = double.tryParse(cleaned);
+    if (major == null || major <= 0) {
+      setState(() => _error = 'Enter a positive amount');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final int minor = Money.fromMajor(major, _currency).amountMinor;
+      await ref
+          .read(missionRepositoryProvider)
+          .setBudget(widget.mission.id, minor, _currency);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      setState(() {
+        _error = 'Could not save: $e';
+        _saving = false;
+      });
+    }
   }
 }

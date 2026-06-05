@@ -1109,14 +1109,15 @@ class _ChartCard extends StatelessWidget {
     return b.toString();
   }
 
+  String get _slug => dimensionLabel
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+
   void _exportCsv(BuildContext context) {
-    final String slug = dimensionLabel
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-');
     final Uint8List bytes = Uint8List.fromList(utf8.encode(_buildCsv()));
     saveBytesToDisk(
       bytes: bytes,
-      filename: 'reports-spend-by-$slug.csv',
+      filename: 'reports-spend-by-$_slug.csv',
       contentType: 'text/csv;charset=utf-8',
     );
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1125,6 +1126,41 @@ class _ChartCard extends StatelessWidget {
   }
 
   void _exportPdf(BuildContext _) => browserPrint();
+
+  /// Open the native share sheet with the CSV file (→ WhatsApp on a phone,
+  /// BRD §2.6). Falls back to a plain download when Web Share with files is
+  /// unsupported (desktop browsers).
+  Future<void> _shareReport(BuildContext context) async {
+    final Uint8List bytes = Uint8List.fromList(utf8.encode(_buildCsv()));
+    final String filename = 'reports-spend-by-$_slug.csv';
+    final bool shared = await shareBytes(
+      bytes: bytes,
+      filename: filename,
+      contentType: 'text/csv;charset=utf-8',
+      title: 'PDD report',
+      text: 'PDD Delegation Expenses report',
+    );
+    if (!context.mounted) return;
+    if (shared) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Opened share sheet.')),
+      );
+    } else {
+      saveBytesToDisk(
+        bytes: bytes,
+        filename: filename,
+        contentType: 'text/csv;charset=utf-8',
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Sharing isn't supported here — downloaded instead; "
+            'attach it in WhatsApp.',
+          ),
+        ),
+      );
+    }
+  }
 
   static const List<Color> _palette = <Color>[
     Color(0xFF6B8A3F), Color(0xFFD08A2A), Color(0xFFA85C2A),
@@ -1185,6 +1221,12 @@ class _ChartCard extends StatelessWidget {
                   icon: Icons.picture_as_pdf_outlined,
                   label: 'PDF',
                   onTap: () => _exportPdf(context),
+                ),
+                const SizedBox(width: 6),
+                _ExportBtn(
+                  icon: Icons.ios_share,
+                  label: 'Share',
+                  onTap: () => _shareReport(context),
                 ),
               ],
             ],

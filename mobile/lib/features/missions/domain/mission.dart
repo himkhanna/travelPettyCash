@@ -1,3 +1,5 @@
+import '../../../core/money/money.dart';
+
 /// Diplomatic / operational mission grouping multiple [Trip]s. Matches
 /// the server's [Mission] record (`/api/v1/missions`).
 class Mission {
@@ -12,6 +14,7 @@ class Mission {
     required this.createdById,
     required this.createdAt,
     this.closedAt,
+    this.budget,
   });
 
   final String id;
@@ -24,6 +27,9 @@ class Mission {
   final String createdById;
   final DateTime createdAt;
   final DateTime? closedAt;
+
+  /// Optional mission-level budget (BRD §2.2). Nullable when unset.
+  final Money? budget;
 }
 
 enum MissionStatus {

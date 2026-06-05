@@ -45,6 +45,15 @@ public class Mission {
     @Column(name = "created_by_id", nullable = false)
     private UUID createdById;
 
+    // Mission-level budget (BRD §2.2) — Admin assigns the total and can
+    // increase it later. Currency is chosen on first assignment; null +
+    // 0 until assigned. Trips/spend roll up under it for visibility.
+    @Column(name = "budget_minor", nullable = false)
+    private long budgetMinor = 0;
+
+    @Column(name = "budget_currency", length = 3)
+    private String budgetCurrency;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -81,8 +90,17 @@ public class Mission {
     public UUID getParentMissionId() { return parentMissionId; }
     public MissionStatus getStatus() { return status; }
     public UUID getCreatedById() { return createdById; }
+    public long getBudgetMinor() { return budgetMinor; }
+    public String getBudgetCurrency() { return budgetCurrency; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getClosedAt() { return closedAt; }
+
+    /** Set the mission's total budget (assign or increase). Admin only —
+     *  enforced at the controller/service. BRD §2.2. */
+    public void setBudget(long budgetMinor, String budgetCurrency) {
+        this.budgetMinor = budgetMinor;
+        this.budgetCurrency = budgetCurrency;
+    }
 
     public void close(Instant at) {
         this.status = MissionStatus.CLOSED;

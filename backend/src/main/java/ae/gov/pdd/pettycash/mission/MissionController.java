@@ -1,16 +1,20 @@
 package ae.gov.pdd.pettycash.mission;
 
 import ae.gov.pdd.pettycash.auth.AuthenticatedUser;
+import ae.gov.pdd.pettycash.common.MoneyDto;
 import ae.gov.pdd.pettycash.common.error.ApiException;
 import ae.gov.pdd.pettycash.trip.TripRepository;
 import ae.gov.pdd.pettycash.user.UserRole;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -136,6 +140,20 @@ class MissionController {
         return MissionDto.from(missions.save(m));
     }
 
+    /** Assign or increase the mission's total budget (Admin only). Setting
+     *  a higher amount is how a budget is "increased later" (BRD §2.2). */
+    @PatchMapping("/{id}/budget")
+    public MissionDto setBudget(
+        @PathVariable UUID id,
+        @Valid @RequestBody SetBudgetRequest req,
+        @AuthenticationPrincipal AuthenticatedUser caller
+    ) {
+        requireAdmin(caller);
+        Mission m = load(id);
+        m.setBudget(req.amount(), req.currency().toUpperCase());
+        return MissionDto.from(missions.save(m));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
         @PathVariable UUID id,
@@ -191,6 +209,11 @@ class MissionController {
         MissionStatus status
     ) {}
 
+    public record SetBudgetRequest(
+        @Min(0) long amount,
+        @NotBlank @Pattern(regexp = "[A-Za-z]{3}") String currency
+    ) {}
+
     public record MissionDto(
         UUID id,
         String name,
@@ -201,7 +224,9 @@ class MissionController {
         MissionStatus status,
         UUID createdById,
         Instant createdAt,
-        Instant closedAt
+        Instant closedAt,
+        // Mission-level budget (BRD §2.2); null until assigned by an Admin.
+        MoneyDto budget
     ) {
         public static MissionDto from(Mission m) {
             return new MissionDto(
@@ -214,7 +239,10 @@ class MissionController {
                 m.getStatus(),
                 m.getCreatedById(),
                 m.getCreatedAt(),
-                m.getClosedAt()
+                m.getClosedAt(),
+                m.getBudgetCurrency() == null
+                    ? null
+                    : new MoneyDto(m.getBudgetMinor(), m.getBudgetCurrency())
             );
         }
     }
