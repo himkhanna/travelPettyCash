@@ -61,6 +61,7 @@ public class ReceiptOcrService {
     private final String tessdataPath;
     private final String languages;
     private final String installDir;
+    private final ReceiptCategorizer categorizer;
 
     private volatile ITesseract engine;
     private volatile boolean available;
@@ -68,11 +69,13 @@ public class ReceiptOcrService {
     public ReceiptOcrService(
         @Value("${pdd.ocr.tessdata-path:}") String tessdataPath,
         @Value("${pdd.ocr.languages:eng}") String languages,
-        @Value("${pdd.ocr.install-dir:}") String installDir
+        @Value("${pdd.ocr.install-dir:}") String installDir,
+        ReceiptCategorizer categorizer
     ) {
         this.tessdataPath = tessdataPath;
         this.languages = languages;
         this.installDir = installDir;
+        this.categorizer = categorizer;
     }
 
     @PostConstruct
@@ -208,12 +211,17 @@ public class ReceiptOcrService {
             }
         }
 
+        // Deterministic category guess from the merchant name + body text.
+        // Null when nothing matched, so the form keeps its own default.
+        String categoryCode = categorizer.categorize(vendor, rawText);
+
         return new OcrResult(
             true,
             rawText.trim(),
             vendor,
             bestMinor,
             date,
+            categoryCode,
             null
         );
     }

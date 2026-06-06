@@ -22,14 +22,15 @@ public record OcrResult(
     String suggestedVendor,
     Long suggestedAmountMinor,
     LocalDate suggestedOccurredAt,
+    String suggestedCategoryCode,
     String message
 ) {
     public static OcrResult unavailable() {
-        return new OcrResult(false, null, null, null, null,
+        return new OcrResult(false, null, null, null, null, null,
             "OCR engine not configured on this server.");
     }
 
     public static OcrResult empty(String message) {
-        return new OcrResult(true, null, null, null, null, message);
+        return new OcrResult(true, null, null, null, null, null, message);
     }
 }

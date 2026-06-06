@@ -78,6 +78,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   String? _sourceId;
   String? _categoryCode = 'FOOD';
+  // True when [_categoryCode] was set by the receipt categorizer rather than
+  // by the user. Drives the "Suggested" badge; cleared on a manual tap.
+  bool _categorySuggested = false;
   DateTime _occurredAt = DateTime.now();
   bool _submitting = false;
   XFile? _receiptFile;
@@ -190,7 +193,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         _OcrDisclaimer(),
                       ],
                       const SizedBox(height: 14),
-                      _SectionLabel(label: 'Category'),
+                      Row(
+                        children: <Widget>[
+                          const _SectionLabel(label: 'Category'),
+                          if (_categorySuggested) ...<Widget>[
+                            const SizedBox(width: 8),
+                            const _SuggestedBadge(),
+                          ],
+                        ],
+                      ),
                       const SizedBox(height: 4),
                       categoriesAsync.when(
                         loading: () => const _CategoryGridPlaceholder(),
@@ -198,8 +209,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         data: (List<ExpenseCategory> cats) => _CategoryGrid(
                           categories: cats,
                           selected: _categoryCode,
-                          onPick: (String code) =>
-                              setState(() => _categoryCode = code),
+                          onPick: (String code) => setState(() {
+                            _categoryCode = code;
+                            // A manual pick clears the "Suggested" badge.
+                            _categorySuggested = false;
+                          }),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -586,6 +600,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         }
         return;
       }
+      final List<ExpenseCategory> knownCategories =
+          ref.read(categoriesProvider).valueOrNull ?? const <ExpenseCategory>[];
       int prefills = 0;
       setState(() {
         if (s.vendor != null && _vendorCtrl.text.trim().isEmpty) {
@@ -606,6 +622,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         }
         if (s.occurredAt != null) {
           _occurredAt = s.occurredAt!;
+          prefills++;
+        }
+        // Auto-select the guessed category only when it's one we actually
+        // offer; flag it so the "Suggested" badge shows. A later manual tap
+        // clears the flag.
+        if (s.categoryCode != null &&
+            knownCategories
+                .any((ExpenseCategory c) => c.code == s.categoryCode)) {
+          _categoryCode = s.categoryCode;
+          _categorySuggested = true;
           prefills++;
         }
       });
@@ -1365,6 +1391,39 @@ class _OcrDisclaimer extends StatelessWidget {
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small pill shown next to the Category label when the receipt categorizer
+/// auto-selected a category. Signals "the app picked this for you" — the
+/// user can still tap any other cell, which clears the badge.
+class _SuggestedBadge extends StatelessWidget {
+  const _SuggestedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.greenSoft,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(Icons.auto_awesome, size: 12, color: AppColors.green),
+          const SizedBox(width: 4),
+          Text(
+            'Suggested from receipt',
+            style: AppTypography.geist(
+              fontSize: 10.5,
+              color: AppColors.green,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
