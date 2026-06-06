@@ -18,6 +18,8 @@ import '../../expenses/domain/expense.dart';
 import '../../funds/application/funds_providers.dart';
 import '../../funds/domain/funding.dart';
 import '../../funds/presentation/pending_allocations_banner.dart';
+import '../../insights/application/insights_providers.dart';
+import '../../insights/domain/insight.dart';
 import '../../notifications/application/notifications_providers.dart';
 import '../../notifications/domain/notification.dart';
 import '../application/trips_providers.dart';
@@ -115,6 +117,12 @@ class TripDashboardScreen extends ConsumerWidget {
                   // access if it doesn't exist yet.
                   SliverToBoxAdapter(
                     child: _TeamChatTile(tripId: tripId),
+                  ),
+                  // Smart Insights — deterministic spend analysis + a
+                  // plain-language narrative. The card renders its own header
+                  // and collapses to nothing when the engine returns empty.
+                  SliverToBoxAdapter(
+                    child: _InsightsCard(tripId: tripId),
                   ),
                   // Donut + categories
                   SliverToBoxAdapter(
@@ -516,6 +524,149 @@ class _BalancePlaceholder extends StatelessWidget {
 // ────────────────────────────────────────────────────────────────────
 // Donut + category breakdown
 // ────────────────────────────────────────────────────────────────────
+
+/// Smart Insights card — deterministic spend analysis (budget burn, category
+/// concentration, possible duplicates, top spender) plus a plain-language
+/// narrative, all computed server-side. Collapses to nothing while loading,
+/// on error, or when the engine has nothing to say (e.g. an empty trip).
+class _InsightsCard extends ConsumerWidget {
+  const _InsightsCard({required this.tripId});
+  final String tripId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<TripInsights> async =
+        ref.watch(tripInsightsProvider(tripId));
+    return async.maybeWhen(
+      data: (TripInsights ins) {
+        if (ins.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.bgCard,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Icon(Icons.auto_awesome,
+                        size: 16, color: AppColors.blue),
+                    const SizedBox(width: 8),
+                    Text('Smart Insights', style: AppTypography.microLabel()),
+                  ],
+                ),
+                if (ins.narrative.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    ins.narrative,
+                    style: AppTypography.geist(
+                        fontSize: 13, height: 1.4, color: AppColors.ink2),
+                  ),
+                ],
+                for (final Insight i in ins.insights) ...<Widget>[
+                  const SizedBox(height: 12),
+                  _InsightRow(insight: i),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _InsightRow extends StatelessWidget {
+  const _InsightRow({required this.insight});
+  final Insight insight;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = _severityColor(insight.severity);
+    final Color bg = _severityBg(insight.severity);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Icon(_iconFor(insight.type), size: 15, color: color),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                insight.title,
+                style: AppTypography.geist(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink1),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                insight.message,
+                style: AppTypography.geist(
+                    fontSize: 12, height: 1.35, color: AppColors.ink3),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static Color _severityColor(String s) {
+    switch (s) {
+      case 'CRITICAL':
+        return AppColors.red;
+      case 'WARNING':
+        return AppColors.amber;
+      default:
+        return AppColors.blue;
+    }
+  }
+
+  static Color _severityBg(String s) {
+    switch (s) {
+      case 'CRITICAL':
+        return AppColors.redSoft;
+      case 'WARNING':
+        return AppColors.amberSoft;
+      default:
+        return AppColors.blueSoft;
+    }
+  }
+
+  static IconData _iconFor(String type) {
+    switch (type) {
+      case 'OVER_BUDGET':
+      case 'BUDGET_BURN':
+      case 'BUDGET_OK':
+        return Icons.account_balance_wallet_outlined;
+      case 'CATEGORY_CONCENTRATION':
+        return Icons.donut_large;
+      case 'POSSIBLE_DUPLICATE':
+        return Icons.content_copy_outlined;
+      case 'TOP_SPENDER':
+        return Icons.person_outline;
+      default:
+        return Icons.insights;
+    }
+  }
+}
 
 class _BreakdownCard extends ConsumerWidget {
   const _BreakdownCard({
