@@ -99,42 +99,6 @@ class CmsSettingsScreen extends ConsumerWidget {
                     onTap: () => context.go('/cms/reports'),
                   ),
                 ),
-                SizedBox(
-                  width: w,
-                  child: _SettingsCard(
-                    icon: Icons.account_balance_outlined,
-                    title: 'Funding sources',
-                    description:
-                        'Court Office, External Affairs, and other funding '
-                        'pools the delegations draw against.',
-                    cta: 'Coming soon',
-                    onTap: null,
-                  ),
-                ),
-                SizedBox(
-                  width: w,
-                  child: _SettingsCard(
-                    icon: Icons.draw_outlined,
-                    title: 'Digital signature',
-                    description:
-                        'PKCS#11 key custody and PAdES signing pipeline for '
-                        'the finance letter.',
-                    cta: 'Coming soon',
-                    onTap: null,
-                  ),
-                ),
-                SizedBox(
-                  width: w,
-                  child: _SettingsCard(
-                    icon: Icons.tune,
-                    title: 'System preferences',
-                    description:
-                        'Default currency, locale fallbacks, idempotency '
-                        'window, retention policy.',
-                    cta: 'Coming soon',
-                    onTap: null,
-                  ),
-                ),
               ],
             );
           },

@@ -13,13 +13,9 @@ import '../../../notifications/domain/notification.dart';
 import '../../../search/data/search_repository.dart';
 import 'cms_theme.dart';
 
-/// Top-level CMS sections that map to actual routes.
-///
-/// The mockup's sidebar lists several items we don't have screens for
-/// yet (Trips, Approvals, Expenses, Organizations, Overview, Spend,
-/// Settings). They appear as "coming soon" entries — `_SidebarItem` with
-/// `enabled: false` — so the IA reads correctly without dragging the
-/// admin to a broken route.
+/// Top-level CMS sections that map to actual routes. Every sidebar entry
+/// now leads to a working screen — unbuilt placeholders have been removed
+/// rather than shown as disabled "coming soon" items.
 enum CmsNavItem {
   home, trips, missions, expenses, users, audit, dg, reports, settings,
 }
@@ -288,11 +284,6 @@ class _Sidebar extends StatelessWidget {
                     onTap: () =>
                         GoRouter.of(context).go(CmsNavItem.missions.path),
                   ),
-                  const _SidebarItem(
-                    icon: Icons.task_alt_outlined,
-                    label: 'Approvals',
-                    enabled: false,
-                  ),
                   _SidebarItem(
                     icon: Icons.receipt_long_outlined,
                     label: 'Expenses',
@@ -416,6 +407,9 @@ class _SidebarItem extends StatelessWidget {
     required this.icon,
     required this.label,
     this.selected = false,
+    // Kept for the disabled "coming soon" state; no call site disables an
+    // item now that every sidebar entry routes somewhere real.
+    // ignore: unused_element_parameter
     this.enabled = true,
     this.onTap,
     // Plumbed for sidebar unread badges; no call site supplies it yet.

@@ -100,27 +100,31 @@ class CmsMissionDetailScreen extends ConsumerWidget {
               icon: const Icon(Icons.arrow_back, size: 14),
               label: const Text('All missions'),
               style: TextButton.styleFrom(
-                foregroundColor: CmsColors.surfaceCard,
+                foregroundColor: CmsColors.textSecondary,
                 minimumSize: const Size(0, 32),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
               ),
             ),
             // Whole screen is already gated to Admin/SuperAdmin above, so
             // anyone reaching here can set the mission budget (BRD §2.2).
-            OutlinedButton.icon(
+            // Primary CTA styling (green accent, white ink) to match the
+            // "New trip" button — the top bar is light, so a white-on-white
+            // outline button would be invisible.
+            ElevatedButton.icon(
               onPressed: () => _editBudget(context, ref, m),
               icon: Icon(
                 m.budget == null ? Icons.add : Icons.edit_outlined,
-                size: 14,
+                size: 16,
               ),
               label: Text(m.budget == null ? 'Set budget' : 'Edit budget'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: CmsColors.surfaceCard,
-                side: const BorderSide(color: CmsColors.surfaceCard),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: CmsColors.accent,
+                foregroundColor: Colors.white,
+                elevation: 0,
                 minimumSize: const Size(0, 34),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 textStyle: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w700,
+                  fontSize: 13, fontWeight: FontWeight.w700,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
